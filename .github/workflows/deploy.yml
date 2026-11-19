@@ -42,6 +42,7 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
 
       - uses: actions/cache/save@v4
+        if: always() # keep the cache (and the API usage log) even if the fetch failed
         with:
           path: data
           key: yt-cache-${{ github.run_id }}

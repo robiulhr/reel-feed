@@ -29,9 +29,25 @@ export interface Short {
   r: number; // topic relevance 0..1
 }
 
+/** One Shorts refresh and the YouTube API units it spent (written by scripts/fetch.ts). */
+export interface UsageRun {
+  at: number;
+  where: "github" | "local";
+  deep: boolean;
+  units: number;
+  by: { resolve: number; channelInfo: number; playlist: number; stats: number };
+  rssOk: number;
+  rssFailed: number;
+  playlistChecks: number;
+  statsRefreshed: number;
+  newShorts: number;
+  ok: boolean;
+}
+
 export interface Dataset {
   generatedAt: number;
   units: number; // YouTube API units used by the last refresh
+  usage: UsageRun[]; // refresh history, newest first
   channels: Channel[];
   videos: Short[];
 }

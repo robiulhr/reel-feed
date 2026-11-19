@@ -207,6 +207,21 @@ p { margin: 0; }
 .form input:focus { outline: 2px solid var(--muted); outline-offset: 0; }
 .form .btn { align-self: flex-start; margin: 0; }
 
+/* ---------- API usage panel ---------- */
+.u-hero { background: var(--panel-2); border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; }
+.u-big { font-size: 32px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.u-of { font-size: 14px; margin-top: 2px; }
+.u-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.u-h { font-size: 14px; margin: 18px 0 6px; }
+.panel-body p.u-note { font-size: 12px; margin: 6px 0 0; }
+.u-note a { color: var(--text); }
+.u-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.u-table th, .u-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.u-table th { color: var(--muted); font-weight: 600; }
+.u-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.u-table td:last-child:not(.num) { color: var(--muted); }
+.u-table tr:last-child td { border-bottom: 0; }
+
 /* ---------- Channels panel ---------- */
 .panel-inner { width: min(680px, 100vw); }
 .ptabs { overflow-x: auto; scrollbar-width: none; }

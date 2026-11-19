@@ -41,7 +41,7 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
   - **Newest**: pure upload order.
 - **Filters**: time range (`All time` default, 30 days, 7 days, Today) + categories (All, Bangla, Ads & E-com, Biz Stories, Founders, Books & Money, AI & Brand).
 - **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), hide channel ⊘, open on YouTube ↗.
-- **Menu ☰**: **Channels** (control panel, §6a), Saved list, Hidden channels (unhide), Sync (log in / status), About (stats, reset learning, clear history).
+- **Menu ☰**: **Channels** (control panel, §6a), Saved list, Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), About (stats, reset learning, clear history).
 - **NEW badge**: Shorts uploaded since your last visit (a gap of 30+ minutes counts as a new visit).
 - Never shows the same Short twice (until you've seen everything in a filter); never the same channel twice in a row; max 3 per channel in any 20.
 - Videos play through YouTube's **official embedded player** (views count for creators; nothing is downloaded or re-hosted).
@@ -160,6 +160,15 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 
 Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week the "older Shorts" stats refresh costs a few hundred. Six refreshes a day stay well under 1,000 units/day.
 
+**API usage page (Menu ☰ → API usage)** — `src/usage.ts`:
+- **Today**: units used of 10,000, units left, and when the quota resets in your local time (midnight Pacific).
+- **Where today's units went**: new-Shorts checks, views/likes updates, channel info, and Channels → Add lookups.
+- **Last 7 days** table, **average per refresh** and projected daily use.
+- **Recent refreshes** (with RSS/playlist/stats details; failed runs marked ✗) and **recent channel lookups**.
+- **What costs what** reference table.
+- Data sources: every refresh appends a record to the usage history (kept in the Actions cache, published in `shorts.json`; also saved when a run fails). Lookups are logged by the app into `user-state.json` (synced across devices).
+- It's the app's own count. Google's official number: Google Cloud → YouTube Data API → Quotas. Runs made on the PC (`npm run fetch`) use the same quota but only show in the local copy.
+
 ---
 
 ## 7. Everyday use
@@ -256,6 +265,7 @@ npx wrangler deploy                      # prints the Worker address (https://re
 | `src/store.ts` | Local state, change operations, file format |
 | `src/sync.ts` | Sync with the Worker |
 | `src/channels.ts` | Channels control panel |
+| `src/usage.ts` | API usage page |
 | `src/player.ts` | YouTube IFrame Player wrapper |
 | `src/style.css`, `index.html` | Layout: top bar / video / bottom bar |
 | `worker/` | Cloudflare Worker (login, sessions, `user-state.json`, `channels.json` edits, channel lookups, refresh trigger) |

@@ -43,7 +43,24 @@ interface CachedChannel {
   noShorts?: boolean; rss?: string[]; checkedAt?: number;
 }
 interface CachedVideo { ch: string; t: string; p: number; v: number; l: number; c: number; kw: number; emb: boolean; bn: boolean; s?: number }
-interface Cache { channels: Record<string, CachedChannel>; videos: Record<string, CachedVideo> }
+interface Cache { channels: Record<string, CachedChannel>; videos: Record<string, CachedVideo>; usage?: UsageRun[] }
+
+/** What each API call was for — shown on the app's API usage page. */
+type UsageTag = "resolve" | "channelInfo" | "playlist" | "stats";
+interface UsageRun {
+  at: number; // unix seconds
+  where: "github" | "local";
+  deep: boolean;
+  units: number;
+  by: Record<UsageTag, number>; // units per purpose
+  rssOk: number;
+  rssFailed: number;
+  playlistChecks: number; // channels whose Shorts playlist was read
+  statsRefreshed: number; // Shorts whose views/likes were refreshed
+  newShorts: number;
+  ok: boolean;
+}
+const USAGE_HISTORY = 300; // ~7 weeks of refreshes every 4 hours
 
 const KEYWORDS = [
   "business", "brand", "marketing", "sales", "sell", "startup", "founder", "ceo", "company", "companies",
@@ -69,17 +86,19 @@ if (!KEY) {
 }
 
 let units = 0;
-const counts = { rssOk: 0, rssFailed: 0, playlistChecks: 0, statsCalls: 0 };
+const byTag: Record<UsageTag, number> = { resolve: 0, channelInfo: 0, playlist: 0, stats: 0 };
+const counts = { rssOk: 0, rssFailed: 0, playlistChecks: 0, statsCalls: 0, statsRefreshed: 0, newShorts: 0 };
 class QuotaError extends Error {}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Calls the YouTube Data API. Returns null on 404. Never logs the URL (it contains the key). */
-async function yt(endpoint: string, params: Record<string, string | number>): Promise<any | null> {
+async function yt(endpoint: string, params: Record<string, string | number>, tag: UsageTag): Promise<any | null> {
   const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   url.searchParams.set("key", KEY!);
   for (let attempt = 0; ; attempt++) {
     units++;
+    byTag[tag]++;
     let res: Response;
     try {
       res = await fetch(url);
@@ -155,6 +174,36 @@ function statsInterval(ageSec: number) {
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
+let cacheRef: Cache | null = null;
+let runStartedAt = 0;
+
+function saveCache() {
+  if (!cacheRef) return;
+  mkdirSync(CACHE_DIR, { recursive: true });
+  writeFileSync(CACHE_FILE, JSON.stringify(cacheRef));
+}
+
+/** Adds this run to the usage history (also for failed runs, so quota spent is never hidden). */
+function recordUsage(ok: boolean): UsageRun[] {
+  if (!cacheRef) return [];
+  const run: UsageRun = {
+    at: runStartedAt || Math.floor(Date.now() / 1000),
+    where: process.env.GITHUB_ACTIONS ? "github" : "local",
+    deep: DEEP,
+    units,
+    by: { ...byTag },
+    rssOk: counts.rssOk,
+    rssFailed: counts.rssFailed,
+    playlistChecks: counts.playlistChecks,
+    statsRefreshed: counts.statsRefreshed,
+    newShorts: counts.newShorts,
+    ok,
+  };
+  cacheRef.usage = [run, ...(cacheRef.usage ?? [])].slice(0, USAGE_HISTORY);
+  saveCache();
+  return cacheRef.usage;
+}
+
 async function main() {
   const t0 = Date.now();
   const now = Math.floor(t0 / 1000);
@@ -162,10 +211,8 @@ async function main() {
   const cache: Cache = existsSync(CACHE_FILE)
     ? JSON.parse(readFileSync(CACHE_FILE, "utf8"))
     : { channels: {}, videos: {} };
-  const saveCache = () => {
-    mkdirSync(CACHE_DIR, { recursive: true });
-    writeFileSync(CACHE_FILE, JSON.stringify(cache));
-  };
+  cacheRef = cache;
+  runStartedAt = now;
 
   // 0. Purge permanently deleted channels (no longer in the list at all)
   const listed = new Set(list.map((c) => c.handle));
@@ -186,7 +233,7 @@ async function main() {
       cache.channels[c.handle] = { id: c.id, title: c.name, thumb: "", subs: 0, known: [] };
       return;
     }
-    const j = await yt("channels", { part: "snippet,statistics", forHandle: c.handle });
+    const j = await yt("channels", { part: "snippet,statistics", forHandle: c.handle }, "resolve");
     const item = j?.items?.[0];
     if (!item) { notFound.push(`${c.name} (${c.handle})`); return; }
     cache.channels[c.handle] = {
@@ -202,7 +249,7 @@ async function main() {
 
   // 2. Channel names, avatars, subscriber counts (1 unit per 50 channels)
   await pool(chunk(active, 50), CONCURRENCY, async (batch) => {
-    const j = await yt("channels", { part: "snippet,statistics", id: batch.map(([, ch]) => ch.id).join(","), maxResults: 50 });
+    const j = await yt("channels", { part: "snippet,statistics", id: batch.map(([, ch]) => ch.id).join(","), maxResults: 50 }, "channelInfo");
     const byId = new Map<string, any>((j?.items ?? []).map((it: any) => [it.id, it]));
     for (const [, ch] of batch) {
       const it = byId.get(ch.id);
@@ -239,7 +286,7 @@ async function main() {
         playlistId: "UUSH" + ch.id.slice(2),
         maxResults: 50,
         ...(pageToken ? { pageToken } : {}),
-      });
+      }, "playlist");
       if (!j) { ch.noShorts = known.size === 0; break; }
       ch.noShorts = false;
       let hitKnown = false;
@@ -267,10 +314,12 @@ async function main() {
     return !v || now - (v.s ?? 0) >= statsInterval(now - v.p);
   });
   console.log(`Updating stats for ${due.length} of ${owner.size} Shorts (${newCount} new)...`);
+  counts.statsRefreshed = due.length;
+  counts.newShorts = newCount;
   const missing = new Set(due);
   await pool(chunk(due, 50), CONCURRENCY, async (batch) => {
     counts.statsCalls++;
-    const j = await yt("videos", { part: "snippet,statistics,status", id: batch.join(","), maxResults: 50 });
+    const j = await yt("videos", { part: "snippet,statistics,status", id: batch.join(","), maxResults: 50 }, "stats");
     for (const it of j?.items ?? []) {
       missing.delete(it.id);
       const title: string = it.snippet?.title ?? "";
@@ -353,7 +402,8 @@ async function main() {
   const videos = rows.map((r, i) => [r.id, r.ch, r.v.t, r.v.p, r.v.v, r.v.l, r.v.c, r3(oP[i]), r3(eP[i]), r3(tP[i]), r3(r.r)]);
 
   mkdirSync(OUT_DIR, { recursive: true });
-  writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: now, units, channels: outChannels, videos }));
+  const usage = recordUsage(true);
+  writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: now, units, usage, channels: outChannels, videos }));
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   const activeCount = outChannels.filter((c) => c.st === "active").length;
@@ -369,5 +419,6 @@ async function main() {
 main().catch((err) => {
   console.error(`\n${err instanceof QuotaError ? "" : "Error: "}${err.message}`);
   console.error(`API units used before stopping: ~${units}`);
+  recordUsage(false);
   process.exit(1);
 });

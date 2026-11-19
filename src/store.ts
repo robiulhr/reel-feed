@@ -8,7 +8,12 @@ export interface Shared {
   bad: string[]; // shortIds that refused to play (embedding disabled)
   affCh: Record<string, number>; // learned liking per channel
   affCat: Record<string, number>; // learned liking per category
+  apiLog: ApiUse[]; // YouTube API units spent by channel lookups (newest first)
 }
+
+/** One YouTube API spend made from the app (Channels → Add lookups). */
+export interface ApiUse { at: number; units: number; what: string }
+const MAX_API_LOG = 300;
 
 /** Settings that stay on each device. */
 export interface DevicePrefs {
@@ -32,14 +37,15 @@ export type Op =
   | { t: "bad"; id: string }
   | { t: "learn"; h: string; cat: string; d: number }
   | { t: "resetLearn" }
-  | { t: "clearSeen" };
+  | { t: "clearSeen" }
+  | { t: "api"; at: number; units: number; what: string };
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
 const PENDING_KEY = "ecomgy-reel-feed.pending";
 export const MAX_SEEN = 20000;
-export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat"] as const;
+export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog"] as const;
 
-export const emptyShared = (): Shared => ({ saved: [], hidden: [], seen: {}, bad: [], affCh: {}, affCat: {} });
+export const emptyShared = (): Shared => ({ saved: [], hidden: [], seen: {}, bad: [], affCh: {}, affCat: {}, apiLog: [] });
 
 const defaults = (): State => ({
   ...emptyShared(),
@@ -112,6 +118,13 @@ export function applyOp(s: Shared, op: Op) {
     case "clearSeen":
       s.seen = {};
       break;
+    case "api":
+      if (!s.apiLog.some((x) => x.at === op.at && x.what === op.what)) {
+        s.apiLog = [{ at: op.at, units: op.units, what: op.what }, ...s.apiLog]
+          .sort((a, b) => b.at - a.at)
+          .slice(0, MAX_API_LOG);
+      }
+      break;
   }
 }
 
@@ -151,6 +164,7 @@ export interface StateFile {
   bad: string[];
   affCh: Record<string, number>;
   affCat: Record<string, number>;
+  apiLog?: ApiUse[];
 }
 
 export function toFile(s: Shared): StateFile {
@@ -158,7 +172,7 @@ export function toFile(s: Shared): StateFile {
   const seen = Object.keys(s.seen).sort((a, b) => s.seen[a] - s.seen[b]);
   return {
     v: 1, updatedAt: new Date().toISOString(),
-    saved: s.saved, hidden: s.hidden, seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat,
+    saved: s.saved, hidden: s.hidden, seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat, apiLog: s.apiLog,
   };
 }
 
@@ -170,6 +184,7 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
   s.bad = f.bad ?? [];
   s.affCh = f.affCh ?? {};
   s.affCat = f.affCat ?? {};
+  s.apiLog = f.apiLog ?? [];
   (f.seen ?? []).forEach((id, i) => (s.seen[id] = i + 1)); // keeps order; real timestamps sort after these
   return s;
 }
@@ -181,12 +196,14 @@ export function mergeInto(base: Shared, local: Shared) {
   for (const id of local.bad) if (!base.bad.includes(id)) base.bad.push(id);
   for (const [id, at] of Object.entries(local.seen)) base.seen[id] = Math.max(base.seen[id] ?? 0, at);
   for (const [k, v] of Object.entries(local.affCh)) if (!(k in base.affCh)) base.affCh[k] = v;
+  for (const u of local.apiLog ?? []) applyOp(base, { t: "api", ...u });
   for (const [k, v] of Object.entries(local.affCat)) if (!(k in base.affCat)) base.affCat[k] = v;
 }
 
 export function sharedOf(s: State): Shared {
   return structuredClone({
     saved: s.saved, hidden: s.hidden, seen: s.seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat,
+    apiLog: s.apiLog ?? [],
   });
 }
 

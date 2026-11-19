@@ -225,6 +225,7 @@ async function doLookup(search: boolean) {
     const r = await sync.call<{ results: LookupResult[]; units: number; needsSearch: boolean }>("/lookup", {
       method: "POST", body: JSON.stringify({ q, search }),
     });
+    if (r.units) act({ t: "api", at: Math.floor(Date.now() / 1000), units: r.units, what: `${search ? "Search" : "Look up"} "${q.slice(0, 60)}"` });
     add.results = r.results;
     add.needsSearch = r.needsSearch || (!search && !r.results.length);
     add.msg = r.results.length

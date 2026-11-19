@@ -4,6 +4,7 @@ import { buildQueue, CATS } from "./rank";
 import { act, learn, persist, startVisit, state } from "./store";
 import * as sync from "./sync";
 import { renderChannelsPanel, resetChannels } from "./channels";
+import { renderUsagePanel } from "./usage";
 import type { Dataset, Short, Tab, Win } from "./types";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -34,7 +35,7 @@ const el = {
   toast: $("toast"),
 };
 
-let ds: Dataset = { generatedAt: 0, units: 0, channels: [], videos: [] };
+let ds: Dataset = { generatedAt: 0, units: 0, usage: [], channels: [], videos: [] };
 let byId = new Map<string, Short>();
 let history: Short[] = [];
 let idx = -1;
@@ -413,6 +414,8 @@ function renderPanel() {
       row.append(name, b);
       body.append(row);
     }
+  } else if (panelTab === "api") {
+    renderUsagePanel(body, ds, ago);
   } else if (panelTab === "sync") {
     renderSyncPanel(body);
   } else {
@@ -561,6 +564,7 @@ async function loadData(): Promise<Dataset | null> {
     return {
       generatedAt: raw.generatedAt,
       units: raw.units ?? 0,
+      usage: raw.usage ?? [],
       channels: raw.channels,
       videos: raw.videos.map((a: any[]) => ({
         id: a[0], ch: a[1], t: a[2], p: a[3], v: a[4], l: a[5], c: a[6], o: a[7], e: a[8], tr: a[9], r: a[10],
