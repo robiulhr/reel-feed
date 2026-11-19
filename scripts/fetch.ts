@@ -1,11 +1,18 @@
 /**
- * Fetches Shorts from every channel in channels.json, scores them and writes
+ * Fetches Shorts from every active channel in channels.json, scores them and writes
  * public/data/shorts.json for the website.
  *
- *   npm run fetch          normal refresh (new Shorts + updated stats)
+ *   npm run fetch          normal refresh
  *   npm run fetch:deep     also digs further back into each channel's history
  *
- * The API key is read from .env and is never printed.
+ * Quota-saving rules (YouTube Data API, 10,000 units/day):
+ *  - New uploads are detected with each channel's public RSS feed (free). The Shorts playlist
+ *    (1 unit/page) is only checked when RSS shows something new, RSS fails, or once a week.
+ *  - View/like counts are refreshed by age: Shorts < 7 days old every run, < 60 days once a day,
+ *    older ones once a week (1 unit per 50 Shorts).
+ *  - Removed channels are not fetched at all. Permanently deleted channels are purged from the cache.
+ *
+ * The API key is read from .env (or the YOUTUBE_API_KEY env var) and is never printed.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -24,13 +31,18 @@ const MAX_PAGES = DEEP ? 20 : 4; // 50 Shorts per page
 const KEEP_PER_CHANNEL = 150; // best older Shorts kept per channel
 const KEEP_RECENT_DAYS = 60; // every Short newer than this is kept
 const CONCURRENCY = 8;
+const DAY = 86400;
+const FORCE_PLAYLIST_CHECK = 7 * DAY; // safety net in case RSS misses something
 
 type Cat = "bangla" | "ads" | "stories" | "founders" | "books" | "ai" | "other";
 const CAT_PRIOR: Record<Cat, number> = { ads: 1, stories: 1, bangla: 0.8, founders: 0.8, books: 0.5, ai: 0.5, other: 0.4 };
 
-interface ChannelInput { name: string; handle: string; cat?: Cat }
-interface CachedChannel { id: string; title: string; thumb: string; subs: number; known: string[]; noShorts?: boolean }
-interface CachedVideo { ch: string; t: string; p: number; v: number; l: number; c: number; kw: number; emb: boolean; bn: boolean }
+interface ChannelInput { name: string; handle: string; cat?: Cat; id?: string; status?: "removed" }
+interface CachedChannel {
+  id: string; title: string; thumb: string; subs: number; known: string[];
+  noShorts?: boolean; rss?: string[]; checkedAt?: number;
+}
+interface CachedVideo { ch: string; t: string; p: number; v: number; l: number; c: number; kw: number; emb: boolean; bn: boolean; s?: number }
 interface Cache { channels: Record<string, CachedChannel>; videos: Record<string, CachedVideo> }
 
 const KEYWORDS = [
@@ -57,6 +69,7 @@ if (!KEY) {
 }
 
 let units = 0;
+const counts = { rssOk: 0, rssFailed: 0, playlistChecks: 0, statsCalls: 0 };
 class QuotaError extends Error {}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -83,6 +96,20 @@ async function yt(endpoint: string, params: Record<string, string | number>): Pr
     }
     if (res.status >= 500 && attempt < 2) { await sleep(1000 * (attempt + 1)); continue; }
     throw new Error(`${endpoint} failed: HTTP ${res.status} ${reason} ${body?.error?.message ?? ""}`.trim());
+  }
+}
+
+/** Latest ~15 upload IDs from the channel's public RSS feed. Free (no API quota). Null if unavailable. */
+async function rssIds(channelId: string): Promise<string[] | null> {
+  try {
+    const r = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!r.ok) return null;
+    const xml = await r.text();
+    return [...xml.matchAll(/<yt:videoId>([\w-]{11})<\/yt:videoId>/g)].map((m) => m[1]);
+  } catch {
+    return null;
   }
 }
 
@@ -119,11 +146,19 @@ function percentiles(values: number[]) {
   return out;
 }
 
+/** How often a Short's stats are refreshed, by age. */
+function statsInterval(ageSec: number) {
+  if (ageSec < 7 * DAY) return 0; // every run
+  if (ageSec < 60 * DAY) return 20 * 3600; // about daily
+  return 7 * DAY; // weekly
+}
+
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 async function main() {
   const t0 = Date.now();
-  const channelsIn: ChannelInput[] = JSON.parse(readFileSync(CHANNELS_FILE, "utf8"));
+  const now = Math.floor(t0 / 1000);
+  const list: ChannelInput[] = JSON.parse(readFileSync(CHANNELS_FILE, "utf8"));
   const cache: Cache = existsSync(CACHE_FILE)
     ? JSON.parse(readFileSync(CACHE_FILE, "utf8"))
     : { channels: {}, videos: {} };
@@ -131,29 +166,41 @@ async function main() {
     mkdirSync(CACHE_DIR, { recursive: true });
     writeFileSync(CACHE_FILE, JSON.stringify(cache));
   };
+
+  // 0. Purge permanently deleted channels (no longer in the list at all)
+  const listed = new Set(list.map((c) => c.handle));
+  for (const [h, ch] of Object.entries(cache.channels)) {
+    if (listed.has(h)) continue;
+    for (const id of ch.known) delete cache.videos[id];
+    delete cache.channels[h];
+  }
+
+  const activeIn = list.filter((c) => c.status !== "removed");
   const notFound: string[] = [];
 
-  // 1. Resolve new handles to channel IDs
-  const toResolve = channelsIn.filter((c) => !cache.channels[c.handle]?.id);
-  if (toResolve.length) console.log(`Resolving ${toResolve.length} channel handle(s)...`);
+  // 1. Resolve new channels to IDs (free if the app already stored the ID)
+  const toResolve = activeIn.filter((c) => !cache.channels[c.handle]?.id);
+  if (toResolve.length) console.log(`Resolving ${toResolve.length} new channel(s)...`);
   await pool(toResolve, CONCURRENCY, async (c) => {
+    if (c.id) {
+      cache.channels[c.handle] = { id: c.id, title: c.name, thumb: "", subs: 0, known: [] };
+      return;
+    }
     const j = await yt("channels", { part: "snippet,statistics", forHandle: c.handle });
     const item = j?.items?.[0];
     if (!item) { notFound.push(`${c.name} (${c.handle})`); return; }
     cache.channels[c.handle] = {
-      id: item.id,
-      title: item.snippet.title,
+      id: item.id, title: item.snippet.title,
       thumb: item.snippet.thumbnails?.default?.url ?? "",
-      subs: Number(item.statistics?.subscriberCount ?? 0),
-      known: [],
+      subs: Number(item.statistics?.subscriberCount ?? 0), known: [],
     };
   });
 
-  const active = channelsIn
+  const active = activeIn
     .map((c) => [c, cache.channels[c.handle]] as const)
     .filter((x): x is readonly [ChannelInput, CachedChannel] => Boolean(x[1]?.id));
 
-  // 2. Refresh channel info (50 per call)
+  // 2. Channel names, avatars, subscriber counts (1 unit per 50 channels)
   await pool(chunk(active, 50), CONCURRENCY, async (batch) => {
     const j = await yt("channels", { part: "snippet,statistics", id: batch.map(([, ch]) => ch.id).join(","), maxResults: 50 });
     const byId = new Map<string, any>((j?.items ?? []).map((it: any) => [it.id, it]));
@@ -166,10 +213,22 @@ async function main() {
     }
   });
 
-  // 3. New Shorts from each channel's Shorts-only playlist (UC... -> UUSH...)
-  console.log(`Checking Shorts for ${active.length} channels${DEEP ? " (deep)" : ""}...`);
+  // 3. New Shorts: RSS first (free), Shorts playlist only when needed
+  console.log(`Checking ${active.length} channels for new uploads${DEEP ? " (deep)" : ""}...`);
   let newCount = 0;
   await pool(active, CONCURRENCY, async ([, ch]) => {
+    let needPlaylist = DEEP || !ch.checkedAt || now - ch.checkedAt > FORCE_PLAYLIST_CHECK;
+    const feed = await rssIds(ch.id);
+    if (feed === null) { counts.rssFailed++; needPlaylist = true; }
+    else {
+      counts.rssOk++;
+      const seen = new Set(ch.rss ?? []);
+      if (feed.some((id) => !seen.has(id))) needPlaylist = true;
+      ch.rss = feed;
+    }
+    if (!needPlaylist) return;
+
+    counts.playlistChecks++;
     const known = new Set(ch.known);
     const fresh: string[] = [];
     let pageToken: string | undefined;
@@ -181,7 +240,7 @@ async function main() {
         maxResults: 50,
         ...(pageToken ? { pageToken } : {}),
       });
-      if (!j) { ch.noShorts = known.size === 0; return; }
+      if (!j) { ch.noShorts = known.size === 0; break; }
       ch.noShorts = false;
       let hitKnown = false;
       for (const it of j.items ?? []) {
@@ -195,17 +254,22 @@ async function main() {
       pages++;
       if (hitKnown && !DEEP) break;
     } while (pageToken && pages < MAX_PAGES);
+    ch.checkedAt = now;
     ch.known = DEEP ? [...ch.known, ...fresh.filter((id) => !ch.known.includes(id))] : [...fresh, ...ch.known];
     newCount += fresh.length;
   });
 
-  // 4. Stats for every known Short (50 per call)
+  // 4. Stats, refreshed by age (1 unit per 50 Shorts)
   const owner = new Map<string, string>();
   for (const [c, ch] of active) for (const id of ch.known) owner.set(id, c.handle);
-  const allIds = [...owner.keys()];
-  console.log(`Updating stats for ${allIds.length} Shorts (${newCount} new)...`);
-  const missing = new Set(allIds);
-  await pool(chunk(allIds, 50), CONCURRENCY, async (batch) => {
+  const due = [...owner.keys()].filter((id) => {
+    const v = cache.videos[id];
+    return !v || now - (v.s ?? 0) >= statsInterval(now - v.p);
+  });
+  console.log(`Updating stats for ${due.length} of ${owner.size} Shorts (${newCount} new)...`);
+  const missing = new Set(due);
+  await pool(chunk(due, 50), CONCURRENCY, async (batch) => {
+    counts.statsCalls++;
     const j = await yt("videos", { part: "snippet,statistics,status", id: batch.join(","), maxResults: 50 });
     for (const it of j?.items ?? []) {
       missing.delete(it.id);
@@ -221,6 +285,7 @@ async function main() {
         kw: kwScore(`${title} ${desc.slice(0, 500)}`),
         emb: it.status?.embeddable !== false && it.status?.privacyStatus !== "private",
         bn: BENGALI.test(title),
+        s: now,
       };
     }
   });
@@ -229,24 +294,40 @@ async function main() {
   for (const [, ch] of active) ch.known = ch.known.filter((id) => !missing.has(id));
   saveCache();
 
-  // 5. Score and write the website data
-  const now = Date.now() / 1000;
-  const outChannels: { h: string; n: string; cat: Cat; bn: boolean; subs: number; thumb: string }[] = [];
+  // 5. Score and write the website data. Every listed channel is included (for the Channels panel);
+  //    only active ones contribute Shorts.
+  type OutChannel = {
+    h: string; n: string; cat: Cat; bn: boolean; subs: number; thumb: string;
+    id: string; st: "active" | "noShorts" | "notFound" | "removed"; cnt: number; last: number;
+  };
+  const outChannels: OutChannel[] = [];
   const rows: { id: string; ch: number; v: CachedVideo; o: number; e: number; tr: number; r: number }[] = [];
   const noShorts: string[] = [];
 
-  for (const [c, ch] of active) {
+  for (const c of list) {
+    const ch = cache.channels[c.handle];
+    const cat: Cat = c.cat ?? "other";
+    const base: OutChannel = {
+      h: c.handle, n: ch?.title || c.name, cat, bn: cat === "bangla", subs: ch?.subs ?? 0,
+      thumb: ch?.thumb ?? "", id: ch?.id ?? c.id ?? "", st: "notFound", cnt: 0, last: 0,
+    };
+    if (c.status === "removed") { outChannels.push({ ...base, st: "removed" }); continue; }
+    if (!ch?.id) { outChannels.push(base); continue; }
+
     const vids = ch.known
       .map((id) => [id, cache.videos[id]] as const)
       .filter((x): x is readonly [string, CachedVideo] => Boolean(x[1]?.emb));
-    if (!vids.length) { noShorts.push(`${c.name} (${c.handle})`); continue; }
+    if (!vids.length) {
+      noShorts.push(`${c.name} (${c.handle})`);
+      outChannels.push({ ...base, st: "noShorts" });
+      continue;
+    }
 
     const med = median(vids.map(([, v]) => v.v));
     const scored = vids.map(([id, v]) => {
-      const ageDays = Math.max((now - v.p) / 86400, 0.25);
+      const ageDays = Math.max((now - v.p) / DAY, 0.25);
       return {
-        id, v,
-        ageDays,
+        id, v, ageDays,
         o: Math.log((v.v + 1) / (med + 1)),
         tr: Math.log1p(v.v / ageDays),
         e: (v.l + 3 * v.c + 1) / (v.v + 100),
@@ -257,10 +338,12 @@ async function main() {
     );
     const kept = scored.filter((s) => best.has(s.id) || s.ageDays <= KEEP_RECENT_DAYS);
 
-    const cat: Cat = c.cat ?? "other";
     const idx = outChannels.length;
     const bnShare = vids.filter(([, v]) => v.bn).length / vids.length;
-    outChannels.push({ h: c.handle, n: ch.title || c.name, cat, bn: bnShare >= 0.3, subs: ch.subs, thumb: ch.thumb });
+    outChannels.push({
+      ...base, bn: bnShare >= 0.3, st: "active", cnt: kept.length,
+      last: Math.max(...vids.map(([, v]) => v.p)),
+    });
     for (const s of kept) rows.push({ id: s.id, ch: idx, v: s.v, o: s.o, e: s.e, tr: s.tr, r: 0.5 * s.v.kw + 0.5 * CAT_PRIOR[cat] });
   }
 
@@ -270,11 +353,15 @@ async function main() {
   const videos = rows.map((r, i) => [r.id, r.ch, r.v.t, r.v.p, r.v.v, r.v.l, r.v.c, r3(oP[i]), r3(eP[i]), r3(tP[i]), r3(r.r)]);
 
   mkdirSync(OUT_DIR, { recursive: true });
-  writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: Math.floor(now), channels: outChannels, videos }));
+  writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: now, units, channels: outChannels, videos }));
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`\nDone in ${secs}s — ${videos.length} Shorts from ${outChannels.length} channels written to public/data/shorts.json`);
+  const activeCount = outChannels.filter((c) => c.st === "active").length;
+  console.log(`\nDone in ${secs}s — ${videos.length} Shorts from ${activeCount} channels written to public/data/shorts.json`);
   console.log(`API units used this run: ~${units} (free limit: 10,000/day)`);
+  console.log(
+    `RSS checks: ${counts.rssOk} ok, ${counts.rssFailed} failed · playlist checks: ${counts.playlistChecks} · stats calls: ${counts.statsCalls}`,
+  );
   if (noShorts.length) console.log(`\nNo playable Shorts (${noShorts.length}): ${noShorts.join(", ")}`);
   if (notFound.length) console.log(`\nHandle not found (${notFound.length}) — check these in channels.json: ${notFound.join(", ")}`);
 }

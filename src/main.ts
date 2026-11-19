@@ -3,6 +3,7 @@ import { ShortsPlayer } from "./player";
 import { buildQueue, CATS } from "./rank";
 import { act, learn, persist, startVisit, state } from "./store";
 import * as sync from "./sync";
+import { renderChannelsPanel, resetChannels } from "./channels";
 import type { Dataset, Short, Tab, Win } from "./types";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -18,6 +19,7 @@ const el = {
   muteBtn: $("muteBtn"),
   saveBtn: $("saveBtn"),
   hideBtn: $("hideBtn"),
+  shareBtn: $("shareBtn"),
   openBtn: $<HTMLAnchorElement>("openBtn"),
   chThumb: $<HTMLImageElement>("chThumb"),
   chName: $<HTMLAnchorElement>("chName"),
@@ -32,7 +34,7 @@ const el = {
   toast: $("toast"),
 };
 
-let ds: Dataset = { generatedAt: 0, channels: [], videos: [] };
+let ds: Dataset = { generatedAt: 0, units: 0, channels: [], videos: [] };
 let byId = new Map<string, Short>();
 let history: Short[] = [];
 let idx = -1;
@@ -308,6 +310,7 @@ $("prevBtn").onclick = prev;
 el.muteBtn.onclick = toggleMute;
 el.saveBtn.onclick = () => toggleSave();
 el.hideBtn.onclick = hideChannel;
+el.shareBtn.onclick = shareCurrent;
 
 // ---------- tabs, time range, categories ----------
 function renderControls() {
@@ -350,6 +353,7 @@ function openPanel(tab = panelTab) {
 }
 function closePanel() {
   el.panel.hidden = true;
+  onFeedChange(); // skip the current Short if its channel was removed/hidden while the menu was open
 }
 $("menuBtn").onclick = () => openPanel();
 $("closePanel").onclick = closePanel;
@@ -364,7 +368,9 @@ function renderPanel() {
   const body = el.panelBody;
   body.replaceChildren();
 
-  if (panelTab === "saved") {
+  if (panelTab === "channels") {
+    renderChannelsPanel(body, { ds, toast, ago, fmt: (n) => compact.format(n), onFeedChange });
+  } else if (panelTab === "saved") {
     const items = state.saved.map((id) => byId.get(id)).filter((s): s is Short => !!s);
     if (!items.length) { body.innerHTML = "<p>No saved Shorts yet. Tap ♡ or double-tap a video to save it.</p>"; return; }
     const grid = document.createElement("div");
@@ -424,7 +430,7 @@ function renderPanel() {
       stats.append(d);
     }
     const p = document.createElement("p");
-    p.textContent = `Data last refreshed: ${updated}. Run "npm run fetch" to pull new Shorts.`;
+    p.textContent = `Data last refreshed: ${updated}${ds.units ? ` (used ~${ds.units} YouTube API units)` : ""}. New Shorts are pulled automatically every 4 hours, or use Channels → Refresh now.`;
     const keys = document.createElement("p");
     keys.innerHTML = "Keys: <b>↑/↓</b> or <b>j/k</b> move · <b>Space</b> pause · <b>m</b> sound · <b>s</b> save. On phone: swipe, tap to pause, double-tap to save.";
     const resetLearn = document.createElement("button");
@@ -471,7 +477,7 @@ function renderSyncPanel(body: HTMLElement) {
       para("Every sync is a commit in your private GitHub repo, so GitHub keeps every earlier version as a backup."),
       button("Sync now", async () => { await sync.syncNow(); renderPanel(); }),
       button("Log out this device", () => {
-        if (confirm("Log out this device? Your data stays in GitHub.")) { sync.disconnect(); renderPanel(); }
+        if (confirm("Log out this device? Your data stays in GitHub.")) { sync.disconnect(); resetChannels(); renderPanel(); }
       }, "btn danger"),
     );
     return;
@@ -508,11 +514,42 @@ function renderSyncPanel(body: HTMLElement) {
   body.append(form);
 }
 
+/** Channels removed/hidden/re-categorised: drop them from the upcoming queue (and skip the current one). */
+function onFeedChange() {
+  const gone = (s: Short) => {
+    const ch = ds.channels[s.ch];
+    return ch.st === "removed" || state.hidden.includes(ch.h);
+  };
+  queue = queue.filter((s) => !gone(s));
+  if (cur && gone(cur) && el.panel.hidden) next();
+}
+
 function onSyncUpdate() {
   renderSave();
-  if (cur && state.hidden.includes(ds.channels[cur.ch].h)) next();
-  queue = queue.filter((s) => !state.hidden.includes(ds.channels[s.ch].h));
-  if (!el.panel.hidden && (panelTab !== "sync" || sync.isConnected())) renderPanel();
+  onFeedChange();
+  // Don't rebuild the Channels panel on background syncs — it would wipe what you're typing.
+  if (!el.panel.hidden && panelTab !== "channels" && (panelTab !== "sync" || sync.isConnected())) renderPanel();
+}
+
+// ---------- share ----------
+async function shareCurrent() {
+  if (!cur) return;
+  const ch = ds.channels[cur.ch];
+  const url = `https://youtube.com/shorts/${cur.id}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: cur.t, text: `${cur.t} — ${ch.n}`, url });
+      return;
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return; // you closed the share sheet
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Link copied");
+  } catch {
+    window.prompt("Copy this link:", url);
+  }
 }
 
 // ---------- boot ----------
@@ -523,6 +560,7 @@ async function loadData(): Promise<Dataset | null> {
     const raw = await r.json();
     return {
       generatedAt: raw.generatedAt,
+      units: raw.units ?? 0,
       channels: raw.channels,
       videos: raw.videos.map((a: any[]) => ({
         id: a[0], ch: a[1], t: a[2], p: a[3], v: a[4], l: a[5], c: a[6], o: a[7], e: a[8], tr: a[9], r: a[10],

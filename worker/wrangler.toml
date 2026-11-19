@@ -5,10 +5,13 @@ workers_dev = true     # address: https://reel-feed-sync.robiulhr2201.workers.de
 preview_urls = false   # no extra per-version preview addresses
 
 [vars]
-# The PRIVATE repo that stores user-state.json
+# PRIVATE repo that stores user-state.json (saves, history, learning)
 DATA_REPO = "robiulhr/reel-feed-data"
+# Code repo that holds channels.json and the refresh workflow
+CODE_REPO = "robiulhr/reel-feed"
+WORKFLOW_FILE = "deploy.yml"
 # Sites allowed to call this Worker (local dev addresses are always allowed)
 ALLOWED_ORIGINS = "https://robiulhr.github.io"
 
-# Secrets — set these with `npx wrangler secret put <NAME>`, never put them in this file:
-#   GITHUB_TOKEN, APP_PASSWORD, SESSION_SECRET
+# Secrets — set with `npx wrangler secret put <NAME>`, never put them in this file:
+#   GITHUB_TOKEN, APP_PASSWORD, SESSION_SECRET, YOUTUBE_API_KEY

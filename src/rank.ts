@@ -31,7 +31,7 @@ export function buildQueue(
 
   const allowed = (s: Short, ignoreSeen: boolean) => {
     const ch = ds.channels[s.ch];
-    if (hidden.has(ch.h) || bad.has(s.id) || opts.exclude.has(s.id)) return false;
+    if (ch.st === "removed" || hidden.has(ch.h) || bad.has(s.id) || opts.exclude.has(s.id)) return false;
     if (now - s.p > maxAge) return false;
     if (st.cat !== "all") {
       if (st.cat === "bangla" ? !(ch.cat === "bangla" || ch.bn) : ch.cat !== st.cat) return false;

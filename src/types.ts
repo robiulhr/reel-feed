@@ -9,6 +9,10 @@ export interface Channel {
   bn: boolean; // mostly Bengali titles
   subs: number;
   thumb: string;
+  id: string; // YouTube channel ID ("UC…")
+  st: "active" | "noShorts" | "notFound" | "removed";
+  cnt: number; // Shorts of this channel in the library
+  last: number; // newest Short (unix seconds), 0 if none
 }
 
 export interface Short {
@@ -27,6 +31,7 @@ export interface Short {
 
 export interface Dataset {
   generatedAt: number;
+  units: number; // YouTube API units used by the last refresh
   channels: Channel[];
   videos: Short[];
 }

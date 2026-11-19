@@ -19,14 +19,14 @@ A personal, YouTube-Shorts-style feed that shows **only Shorts from a hand-picke
 | Cost | $0 (GitHub free, Cloudflare Workers free, YouTube API free quota) |
 
 ```
-                 every 4h
-GitHub Actions ───────────► YouTube Data API ──► shorts.json ──► build ──► GitHub Pages (public site)
+            every 4h, on channel edits, or "Refresh now"
+GitHub Actions ───────────► YouTube (RSS + Data API) ──► shorts.json ──► build ──► GitHub Pages (public site)
   (uses secret YOUTUBE_API_KEY)
 
-Phone / laptop ── password login ──► Cloudflare Worker ──────────► private repo: user-state.json
-                  (keeps a 180-day     (holds GitHub token          (every sync = a commit = backup)
-                   session, not the     + password as secrets)
-                   password)
+Phone / laptop ── password login ──► Cloudflare Worker ──┬──► private repo: user-state.json (saves, history, learning)
+                  (180-day session,   (holds GitHub token, ├──► code repo: channels.json (Channels panel edits → triggers refresh)
+                   not the password)   password, YouTube   ├──► YouTube Data API (channel lookups when adding)
+                                       key as secrets)     └──► GitHub Actions (Refresh now / status)
 ```
 
 ---
@@ -40,8 +40,8 @@ Phone / laptop ── password login ──► Cloudflare Worker ─────
   - **Popular**: biggest hits relative to each channel's normal views.
   - **Newest**: pure upload order.
 - **Filters**: time range (`All time` default, 30 days, 7 days, Today) + categories (All, Bangla, Ads & E-com, Biz Stories, Founders, Books & Money, AI & Brand).
-- **Actions** (bottom bar): sound, save ♡, hide channel ⊘, open on YouTube ↗.
-- **Menu ☰**: Saved list, Hidden channels (unhide), Sync (log in / status), About (stats, reset learning, clear history).
+- **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), hide channel ⊘, open on YouTube ↗.
+- **Menu ☰**: **Channels** (control panel, §6a), Saved list, Hidden channels (unhide), Sync (log in / status), About (stats, reset learning, clear history).
 - **NEW badge**: Shorts uploaded since your last visit (a gap of 30+ minutes counts as a new visit).
 - Never shows the same Short twice (until you've seen everything in a filter); never the same channel twice in a row; max 3 per channel in any 20.
 - Videos play through YouTube's **official embedded player** (views count for creators; nothing is downloaded or re-hosted).
@@ -54,6 +54,7 @@ Phone / laptop ── password login ──► Cloudflare Worker ─────
 |---|---|---|
 | Shorts list + stats | `public/data/shorts.json` (generated, not committed) | – (read from YouTube) |
 | Fetch cache (known IDs, stats) | `data/cache.json` (generated; cached between Action runs) | – |
+| Channel list (incl. removed channels) | `channels.json` in the code repo — edited from the Channels panel via the Worker | – |
 | Saves, hidden channels, watched history, learning | Browser + **private repo `user-state.json`** via the Worker | ❌ never |
 | Sound on/off, current tab, filters | That device's browser only (intentionally per device) | ❌ |
 | YouTube API key | `.env` locally; GitHub Actions secret `YOUTUBE_API_KEY` | – |
@@ -72,9 +73,11 @@ Note: because playback uses YouTube's player, YouTube counts the view, and if yo
 | `GITHUB_TOKEN` | Cloudflare Worker secret | `npx wrangler secret put GITHUB_TOKEN` |
 | `APP_PASSWORD` | Cloudflare Worker secret | `npx wrangler secret put APP_PASSWORD` or Cloudflare dashboard |
 | `SESSION_SECRET` | Cloudflare Worker secret | see §8 |
+| `YOUTUBE_API_KEY` (Worker copy) | Cloudflare Worker secret — used for channel lookups in the Channels panel | `npx wrangler secret put YOUTUBE_API_KEY` |
 
 **GitHub token settings** (fine-grained, `github.com/settings/personal-access-tokens`):
-name `reel-feed-sync` · resource owner `robiulhr` · **Only select repositories → `reel-feed-data`** · **Contents: Read and write** (Metadata read-only is added automatically) · everything else *No access* · expiry 1 year.
+name `reel-feed-sync` · resource owner `robiulhr` · **Only select repositories → `reel-feed-data` and `reel-feed`** · Repository permissions: **Contents: Read and write**, **Actions: Read and write** (Metadata read-only is added automatically) · everything else *No access* · expiry 1 year.
+Why: Contents on `reel-feed-data` = your synced data; Contents on `reel-feed` = editing `channels.json`; Actions on `reel-feed` = "Refresh now" and refresh status. The Worker code only ever touches `user-state.json` and `channels.json`.
 When it expires, sync stops with "GitHub token is invalid or expired" → create a new one with the same settings and run `npx wrangler secret put GITHUB_TOKEN`.
 
 **YouTube API key**: Google Cloud project "Ecomgy Reel Feed", YouTube Data API v3 enabled, key restricted to *YouTube Data API v3*, application restriction *None*. Free quota 10,000 units/day (resets midnight Pacific).
@@ -129,20 +132,51 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 
 ---
 
+## 6a. Channels panel (Menu ☰ → Channels) — `src/channels.ts`
+
+- **List** of every channel: avatar, name, @handle, status, subscribers, Shorts in your feed, latest upload, your taste score.
+  Status: *Active* · *No Shorts yet* · *Not found* · *Waiting for refresh* (just added/restored) · *Removed*; plus *Hidden* if you hid it.
+- **Search** (name/handle), **filter** by category and status, **sort** by name, subscribers, Shorts in feed, latest upload, your taste.
+- **Add**: paste `@handle`, any YouTube link (channel, `/channel/UC…`, a Short or video link, `youtu.be/…`) or type a name.
+  - Handles/links → instant lookup (**2–3 API units**). A name → **Search YouTube** button (**~100 units**, only when you press it).
+  - Preview card: avatar, name, handle, subscribers, total videos, **number of Shorts**, latest Short, description; category **suggested automatically** (Bengali text → Bangla, ads/e-com words → Ads & E-com, etc.); warnings for *already in list*, *in Removed (adding restores it)*, *no Shorts yet*.
+  - Lookups are remembered for the session, so repeating one costs nothing.
+- **Change category** inline (feed filters update immediately).
+- **Hide / Unhide**: personal (synced like your saves); the channel stays in the list.
+- **Remove = soft delete**: the channel moves to **Removed**, leaves the feed immediately, and stops being fetched (saves quota). **Restore any time** — there's no time limit. A toast also offers **Undo**.
+- **Delete** (permanent) exists **only for channels already in Removed** — the "second deletion". It asks for confirmation; afterwards the next refresh also purges its cached data. GitHub history still has every version of `channels.json` if you ever need it back.
+- **Refresh now**: starts the GitHub Action immediately (normally every 4 hours). Every channel edit also starts a refresh automatically (it's a commit). Status line shows the latest run and the API units the last refresh used.
+- Editing needs you to be logged in (Sync). Logged out = view only.
+- ⚠️ Because the app commits to `channels.json`, run **`git pull`** before editing `channels.json` (or anything) on the PC.
+
+## 6b. Saving YouTube API quota (10,000 units/day)
+
+| What | How it's kept cheap | Typical cost |
+|---|---|---|
+| Detect new uploads | Each channel's public **RSS feed** (free). The Shorts playlist (1 unit) is only read when RSS shows a new upload, RSS fails, or once a week as a safety net | ~0–40 units/refresh |
+| Views/likes | Refreshed **by age**: < 7 days every run, < 60 days ~daily, older weekly (1 unit per 50 Shorts) | ~10–80 units/refresh |
+| Removed channels | Not fetched at all | 0 |
+| Channel lookups (Add) | Handle/link 2–3 units; name search ~100 only on request; repeats cached | per use |
+
+Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week the "older Shorts" stats refresh costs a few hundred. Six refreshes a day stay well under 1,000 units/day.
+
+---
+
 ## 7. Everyday use
 
 **Watch**: open the live site on any device. First time on a device: Menu → Sync → enter password.
 
-**Add / remove channels**: edit `channels.json`, commit, push → the next Action run picks them up (or run it manually: GitHub → Actions → *Fetch Shorts & deploy* → Run workflow).
+**Add / remove channels**: use **Menu → Channels** (§6a). Editing the file by hand still works (`git pull` first, then edit, commit, push):
 
 ```json
-{ "name": "Channel name", "handle": "@handle", "cat": "bangla" }
+{ "name": "Channel name", "handle": "@handle", "cat": "bangla", "id": "UC…(optional)", "status": "removed (optional)" }
 ```
 `cat`: `bangla`, `ads`, `stories`, `founders`, `books`, `ai`. Channels with no Shorts yet are fine to keep — they appear automatically once they post Shorts.
 
 **Run locally** (from the `reel-feed` folder; works with Node 20+):
 ```powershell
-npm run fetch        # new Shorts + fresh stats (~600 API units; first-ever run ~1,100)
+git pull             # the app may have changed channels.json
+npm run fetch        # new Shorts + fresh stats (usually ~20–100 API units)
 npm run fetch:deep   # dig further back into channel history (more quota)
 npm run dev          # http://localhost:5173 ; phone on same Wi-Fi: use the "Network" address printed
 ```
@@ -162,6 +196,7 @@ Then, inside `reel-feed/worker`:
 npx wrangler login                       # one time; browser asks to Allow (normal, broad default scopes)
 npx wrangler secret put GITHUB_TOKEN     # paste the fine-grained token
 npx wrangler secret put APP_PASSWORD     # type the app password
+npx wrangler secret put YOUTUBE_API_KEY  # paste the YouTube key (for channel lookups)
 node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))" | npx wrangler secret put SESSION_SECRET
 npx wrangler deploy                      # prints the Worker address (https://reel-feed-sync.<name>.workers.dev)
 ```
@@ -183,7 +218,9 @@ npx wrangler deploy                      # prints the Worker address (https://re
 - [x] Repo secret `YOUTUBE_API_KEY` (Settings → Secrets and variables → Actions → Secrets)
 - [x] Repo variable `SYNC_URL` = Worker address (same page → Variables)
 - [x] Actions → *Fetch Shorts & deploy* → Run workflow → open the live site
-- [ ] Log in on each device via Menu → Sync
+- [x] Log in on the phone via Menu → Sync (do the same on each other device)
+- [ ] Channels panel: edit the GitHub token → add repo `reel-feed`, permissions **Contents: Read and write** + **Actions: Read and write** (§4)
+- [ ] Channels panel: `npx wrangler secret put YOUTUBE_API_KEY` (§8)
 
 ---
 
@@ -193,7 +230,12 @@ npx wrangler deploy                      # prints the Worker address (https://re
 |---|---|
 | `'Set-Location' is not recognized` | You're in **cmd**, not PowerShell — use the cmd commands in §8. |
 | `Wrangler requires at least Node.js v22.12.0` | Switch the terminal to Node 24 (§8). |
-| Fetch says *quota used up* | Wait until midnight Pacific; normal refreshes use ~600 units. |
+| Fetch says *quota used up* | Wait until midnight Pacific; normal refreshes use only ~20–100 units, so look for repeated name searches or `fetch:deep` runs. |
+| Channels: "GitHub token lacks permission for robiulhr/reel-feed/channels.json" | Token needs repo `reel-feed` with **Contents: Read and write** (§4). |
+| Channels: "…starting the refresh workflow (needs Actions: Read and write)" | Add **Actions: Read and write** for `reel-feed` to the token. |
+| Channels: "YOUTUBE_API_KEY is not set on the sync server" | `npx wrangler secret put YOUTUBE_API_KEY` in `worker/` (§8). |
+| Channels: added channel stays "Waiting for refresh" | The refresh takes ~3 min; check Actions tab. If the handle was wrong it becomes "Not found" — remove it and add again. |
+| `git push` rejected (non-fast-forward) on the PC | The app committed `channels.json` — run `git pull`, then push. |
 | Action failed | Usually missing `YOUTUBE_API_KEY` secret or Pages not set to *GitHub Actions*. Check the run log in the Actions tab. |
 | Sync: "GitHub token is invalid or expired" | Make a new token (§4) → `npx wrangler secret put GITHUB_TOKEN`. |
 | Sync: "You were logged out" | Password or session secret changed, or 180 days passed — log in again. |
@@ -213,9 +255,10 @@ npx wrangler deploy                      # prints the Worker address (https://re
 | `src/rank.ts` | Recommendation logic |
 | `src/store.ts` | Local state, change operations, file format |
 | `src/sync.ts` | Sync with the Worker |
+| `src/channels.ts` | Channels control panel |
 | `src/player.ts` | YouTube IFrame Player wrapper |
 | `src/style.css`, `index.html` | Layout: top bar / video / bottom bar |
-| `worker/` | Cloudflare Worker (login, sessions, read/write `user-state.json`) |
+| `worker/` | Cloudflare Worker (login, sessions, `user-state.json`, `channels.json` edits, channel lookups, refresh trigger) |
 | `.github/workflows/deploy.yml` | Scheduled fetch + build + deploy to Pages |
 | `.env`, `.env.local`, `worker/.dev.vars`, `data/`, `public/data/` | Local-only / generated (git-ignored) |
 
@@ -235,3 +278,8 @@ Tech: Vite + TypeScript (no UI framework), YouTube Data API v3, YouTube IFrame P
 - **Change-based merging** (operations replayed on the latest file) so phone and laptop never overwrite each other.
 - **Kept channels with no Shorts** in the list: they may start posting Shorts later.
 - **Shorts data is deployed as a build artifact, not committed**: avoids bloating the repo with a 2 MB file every 4 hours.
+- **Channel list stays in `channels.json` (code repo), edited through the Worker**: one source of truth with full history; a commit automatically triggers a refresh.
+- **Remove is a soft delete** (`"status": "removed"`), restorable forever; permanent Delete only from Removed — the user explicitly wanted a second, deliberate deletion.
+- **RSS-first new-upload detection + age-based stats refresh**: cut API use per refresh ~35×.
+- **Name search only on request**: it costs 100 units vs 2–3 for a handle/link.
+- **Share uses the native share sheet / copy link** with the public `youtube.com/shorts/…` link (works for anyone, no app needed).

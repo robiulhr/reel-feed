@@ -39,6 +39,14 @@ export const status = () => ({ lastSync, lastError, pending: pending.length, bus
 
 class AuthError extends Error {}
 
+/** Authenticated call to the sync server (used by the Channels panel too). Throws on network errors. */
+export async function call<T = any>(path: string, init: RequestInit = {}): Promise<T> {
+  if (!isConnected()) throw new Error("Log in first (Menu → Sync)");
+  const r = await api(path, init);
+  if (!r.ok) throw new Error(await errorOf(r));
+  return r.json() as Promise<T>;
+}
+
 async function api(path: string, init: RequestInit = {}) {
   const r = await fetch(`${SYNC_URL}${path}`, {
     ...init,
