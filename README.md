@@ -10,7 +10,7 @@ A personal, YouTube-Shorts-style feed that shows **only Shorts from a hand-picke
 
 | Thing | Where |
 |---|---|
-| Live site | `https://robiulhr.github.io/reel-feed/` (after setup is finished) |
+| Live site | `https://robiulhr.github.io/reel-feed/` |
 | Code repo (public) | `https://github.com/robiulhr/reel-feed` |
 | Personal data repo (**private**) | `https://github.com/robiulhr/reel-feed-data` → `user-state.json` |
 | Sync server | Cloudflare Worker `reel-feed-sync` → `https://reel-feed-sync.robiulhr2201.workers.dev` (code in `worker/`) |
@@ -177,12 +177,12 @@ npx wrangler deploy                      # prints the Worker address (https://re
 - [x] Code pushed to `robiulhr/reel-feed`; private repo `robiulhr/reel-feed-data` created
 - [x] Cloudflare account created
 - [ ] Revoke the token that was pasted in chat; create a new fine-grained token (settings in §4)
-- [ ] `wrangler login` + set `GITHUB_TOKEN`, `APP_PASSWORD`, `SESSION_SECRET`
+- [x] `wrangler login` + set `GITHUB_TOKEN`, `APP_PASSWORD`, `SESSION_SECRET`
 - [x] `npx wrangler deploy` → `https://reel-feed-sync.robiulhr2201.workers.dev`
-- [ ] GitHub repo `reel-feed` → Settings → Pages → Source: **GitHub Actions**
-- [ ] Repo secret `YOUTUBE_API_KEY` (Settings → Secrets and variables → Actions → Secrets)
-- [ ] Repo variable `SYNC_URL` = Worker address (same page → Variables)
-- [ ] Actions → *Fetch Shorts & deploy* → Run workflow → open the live site
+- [x] GitHub repo `reel-feed` → Settings → Pages → Source: **GitHub Actions**
+- [x] Repo secret `YOUTUBE_API_KEY` (Settings → Secrets and variables → Actions → Secrets)
+- [x] Repo variable `SYNC_URL` = Worker address (same page → Variables)
+- [x] Actions → *Fetch Shorts & deploy* → Run workflow → open the live site
 - [ ] Log in on each device via Menu → Sync
 
 ---
