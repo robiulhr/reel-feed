@@ -1,6 +1,8 @@
 name = "reel-feed-sync"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
+workers_dev = true     # address: https://reel-feed-sync.robiulhr2201.workers.dev
+preview_urls = false   # no extra per-version preview addresses
 
 [vars]
 # The PRIVATE repo that stores user-state.json
