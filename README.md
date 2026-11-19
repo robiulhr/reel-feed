@@ -40,7 +40,7 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
   - **Popular**: biggest hits relative to each channel's normal views.
   - **Newest**: pure upload order.
 - **Filters**: time range (`All time` default, 30 days, 7 days, Today) + categories (All, Bangla, Ads & E-com, Biz Stories, Founders, Books & Money, AI & Brand).
-- **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), hide channel ⊘, open on YouTube ↗.
+- **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), **⋯** → More like this (§6d), Explore this channel (§6c), Hide this channel, Open on YouTube. Tapping the **channel name** also opens the channel explorer.
 - **Menu ☰**: **Channels** (control panel, §6a), Saved list, Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), About (stats, reset learning, clear history).
 - **NEW badge**: Shorts uploaded since your last visit (a gap of 30+ minutes counts as a new visit).
 - Never shows the same Short twice (until you've seen everything in a filter); never the same channel twice in a row; max 3 per channel in any 20.
@@ -156,7 +156,10 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 | Detect new uploads | Each channel's public **RSS feed** (free). The Shorts playlist (1 unit) is only read when RSS shows a new upload, RSS fails, or once a week as a safety net | ~0–40 units/refresh |
 | Views/likes | Refreshed **by age**: < 7 days every run, < 60 days ~daily, older weekly (1 unit per 50 Shorts) | ~10–80 units/refresh |
 | Removed channels | Not fetched at all | 0 |
-| Channel lookups (Add) | Handle/link 2–3 units; name search ~100 only on request; repeats cached | per use |
+| Channel lookups (Add) | Handle/link 2–3 units; name search ~106 only on request; repeats cached | per use |
+| Channel preview (channel not in your list) | Newest ≤200 Shorts + stats; **cached 24 h for all devices** (Cloudflare KV) | ~6–10, then 0 |
+| More like this → On YouTube | One search (25 results) + stats + channel info; **same words within 7 days = free** (any word order, any device) | ~103, then 0 |
+| More like this → In your feed | Computed in the browser from titles | 0 |
 
 Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week the "older Shorts" stats refresh costs a few hundred. Six refreshes a day stay well under 1,000 units/day.
 
@@ -168,6 +171,35 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **What costs what** reference table.
 - Data sources: every refresh appends a record to the usage history (kept in the Actions cache, published in `shorts.json`; also saved when a run fails). Lookups are logged by the app into `user-state.json` (synced across devices).
 - It's the app's own count. Google's official number: Google Cloud → YouTube Data API → Quotas. Runs made on the PC (`npm run fetch`) use the same quota but only show in the local copy.
+- **Your discovery budget** section (needs login): today's used/budget meter, searches/previews left, the split of the 10,000 (reserve / budget / margin), whether refreshes are protected, units saved by caching this week, a box to change the budget, and spending tips.
+
+### Quota guard — `src/quota.ts` + Worker
+- **Split of the daily 10,000**: 🛡️ **1,500 reserved for automatic refreshes** (they really use ~100–600) · 🔍 **discovery budget, default 3,000** (searches, channel previews, lookups) — changeable 100–8,500 on the API usage page, applies to all devices · the rest is safety margin.
+- **Cost card before every paid action**: what it costs, today's used vs budget (meter), what's left after it and "room for ~N more searches", **free alternatives first** (similar Shorts from your feed, a similar search from the last 7 days), and a warning for vague one-word searches.
+- **Levels** (by budget used after the action): 🟢 < 50% normal · 🟡 50–80% "is this worth it?" · 🔴 80–100% **press and hold 1 s** to confirm · ⛔ over budget = no spend button (free options still work).
+  Small costs (channel preview ~10) only show the card from yellow onwards; the cost is always written on the button.
+- **Hard lock on the server**: the Worker keeps the day's counter in Cloudflare KV (`used:YYYY-MM-DD`, Pacific day) and **refuses** any paid request that would exceed the budget — even from an old device, a bug, or a leaked password.
+- **Caching**: previews 24 h (`ch:<id>`), searches 7 days (`q:<sorted words>`), shared by all devices; cache hits cost 0 and are counted as "saved".
+- **After every paid action** a toast confirms: "Used 103 units · 2,789 of your budget left today".
+- KV namespace: `QUOTA` (id in `worker/wrangler.toml`), free tier.
+
+---
+
+## 6c. Channel explorer — `src/explore.ts`
+
+- Open it by tapping the **channel name/avatar** under a Short, **⋯ → Explore this channel**, a channel in **More like this**, or **Preview Shorts** in Channels → Add.
+- **Header**: avatar, name, handle, subscribers, Shorts count, latest upload, status (*In your list* / *Removed* / *Not in your list*, plus *Hidden*).
+- **Actions**: in your list → category, Hide/Unhide, Remove · removed → Restore · not in your list → category (suggested) + **Add to my list**.
+- **Grid** with **Newest · Popular · Hidden gems** (views ÷ the channel's median, shown as ×N) and **▶ Play all**.
+- Tap a Short → **swipe through only this channel**; the top bar shows "← Channel · 3 of 152"; **←** (or Esc) returns to the channel page, and closing it returns to your main feed where you left it.
+- Channels in your list are **free** (best 150 + all recent Shorts already loaded). Others load on request (~10 units, cached 24 h).
+- Watching here **teaches For You** like the main feed.
+
+## 6d. More like this — `src/similar.ts` (⋯ → More like this)
+
+- **In your feed · free**: TF-IDF topic similarity over every title in your library (Bangla + English, stop-words removed), blended with quality (75% topic, 15% outlier, 10% engagement), max 3 per channel, up to 40 results. Built in the browser in < 0.5 s.
+- **On YouTube · ~103 units**: search words are suggested from the Short's most distinctive title words — **edit them**. Results are Shorts only (≤ 3 min), mostly from new channels; **Channels found** lists them with how many results each had ("Good candidate" if ≥ 2) → tap to explore → Add. ▶ Play all to swipe the results.
+- Everything goes through the cost card and the Worker's budget lock.
 
 ---
 
@@ -243,6 +275,8 @@ npx wrangler deploy                      # prints the Worker address (https://re
 | Channels: "GitHub token lacks permission for robiulhr/reel-feed/channels.json" | Token needs repo `reel-feed` with **Contents: Read and write** (§4). |
 | Channels: "…starting the refresh workflow (needs Actions: Read and write)" | Add **Actions: Read and write** for `reel-feed` to the token. |
 | Channels: "YOUTUBE_API_KEY is not set on the sync server" | `npx wrangler secret put YOUTUBE_API_KEY` in `worker/` (§8). |
+| "Today's discovery budget is used up" | Working as intended. Use free options, wait for the reset (2 PM Bangladesh time in winter), or raise the budget on the API usage page. |
+| Cost card says "Couldn't read today's usage" | Not logged in, or the Worker is unreachable — numbers shown are estimates; the Worker still enforces the budget. |
 | Channels: added channel stays "Waiting for refresh" | The refresh takes ~3 min; check Actions tab. If the handle was wrong it becomes "Not found" — remove it and add again. |
 | `git push` rejected (non-fast-forward) on the PC | The app committed `channels.json` — run `git pull`, then push. |
 | Action failed | Usually missing `YOUTUBE_API_KEY` secret or Pages not set to *GitHub Actions*. Check the run log in the Actions tab. |
@@ -265,7 +299,11 @@ npx wrangler deploy                      # prints the Worker address (https://re
 | `src/store.ts` | Local state, change operations, file format |
 | `src/sync.ts` | Sync with the Worker |
 | `src/channels.ts` | Channels control panel |
-| `src/usage.ts` | API usage page |
+| `src/usage.ts` | API usage page (incl. discovery budget) |
+| `src/quota.ts` | Quota guard: cost card, budget, cache reuse hints |
+| `src/explore.ts` | Channel explorer page + Short grid |
+| `src/similar.ts` | More like this (library similarity + YouTube search) |
+| `src/app.ts` | Interface the feature modules use to talk to the main app |
 | `src/player.ts` | YouTube IFrame Player wrapper |
 | `src/style.css`, `index.html` | Layout: top bar / video / bottom bar |
 | `worker/` | Cloudflare Worker (login, sessions, `user-state.json`, `channels.json` edits, channel lookups, refresh trigger) |
@@ -293,3 +331,6 @@ Tech: Vite + TypeScript (no UI framework), YouTube Data API v3, YouTube IFrame P
 - **RSS-first new-upload detection + age-based stats refresh**: cut API use per refresh ~35×.
 - **Name search only on request**: it costs 100 units vs 2–3 for a handle/link.
 - **Share uses the native share sheet / copy link** with the public `youtube.com/shorts/…` link (works for anyone, no app needed).
+- **"More like this" in two layers**: YouTube removed its related-videos API in 2023, so similarity is computed from your own library (free) and, on request, by a keyword search (~103 units).
+- **Quota guard with a server-side lock**: app warnings can be bypassed by bugs or old devices, so the Worker enforces the budget itself (Cloudflare KV counter); a fixed reserve keeps automatic refreshes safe.
+- **Explore any channel, but keep only best 150 + recent**: deep history wasn't needed; previews load the newest ≤200 Shorts.

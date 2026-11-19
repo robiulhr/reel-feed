@@ -26,6 +26,7 @@ export interface Env {
   ALLOWED_ORIGINS: string; // comma-separated
   GITHUB_API?: string; // only for local testing
   YOUTUBE_API?: string; // only for local testing
+  QUOTA?: KVNamespace; // daily quota counter, budget setting, cached previews/searches
 }
 
 type Cors = Record<string, string>;
@@ -59,6 +60,10 @@ export default {
         case "GET /channels": return json(await readJsonFile(env, env.CODE_REPO, CHANNELS_FILE), 200, cors);
         case "POST /channels": return await editChannels(req, env, cors);
         case "POST /lookup": return json(await lookup(req, env), 200, cors);
+        case "GET /quota": return json(await quotaStatus(env), 200, cors);
+        case "POST /quota": return json(await setBudget(req, env), 200, cors);
+        case "POST /channel-shorts": return json(await channelShorts(req, env), 200, cors);
+        case "POST /search-shorts": return json(await searchShorts(req, env), 200, cors);
         case "POST /refresh": return json(await refresh(env), 200, cors);
         case "GET /status": return json(await runStatus(env), 200, cors);
       }
@@ -393,8 +398,21 @@ async function lookup(req: Request, env: Env) {
   const used = { units: 0 };
   const q = parseQuery(raw);
   let ids: string[] = [];
+  if (q.kind === "text" && !body.search) return { results: [], units: 0, needsSearch: true };
+  await guard(env, body.search ? 106 : 3);
+  try {
+    ids = await lookupIds(env, raw, q, !!body.search, used);
+    const results = await channelInfo(env, ids, used);
+    return { results, units: used.units, needsSearch: false, quota: await addUsed(env, used.units) };
+  } catch (e) {
+    await addUsed(env, used.units); // count units spent even if something failed
+    throw e;
+  }
+}
 
-  if (body.search) {
+async function lookupIds(env: Env, raw: string, q: Query, search: boolean, used: { units: number }): Promise<string[]> {
+  let ids: string[] = [];
+  if (search) {
     // Name search — costs 100 units, only when explicitly asked for
     const s = await yt(env, "search", { part: "snippet", type: "channel", q: raw.trim(), maxResults: 5 }, used);
     ids = (s?.items ?? []).map((it: any) => it.snippet?.channelId ?? it.id?.channelId).filter(Boolean);
@@ -409,11 +427,197 @@ async function lookup(req: Request, env: Env) {
   } else if (q.kind === "video") {
     const j = await yt(env, "videos", { part: "snippet", id: q.v }, used);
     ids = (j?.items ?? []).map((it: any) => it.snippet?.channelId).filter(Boolean);
-  } else {
-    return { results: [], units: 0, needsSearch: true };
   }
-  const results = await channelInfo(env, ids, used);
-  return { results, units: used.units, needsSearch: false };
+  return ids;
+}
+
+// ---------- quota guard (KV) ----------
+const DAILY_LIMIT = 10_000;
+const DEFAULT_BUDGET = 3_000; // daily budget for paid actions from the app (lookups, previews, searches)
+const DEFAULT_RESERVE = 1_500; // kept free for the automatic refreshes — the budget can never eat into it
+const MIN_BUDGET = 100;
+
+const pacificDay = (d = new Date()) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+
+async function settings(env: Env) {
+  const s = ((await env.QUOTA?.get("settings", "json")) ?? {}) as { budget?: number; reserve?: number };
+  const reserve = s.reserve ?? DEFAULT_RESERVE;
+  const budget = Math.min(s.budget ?? DEFAULT_BUDGET, DAILY_LIMIT - reserve);
+  return { budget, reserve };
+}
+async function counter(env: Env, kind: "used" | "saved", day = pacificDay()) {
+  return Number((await env.QUOTA?.get(`${kind}:${day}`)) ?? 0);
+}
+async function bump(env: Env, kind: "used" | "saved", units: number) {
+  if (!env.QUOTA || !units) return;
+  const day = pacificDay();
+  const now = await counter(env, kind, day);
+  await env.QUOTA.put(`${kind}:${day}`, String(now + units), { expirationTtl: 10 * 86400 });
+}
+
+/** Refuses a paid action if it would go over today's budget. This is the hard lock — the app's warnings are the soft one. */
+async function guard(env: Env, cost: number) {
+  if (!env.QUOTA) return;
+  const { budget } = await settings(env);
+  const used = await counter(env, "used");
+  if (used + cost > budget) {
+    throw new HttpError(429,
+      `Today's discovery budget is used up (${used.toLocaleString("en-US")} of ${budget.toLocaleString("en-US")} units). ` +
+      "It resets at midnight Pacific time, or raise the budget on the API usage page.");
+  }
+}
+
+/** Records units spent and returns the fresh numbers for the app's toast. */
+async function addUsed(env: Env, units: number) {
+  await bump(env, "used", units);
+  const { budget } = await settings(env);
+  return { used: await counter(env, "used"), budget };
+}
+
+async function quotaStatus(env: Env) {
+  const { budget, reserve } = await settings(env);
+  const days = Array.from({ length: 7 }, (_, i) => pacificDay(new Date(Date.now() - i * 86400_000)));
+  const savedWeek = (await Promise.all(days.map((d) => counter(env, "saved", d)))).reduce((a, b) => a + b, 0);
+  const usedWeek = (await Promise.all(days.map((d) => counter(env, "used", d)))).reduce((a, b) => a + b, 0);
+  const recent = ((await env.QUOTA?.get("q:index", "json")) ?? []) as SearchIndexEntry[];
+  return {
+    enabled: !!env.QUOTA, day: days[0], used: await counter(env, "used"), budget, reserve,
+    limit: DAILY_LIMIT, maxBudget: DAILY_LIMIT - reserve, savedWeek, usedWeek, recent,
+  };
+}
+
+async function setBudget(req: Request, env: Env) {
+  if (!env.QUOTA) throw new HttpError(500, "Quota storage isn't set up on the sync server");
+  const body = (await req.json().catch(() => ({}))) as { budget?: number };
+  const { reserve } = await settings(env);
+  const budget = Math.round(Number(body.budget));
+  if (!Number.isFinite(budget) || budget < MIN_BUDGET || budget > DAILY_LIMIT - reserve) {
+    throw new HttpError(400, `Budget must be between ${MIN_BUDGET} and ${(DAILY_LIMIT - reserve).toLocaleString("en-US")} (the rest is reserved for automatic refreshes)`);
+  }
+  await env.QUOTA.put("settings", JSON.stringify({ budget, reserve }));
+  return quotaStatus(env);
+}
+
+// ---------- /channel-shorts: preview any channel ----------
+interface MiniShort { id: string; t: string; p: number; v: number; l: number; c: number }
+const PREVIEW_TTL = 24 * 3600;
+const PREVIEW_PAGES = 4; // up to 200 newest Shorts
+const PREVIEW_COST_ESTIMATE = 10;
+
+function isoSeconds(d: string) {
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(d ?? "");
+  return m ? Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) : 0;
+}
+
+async function videoStats(env: Env, ids: string[], used: { units: number }) {
+  const out: (MiniShort & { chId: string; dur: number })[] = [];
+  for (let i = 0; i < ids.length; i += 50) {
+    const j = await yt(env, "videos", { part: "snippet,statistics,contentDetails,status", id: ids.slice(i, i + 50).join(","), maxResults: 50 }, used);
+    for (const it of j?.items ?? []) {
+      if (it.status?.embeddable === false || it.status?.privacyStatus === "private") continue;
+      out.push({
+        id: it.id, t: it.snippet?.title ?? "", p: Math.floor(Date.parse(it.snippet?.publishedAt) / 1000) || 0,
+        v: Number(it.statistics?.viewCount ?? 0), l: Number(it.statistics?.likeCount ?? 0), c: Number(it.statistics?.commentCount ?? 0),
+        chId: it.snippet?.channelId ?? "", dur: isoSeconds(it.contentDetails?.duration),
+      });
+    }
+  }
+  return out;
+}
+
+async function channelShorts(req: Request, env: Env) {
+  const body = (await req.json().catch(() => ({}))) as { id?: string; force?: boolean };
+  const id = String(body.id ?? "");
+  if (!/^UC[\w-]{22}$/.test(id)) throw new HttpError(400, "Invalid channel ID");
+  const key = `ch:${id}`;
+  if (!body.force) {
+    const hit = (await env.QUOTA?.get(key, "json")) as any;
+    if (hit) {
+      await bump(env, "saved", hit.units ?? PREVIEW_COST_ESTIMATE);
+      return { ...hit, units: 0, cached: true };
+    }
+  }
+  await guard(env, PREVIEW_COST_ESTIMATE);
+  const used = { units: 0 };
+  try {
+    const [info] = await channelInfo(env, [id], used);
+    if (!info) throw new HttpError(404, "Channel not found");
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < PREVIEW_PAGES; page++) {
+      const p = await yt(env, "playlistItems", {
+        part: "contentDetails", playlistId: "UUSH" + id.slice(2), maxResults: 50, ...(pageToken ? { pageToken } : {}),
+      }, used);
+      if (!p) break;
+      for (const it of p.items ?? []) if (it.contentDetails?.videoId) ids.push(it.contentDetails.videoId);
+      pageToken = p.nextPageToken;
+      if (!pageToken) break;
+    }
+    const shorts: MiniShort[] = (await videoStats(env, ids, used)).map(({ chId, dur, ...s }) => s);
+    const result = { channel: info, shorts, units: used.units, fetchedAt: Math.floor(Date.now() / 1000) };
+    await env.QUOTA?.put(key, JSON.stringify(result), { expirationTtl: PREVIEW_TTL });
+    return { ...result, cached: false, quota: await addUsed(env, used.units) };
+  } catch (e) {
+    await addUsed(env, used.units);
+    throw e;
+  }
+}
+
+// ---------- /search-shorts: find similar Shorts on YouTube ----------
+interface SearchIndexEntry { q: string; norm: string; at: number; n: number }
+const SEARCH_TTL = 7 * 24 * 3600;
+const SEARCH_COST_ESTIMATE = 103;
+const MAX_SHORT_SECONDS = 180;
+
+const normQuery = (q: string) =>
+  [...new Set(q.toLowerCase().split(/[^\p{L}\p{M}\p{N}#]+/u).filter((w) => w.length > 1))].sort().join(" ");
+
+async function searchShorts(req: Request, env: Env) {
+  const body = (await req.json().catch(() => ({}))) as { q?: string; force?: boolean };
+  const q = String(body.q ?? "").trim().slice(0, 120);
+  const norm = normQuery(q);
+  if (!norm) throw new HttpError(400, "Type some search words");
+  const key = `q:${norm}`;
+  if (!body.force) {
+    const hit = (await env.QUOTA?.get(key, "json")) as any;
+    if (hit) {
+      await bump(env, "saved", hit.units ?? SEARCH_COST_ESTIMATE);
+      return { ...hit, units: 0, cached: true };
+    }
+  }
+  await guard(env, SEARCH_COST_ESTIMATE);
+  const used = { units: 0 };
+  try {
+    const s = await yt(env, "search", {
+      part: "snippet", type: "video", videoDuration: "short", q, maxResults: 25, safeSearch: "moderate",
+    }, used);
+    const ids: string[] = (s?.items ?? []).map((it: any) => it.id?.videoId).filter(Boolean);
+    const vids = (await videoStats(env, ids, used)).filter((v) => v.dur > 0 && v.dur <= MAX_SHORT_SECONDS);
+    const chIds = [...new Set(vids.map((v) => v.chId))].slice(0, 50);
+    const chs = new Map<string, any>();
+    if (chIds.length) {
+      const j = await yt(env, "channels", { part: "snippet,statistics", id: chIds.join(","), maxResults: 50 }, used);
+      for (const it of j?.items ?? []) {
+        const cu: string | undefined = it.snippet?.customUrl;
+        chs.set(it.id, {
+          id: it.id, name: it.snippet?.title ?? "", thumb: it.snippet?.thumbnails?.default?.url ?? "",
+          handle: cu ? (cu.startsWith("@") ? cu : `@${cu}`) : it.id, subs: Number(it.statistics?.subscriberCount ?? 0),
+          suggestedCat: suggestCat(`${it.snippet?.title ?? ""} ${it.snippet?.description ?? ""}`),
+        });
+      }
+    }
+    const results = vids.map(({ chId, dur, ...v }) => ({ ...v, ch: chs.get(chId) ?? { id: chId, name: "", thumb: "", handle: chId, subs: 0, suggestedCat: "stories" } }));
+    const result = { q, results, units: used.units, fetchedAt: Math.floor(Date.now() / 1000) };
+    await env.QUOTA?.put(key, JSON.stringify(result), { expirationTtl: SEARCH_TTL });
+    const index = ((await env.QUOTA?.get("q:index", "json")) ?? []) as SearchIndexEntry[];
+    const entry = { q, norm, at: result.fetchedAt, n: results.length };
+    await env.QUOTA?.put("q:index", JSON.stringify([entry, ...index.filter((x) => x.norm !== norm)].slice(0, 50)));
+    return { ...result, cached: false, quota: await addUsed(env, used.units) };
+  } catch (e) {
+    await addUsed(env, used.units);
+    throw e;
+  }
 }
 
 // ---------- /refresh, /status (GitHub Actions) ----------

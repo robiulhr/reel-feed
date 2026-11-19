@@ -5,6 +5,10 @@ import { act, learn, persist, startVisit, state } from "./store";
 import * as sync from "./sync";
 import { renderChannelsPanel, resetChannels } from "./channels";
 import { renderUsagePanel } from "./usage";
+import { openChannel } from "./explore";
+import { openSimilar } from "./similar";
+import { initChannels } from "./channels";
+import type { AppApi, ExternalChannelInfo } from "./app";
 import type { Dataset, Short, Tab, Win } from "./types";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,9 +23,17 @@ const el = {
   chips: $("chips"),
   muteBtn: $("muteBtn"),
   saveBtn: $("saveBtn"),
-  hideBtn: $("hideBtn"),
   shareBtn: $("shareBtn"),
-  openBtn: $<HTMLAnchorElement>("openBtn"),
+  moreBtn: $("moreBtn"),
+  moreSheet: $("moreSheet"),
+  page: $("page"),
+  pageTitle: $("pageTitle"),
+  pageBody: $("pageBody"),
+  ctxBar: $("ctxBar"),
+  ctxTitle: $("ctxTitle"),
+  ctxSub: $("ctxSub"),
+  row1: document.querySelector<HTMLElement>(".row1")!,
+  row2: document.querySelector<HTMLElement>(".row2")!,
   chThumb: $<HTMLImageElement>("chThumb"),
   chName: $<HTMLAnchorElement>("chName"),
   badge: $("badge"),
@@ -43,6 +55,8 @@ let queue: Short[] = [];
 let cur: Short | null = null;
 let playing = false;
 let watch = { playMs: 0, since: 0, maxT: 0, loops: 0 };
+/** A temporary list you're swiping through (a channel's Shorts, "More like this"). null = main feed. */
+let ctx: { title: string; items: Short[]; i: number; onBack?: () => void } | null = null;
 
 // ---------- helpers ----------
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
@@ -146,6 +160,13 @@ function refill() {
 }
 
 function next() {
+  if (ctx) {
+    if (ctx.i >= ctx.items.length - 1) { toast("That's the end of this list — tap ← to go back"); return; }
+    finishCurrent();
+    ctx.i++;
+    show(ctx.items[ctx.i]);
+    return;
+  }
   finishCurrent();
   if (idx < history.length - 1) idx++;
   else {
@@ -159,6 +180,13 @@ function next() {
 }
 
 function prev() {
+  if (ctx) {
+    if (ctx.i <= 0) return;
+    finishCurrent();
+    ctx.i--;
+    show(ctx.items[ctx.i]);
+    return;
+  }
   if (idx <= 0) return;
   finishCurrent();
   idx--;
@@ -166,13 +194,48 @@ function prev() {
 }
 
 function playNow(s: Short) {
+  if (ctx) { ctx = null; renderCtxBar(); }
   finishCurrent();
   history.splice(idx + 1, 0, s);
   idx++;
   show(s);
 }
 
+/** Swipe through a specific list; the main feed waits where you left it. */
+function playList(title: string, items: Short[], start: number, onBack?: () => void) {
+  if (!items.length) return;
+  for (const s of items) if (!byId.has(s.id)) byId.set(s.id, s); // so saves from this list show in Saved
+  finishCurrent();
+  closePage();
+  closePanel();
+  ctx = { title, items, i: Math.max(0, Math.min(start, items.length - 1)), onBack };
+  renderCtxBar();
+  show(ctx.items[ctx.i]);
+}
+
+function exitList() {
+  if (!ctx) return;
+  const back = ctx.onBack;
+  finishCurrent();
+  ctx = null;
+  renderCtxBar();
+  if (history[idx]) show(history[idx]);
+  else next();
+  back?.();
+}
+
+function renderCtxBar() {
+  el.ctxBar.hidden = !ctx;
+  el.row1.hidden = !!ctx;
+  el.row2.hidden = !!ctx;
+  if (ctx) {
+    el.ctxTitle.textContent = ctx.title;
+    el.ctxSub.textContent = `${ctx.i + 1} of ${ctx.items.length} · ← back to your feed`;
+  }
+}
+
 function resetFeed() {
+  if (ctx) { ctx = null; renderCtxBar(); }
   finishCurrent();
   history = [];
   queue = [];
@@ -197,12 +260,11 @@ function show(s: Short) {
   el.poster.classList.remove("gone");
   el.chThumb.src = ch.thumb;
   el.chName.textContent = ch.n;
-  el.chName.href = `https://www.youtube.com/${ch.h}/shorts`;
   el.badge.hidden = !(s.p > state.prevVisit);
   el.title.textContent = s.t;
   el.meta.textContent = `${compact.format(s.v)} views · ${compact.format(s.l)} likes · ${ago(s.p)}`;
-  el.openBtn.href = `https://www.youtube.com/shorts/${s.id}`;
   renderSave();
+  if (ctx) renderCtxBar();
 
   state.lastActive = Math.floor(nowSec());
   act({ t: "seen", id: s.id, at: Math.floor(nowSec()) });
@@ -256,6 +318,69 @@ function hideChannel() {
   next();
 }
 
+// ---------- pages, ⋯ menu, channel explorer, More like this ----------
+function openPage(title: string, render: (body: HTMLElement) => void) {
+  if (playing) player.pause();
+  closePanel();
+  el.moreSheet.hidden = true;
+  el.pageTitle.textContent = title;
+  el.pageBody.replaceChildren();
+  el.pageBody.scrollTop = 0;
+  el.page.hidden = false;
+  render(el.pageBody);
+}
+function closePage() {
+  el.page.hidden = true;
+}
+$("pageClose").onclick = closePage;
+el.page.addEventListener("click", (e) => { if (e.target === el.page) closePage(); });
+$("ctxBack").onclick = exitList;
+
+const BENGALI = /[ঀ-৿]/;
+function ensureChannel(info: ExternalChannelInfo): number {
+  const lc = (x: string) => x.toLowerCase();
+  const i = ds.channels.findIndex((c) => (info.id && c.id === info.id) || lc(c.h) === lc(info.handle));
+  if (i >= 0) return i;
+  ds.channels.push({
+    h: info.handle || info.id, n: info.name || info.handle, cat: (info.suggestedCat ?? "stories") as never,
+    bn: BENGALI.test(info.name), subs: info.subs, thumb: info.thumb, id: info.id, st: "external", cnt: 0, last: 0,
+  });
+  return ds.channels.length - 1;
+}
+
+const app: AppApi = {
+  get ds() { return ds; },
+  toast, ago, fmt: (n) => compact.format(n), thumb,
+  openPage, closePage, playList, ensureChannel,
+  onFeedChange: () => onFeedChange(),
+};
+
+function channelsCtx() {
+  return {
+    ds, toast, ago, fmt: (n: number) => compact.format(n), onFeedChange,
+    explore: (info: ExternalChannelInfo) => openChannel(app, { info }),
+  };
+}
+
+function exploreCurrent() {
+  if (cur) openChannel(app, { chIndex: cur.ch });
+}
+el.chName.addEventListener("click", (e) => { e.preventDefault(); exploreCurrent(); });
+el.chThumb.addEventListener("click", exploreCurrent);
+el.chThumb.style.cursor = "pointer";
+
+el.moreBtn.onclick = () => { if (cur) el.moreSheet.hidden = false; };
+el.moreSheet.addEventListener("click", (e) => {
+  const a = (e.target as HTMLElement).closest("button")?.dataset.a;
+  if (e.target !== el.moreSheet && !a) return;
+  el.moreSheet.hidden = true;
+  if (!cur) return;
+  if (a === "similar") openSimilar(app, cur);
+  else if (a === "channel") exploreCurrent();
+  else if (a === "hide") hideChannel();
+  else if (a === "open") window.open(`https://www.youtube.com/shorts/${cur.id}`, "_blank", "noopener");
+});
+
 // ---------- gestures & keys ----------
 let touchY = 0, touchT = 0, swiped = false;
 el.tap.addEventListener("touchstart", (e) => { touchY = e.touches[0].clientY; touchT = Date.now(); swiped = false; }, { passive: true });
@@ -283,7 +408,7 @@ el.tap.addEventListener("click", () => {
 
 let wheelAcc = 0, wheelLock = 0;
 window.addEventListener("wheel", (e) => {
-  if (!el.panel.hidden) return;
+  if (!el.panel.hidden || !el.page.hidden || !el.moreSheet.hidden || document.querySelector(".cost-overlay")) return;
   const t = Date.now();
   if (t < wheelLock) return;
   wheelAcc += e.deltaY;
@@ -295,8 +420,12 @@ window.addEventListener("wheel", (e) => {
 }, { passive: true });
 
 window.addEventListener("keydown", (e) => {
+  if (document.querySelector(".cost-overlay")) return;
+  if (!el.moreSheet.hidden) { if (e.key === "Escape") el.moreSheet.hidden = true; return; }
+  if (!el.page.hidden) { if (e.key === "Escape") closePage(); return; }
   if (!el.panel.hidden) { if (e.key === "Escape") closePanel(); return; }
-  if ((e.target as HTMLElement).tagName === "SELECT") return;
+  if (["SELECT", "INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)) return;
+  if (e.key === "Escape" && ctx) { exitList(); return; }
   switch (e.key) {
     case "ArrowDown": case "j": e.preventDefault(); next(); break;
     case "ArrowUp": case "k": e.preventDefault(); prev(); break;
@@ -310,7 +439,6 @@ $("nextBtn").onclick = next;
 $("prevBtn").onclick = prev;
 el.muteBtn.onclick = toggleMute;
 el.saveBtn.onclick = () => toggleSave();
-el.hideBtn.onclick = hideChannel;
 el.shareBtn.onclick = shareCurrent;
 
 // ---------- tabs, time range, categories ----------
@@ -370,7 +498,7 @@ function renderPanel() {
   body.replaceChildren();
 
   if (panelTab === "channels") {
-    renderChannelsPanel(body, { ds, toast, ago, fmt: (n) => compact.format(n), onFeedChange });
+    renderChannelsPanel(body, channelsCtx());
   } else if (panelTab === "saved") {
     const items = state.saved.map((id) => byId.get(id)).filter((s): s is Short => !!s);
     if (!items.length) { body.innerHTML = "<p>No saved Shorts yet. Tap ♡ or double-tap a video to save it.</p>"; return; }
@@ -524,7 +652,7 @@ function onFeedChange() {
     return ch.st === "removed" || state.hidden.includes(ch.h);
   };
   queue = queue.filter((s) => !gone(s));
-  if (cur && gone(cur) && el.panel.hidden) next();
+  if (cur && gone(cur) && el.panel.hidden && el.page.hidden) next();
 }
 
 function onSyncUpdate() {
@@ -586,6 +714,7 @@ async function boot() {
     return;
   }
   ds = data;
+  initChannels(channelsCtx());
   byId = new Map(ds.videos.map((s) => [s.id, s]));
   next();
 }

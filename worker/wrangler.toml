@@ -13,5 +13,10 @@ WORKFLOW_FILE = "deploy.yml"
 # Sites allowed to call this Worker (local dev addresses are always allowed)
 ALLOWED_ORIGINS = "https://robiulhr.github.io"
 
+# Free KV store: daily YouTube-quota counter, budget setting, cached channel previews & searches
+[[kv_namespaces]]
+binding = "QUOTA"
+id = "6b32bc97b6b643069fcd92fc65a34815"
+
 # Secrets — set with `npx wrangler secret put <NAME>`, never put them in this file:
 #   GITHUB_TOKEN, APP_PASSWORD, SESSION_SECRET, YOUTUBE_API_KEY

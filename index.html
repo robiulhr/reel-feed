@@ -10,6 +10,10 @@
     <div class="layout">
       <div class="shell">
         <header class="top">
+          <div class="ctx-bar" id="ctxBar" hidden>
+            <button class="icon-btn" id="ctxBack" aria-label="Back to your feed" title="Back (Esc)">←</button>
+            <div class="ctx-text"><div class="ctx-title" id="ctxTitle"></div><div class="ctx-sub" id="ctxSub"></div></div>
+          </div>
           <div class="row1">
             <nav class="tabs" id="tabs">
               <button data-tab="foryou">For You</button>
@@ -43,7 +47,7 @@
           <div class="info">
             <div class="ch-row">
               <img id="chThumb" class="ch-thumb" alt="" />
-              <a id="chName" class="ch-name" target="_blank" rel="noopener"></a>
+              <a id="chName" class="ch-name" href="#" title="Explore this channel"></a>
               <span id="badge" class="badge" hidden>NEW</span>
             </div>
             <p id="title" class="title"></p>
@@ -53,8 +57,7 @@
             <button class="act" id="muteBtn" aria-label="Sound on/off" title="Sound (m)"><span class="ico">🔇</span></button>
             <button class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
             <button class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>
-            <button class="act" id="hideBtn" aria-label="Hide this channel" title="Hide channel"><span class="ico">⊘</span></button>
-            <a class="act" id="openBtn" target="_blank" rel="noopener" aria-label="Open on YouTube" title="Open on YouTube"><span class="ico">↗</span></a>
+            <button class="act" id="moreBtn" aria-label="More" title="More like this, channel, hide…"><span class="ico">⋯</span></button>
           </div>
         </footer>
       </div>
@@ -79,6 +82,26 @@
           <button class="icon-btn" id="closePanel" aria-label="Close">✕</button>
         </div>
         <div class="panel-body" id="panelBody"></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="moreSheet" hidden>
+      <div class="sheet-inner">
+        <button data-a="similar">✨ More like this</button>
+        <button data-a="channel">👤 Explore this channel</button>
+        <button data-a="hide">⊘ Hide this channel</button>
+        <button data-a="open">↗ Open on YouTube</button>
+        <button data-a="cancel" class="sheet-cancel">Cancel</button>
+      </div>
+    </div>
+
+    <div class="page" id="page" hidden>
+      <div class="page-inner">
+        <div class="page-head">
+          <button class="icon-btn" id="pageClose" aria-label="Close">✕</button>
+          <div class="page-title" id="pageTitle"></div>
+        </div>
+        <div class="page-body" id="pageBody"></div>
       </div>
     </div>
 

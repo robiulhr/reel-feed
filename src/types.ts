@@ -10,7 +10,7 @@ export interface Channel {
   subs: number;
   thumb: string;
   id: string; // YouTube channel ID ("UC…")
-  st: "active" | "noShorts" | "notFound" | "removed";
+  st: "active" | "noShorts" | "notFound" | "removed" | "external"; // external = seen via search/preview, not in your list
   cnt: number; // Shorts of this channel in the library
   last: number; // newest Short (unix seconds), 0 if none
 }

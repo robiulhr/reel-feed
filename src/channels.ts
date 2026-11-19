@@ -9,6 +9,7 @@
 import { CATS } from "./rank";
 import { act, state } from "./store";
 import * as sync from "./sync";
+import { COST, confirmCost, noteSpend, spendToast } from "./quota";
 import type { Channel, Dataset } from "./types";
 
 export interface ChannelsCtx {
@@ -17,6 +18,38 @@ export interface ChannelsCtx {
   ago(sec: number): string;
   fmt(n: number): string;
   onFeedChange(): void; // a channel was removed/restored/re-categorised → refresh the queue
+  explore(info: { id: string; name: string; handle: string; thumb: string; subs: number; suggestedCat?: string }): void;
+}
+
+/** Called at startup so other screens (channel page, More like this) can add/remove channels too. */
+export function initChannels(c: ChannelsCtx) {
+  ctx = c;
+}
+
+/** Is this channel in your list? Uses the GitHub copy when loaded, otherwise the feed data. */
+export function listStatus(handle: string, id?: string): "listed" | "removed" | "none" {
+  const list = entries ?? fallbackEntries();
+  const e = list.find((x) => lc(x.handle) === lc(handle) || (!!id && x.id === id));
+  if (!e) {
+    const d = ctx?.ds.channels.find((c) => c.st !== "external" && ((id && c.id === id) || lc(c.h) === lc(handle)));
+    if (!d) return "none";
+    return d.st === "removed" ? "removed" : "listed";
+  }
+  return e.status === "removed" ? "removed" : "listed";
+}
+
+export function addFromInfo(info: { name: string; handle: string; id: string; cat: string }) {
+  return change([{ t: "add", channel: info }], `Added ${info.name} — its Shorts join your feed after the refresh (~3 min)`);
+}
+export function removeByHandle(handle: string, name: string) {
+  return change([{ t: "remove", h: handle }], `Removed ${name}. Restore any time under Channels → Removed.`,
+    { label: "Undo", run: () => change([{ t: "restore", h: handle }], `Restored ${name}`) });
+}
+export function restoreByHandle(handle: string, name: string) {
+  return change([{ t: "restore", h: handle }], `Restored ${name}`);
+}
+export function setCategory(handle: string, name: string, cat: string) {
+  return change([{ t: "cat", h: handle, cat }], `${name} → ${CATS.find((c) => c.id === cat)?.label ?? cat}`);
 }
 
 interface Entry {
@@ -76,12 +109,14 @@ function dsByHandle() {
 }
 
 function fallbackEntries(): Entry[] {
-  return ctx.ds.channels.map((c) => ({ name: c.n, handle: c.h, cat: c.cat, ...(c.st === "removed" ? { status: "removed" as const } : {}) }));
+  return ctx.ds.channels
+    .filter((c) => c.st !== "external")
+    .map((c) => ({ name: c.n, handle: c.h, cat: c.cat, ...(c.st === "removed" ? { status: "removed" as const } : {}) }));
 }
 
 function rowStatus(e: Entry, d: Channel | undefined): RowStatus {
   if (e.status === "removed") return "removed";
-  if (!d || d.st === "removed") return "pending";
+  if (!d || d.st === "removed" || d.st === "external") return "pending"; // just added — not in the feed data yet
   return d.st;
 }
 
@@ -217,15 +252,27 @@ async function doLookup(search: boolean) {
     renderAdd();
     return;
   }
+  if (search) {
+    const ok = await confirmCost({
+      title: `Search YouTube for channels named "${q}"`,
+      cost: COST.nameSearch,
+      alwaysAsk: true,
+      detail: "Searching by name is the most expensive way to find a channel. Pasting its @handle or any link to it costs only 2–3 units.",
+    });
+    if (!ok) return;
+  }
   add.busy = true;
   add.msg = search ? "Searching YouTube…" : "Looking up…";
   add.results = [];
   renderAdd();
   try {
-    const r = await sync.call<{ results: LookupResult[]; units: number; needsSearch: boolean }>("/lookup", {
+    const r = await sync.call<{ results: LookupResult[]; units: number; needsSearch: boolean; quota?: { used: number; budget: number } }>("/lookup", {
       method: "POST", body: JSON.stringify({ q, search }),
     });
-    if (r.units) act({ t: "api", at: Math.floor(Date.now() / 1000), units: r.units, what: `${search ? "Search" : "Look up"} "${q.slice(0, 60)}"` });
+    if (r.units) {
+      noteSpend(r.units, `${search ? "Channel search" : "Look up"} "${q.slice(0, 60)}"`, r.quota);
+      if (search) ctx.toast(spendToast(r.units, r.quota, false));
+    }
     add.results = r.results;
     add.needsSearch = r.needsSearch || (!search && !r.results.length);
     add.msg = r.results.length
@@ -383,7 +430,9 @@ function renderAdd() {
       else addBtn.disabled = false;
     }, "btn sm primary");
     if (existing && existing.status !== "removed") addBtn.disabled = true;
-    row.append(el("span", "ch-note", "Category"), cat, addBtn);
+    const preview = btn(r.shorts ? "Preview Shorts" : "View channel", () =>
+      ctx.explore({ id: r.id, name: r.name, handle: r.handle, thumb: r.thumb, subs: r.subs, suggestedCat: cat.value }), "btn sm");
+    row.append(el("span", "ch-note", "Category"), cat, addBtn, preview);
     main.append(row);
     card.append(img, main);
     addEl.append(card);
