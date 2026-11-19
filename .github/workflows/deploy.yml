@@ -47,6 +47,9 @@ jobs:
           key: yt-cache-${{ github.run_id }}
 
       - run: npm run build
+        env:
+          # Address of the sync Worker (repo Settings → Secrets and variables → Actions → Variables)
+          VITE_SYNC_URL: ${{ vars.SYNC_URL }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

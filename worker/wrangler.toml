@@ -1,0 +1,12 @@
+name = "reel-feed-sync"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+[vars]
+# The PRIVATE repo that stores user-state.json
+DATA_REPO = "Ecomgy/reel-feed-data"
+# Sites allowed to call this Worker (local dev addresses are always allowed)
+ALLOWED_ORIGINS = "https://ecomgy.github.io"
+
+# Secrets — set these with `npx wrangler secret put <NAME>`, never put them in this file:
+#   GITHUB_TOKEN, APP_PASSWORD, SESSION_SECRET

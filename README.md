@@ -2,38 +2,58 @@
 
 A YouTube-Shorts-style feed that only shows Shorts from the channels in `channels.json`.
 
-## Everyday use
-
-```powershell
-cd reel-feed
-npm run fetch     # pull new Shorts + fresh stats (~600 API units)
-npm run dev       # start the site
+```
+GitHub Actions (every 4h) ── fetch Shorts ── build ── GitHub Pages (public site)
+Phone / laptop ── log in with password ── Cloudflare Worker (holds GitHub token) ── private repo: user-state.json
 ```
 
-Open http://localhost:5173 on this PC. To watch on your phone (same Wi-Fi), open the
-**Network** address that `npm run dev` prints, e.g. `http://192.168.x.x:5173`.
-If Windows Firewall asks, allow access on **private** networks.
+## Run it locally
+
+```powershell
+npm run fetch     # pull new Shorts + fresh stats (~600 API units)
+npm run dev       # start the site at http://localhost:5173
+```
 
 `npm run fetch:deep` digs further back into each channel's history (uses more quota).
 
 ## Adding / removing channels
 
-Edit `channels.json`. Each entry:
+Edit `channels.json`, then push (or run `npm run fetch` locally). Each entry:
 
 ```json
 { "name": "Channel name", "handle": "@handle", "cat": "bangla" }
 ```
 
-`cat` is one of: `bangla`, `ads`, `stories`, `founders`, `books`, `ai`. Then run `npm run fetch`.
+`cat` is one of: `bangla`, `ads`, `stories`, `founders`, `books`, `ai`.
+
+## Sync server (Cloudflare Worker)
+
+Lives in `worker/`. Wrangler needs Node 22+. Your PowerShell has Node 20, so first run:
+
+```powershell
+$env:Path = "$HOME\.nvm\versions\node\v24.14.0\bin;" + $env:Path
+```
+
+Then, inside `worker/`:
+
+```powershell
+npx wrangler login                          # one time, opens the browser
+npx wrangler secret put GITHUB_TOKEN        # fine-grained token for the data repo
+npx wrangler secret put APP_PASSWORD        # the password you type on each device
+npx wrangler secret put SESSION_SECRET      # any long random string
+npx wrangler deploy
+```
+
+Changing `APP_PASSWORD` or `SESSION_SECRET` logs out every device.
 
 ## Files
 
 | Path | What |
 |---|---|
-| `.env` | Your YouTube API key (git-ignored, never share) |
+| `.env` | YouTube API key for local fetches (git-ignored, never share) |
 | `channels.json` | Your channel list |
 | `scripts/fetch.ts` | Fetches Shorts and computes scores |
-| `src/rank.ts` | The recommendation logic (For You / Trending / Popular / Newest) |
-| `data/`, `public/data/` | Generated data (git-ignored) |
-
-Your saves, hidden channels, watch history and learned preferences are stored in the browser.
+| `src/rank.ts` | Recommendation logic (For You / Trending / Popular / Newest) |
+| `src/sync.ts` | Syncs saves/history/learning through the Worker |
+| `worker/` | Cloudflare Worker that stores your data in the private GitHub repo |
+| `.github/workflows/deploy.yml` | Scheduled fetch + deploy to GitHub Pages |

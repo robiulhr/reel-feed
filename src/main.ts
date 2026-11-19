@@ -45,6 +45,7 @@ let watch = { playMs: 0, since: 0, maxT: 0, loops: 0 };
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 function ago(sec: number) {
   const d = nowSec() - sec;
+  if (d < 60) return "just now";
   if (d < 3600) return `${Math.max(1, Math.round(d / 60))}m ago`;
   if (d < 86400) return `${Math.round(d / 3600)}h ago`;
   if (d < 86400 * 30) return `${Math.round(d / 86400)}d ago`;
@@ -454,53 +455,57 @@ function button(label: string, onClick: () => void, cls = "btn") {
 }
 
 function renderSyncPanel(body: HTMLElement) {
+  if (!sync.isAvailable()) {
+    body.append(para("Sync isn't set up for this copy of the site yet (no sync server address). Your data is kept in this browser for now."));
+    return;
+  }
   if (sync.isConnected()) {
     const st = sync.status();
     body.append(
-      para(`Connected to ${st.repo} (private).`),
+      para("This device is logged in. Saves, hidden channels, history and learning sync across all your devices."),
       para(st.busy ? "Syncing…" : `Last synced: ${st.lastSync ? ago(st.lastSync / 1000) : "not yet"}`),
       para(`Changes waiting to upload: ${st.pending}`),
     );
     if (st.lastError) body.append(para(`Problem: ${st.lastError}`, "error"));
     body.append(
-      para("Every sync is a commit in your private repo, so GitHub keeps every earlier version as a backup."),
+      para("Every sync is a commit in your private GitHub repo, so GitHub keeps every earlier version as a backup."),
       button("Sync now", async () => { await sync.syncNow(); renderPanel(); }),
-      button("Disconnect this device", () => {
-        if (confirm("Remove the GitHub token from this device? Your data stays in GitHub.")) { sync.disconnect(); renderPanel(); }
+      button("Log out this device", () => {
+        if (confirm("Log out this device? Your data stays in GitHub.")) { sync.disconnect(); renderPanel(); }
       }, "btn danger"),
     );
     return;
   }
 
+  const st = sync.status();
   body.append(
-    para("Sync your saves, hidden channels, history and learning across devices through a private GitHub repo. Each device needs the token once."),
+    para("Log in to sync your saves, hidden channels, history and learning across devices. You only need to do this once per device."),
   );
+  if (st.lastError) body.append(para(st.lastError, "error"));
   const form = document.createElement("form");
   form.className = "form";
-  form.innerHTML = `
-    <label>Private repo<input name="repo" placeholder="your-username/reel-feed-data" autocomplete="off" spellcheck="false"></label>
-    <label>Access token<input name="token" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false"></label>`;
+  form.innerHTML = `<label>Password<input name="password" type="password" autocomplete="current-password"></label>`;
   const err = para("", "error");
-  const go = button("Connect", () => {}, "btn primary");
+  const go = button("Log in", () => {}, "btn primary");
   go.type = "submit";
   form.append(go, err);
   form.onsubmit = async (e) => {
     e.preventDefault();
     const data = new FormData(form);
     go.disabled = true;
-    go.textContent = "Connecting…";
+    go.textContent = "Logging in…";
     err.textContent = "";
-    const msg = await sync.connect(String(data.get("repo") ?? ""), String(data.get("token") ?? ""));
+    const msg = await sync.connect(String(data.get("password") ?? ""));
     if (msg) {
       err.textContent = msg;
       go.disabled = false;
-      go.textContent = "Connect";
+      go.textContent = "Log in";
     } else {
-      toast("Connected — your data is synced");
+      toast("Logged in — your data is synced");
       renderPanel();
     }
   };
-  body.append(form, para("The token stays in this browser only and is sent only to GitHub. You can revoke it any time in GitHub → Settings → Developer settings."));
+  body.append(form);
 }
 
 function onSyncUpdate() {
