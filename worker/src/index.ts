@@ -16,7 +16,7 @@ export interface Env {
   APP_PASSWORD: string;
   SESSION_SECRET: string;
   DATA_REPO: string; // "owner/repo"
-  ALLOWED_ORIGINS: string; // comma-separated, e.g. "https://ecomgy.github.io"
+  ALLOWED_ORIGINS: string; // comma-separated, e.g. "https://robiulhr.github.io"
   GITHUB_API?: string; // only for local testing; defaults to https://api.github.com
 }
 
