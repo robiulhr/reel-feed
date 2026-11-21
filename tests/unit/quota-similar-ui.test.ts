@@ -64,7 +64,10 @@ describe("UI safety helpers", () => {
     btn.textContent = "Add";
     let runs = 0;
     let release!: () => void;
-    const work = () => { runs++; return new Promise<void>((r) => (release = r)); };
+    const work = () => {
+      runs++;
+      return new Promise<void>((r) => (release = r));
+    };
     const first = busy(btn, "Adding…", work);
     const second = busy(btn, "Adding…", work); // double tap
     expect(btn.disabled).toBe(true);
@@ -79,7 +82,11 @@ describe("UI safety helpers", () => {
 
   it("busy(): the button is unlocked even if the action fails", async () => {
     const btn = document.createElement("button");
-    await expect(busy(btn, "…", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
+    await expect(
+      busy(btn, "…", async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
     expect(btn.disabled).toBe(false);
   });
 

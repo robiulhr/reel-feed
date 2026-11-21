@@ -10,30 +10,42 @@ import { CATS } from "./rank";
 import { act, state } from "./store";
 import * as sync from "./sync";
 import type { Channel, Short } from "./types";
+import { el, btn } from "./dom";
 
 type Sort = "newest" | "popular" | "gems";
-interface MiniShort { id: string; t: string; p: number; v: number; l: number; c: number }
+interface MiniShort {
+  id: string;
+  t: string;
+  p: number;
+  v: number;
+  l: number;
+  c: number;
+}
 interface PreviewResponse {
-  channel: { id: string; name: string; handle: string; thumb: string; subs: number; videos: number; desc: string; shorts: number; latestShort: number; suggestedCat: string };
-  shorts: MiniShort[]; units: number; cached: boolean; fetchedAt: number; quota?: { used: number; budget: number };
+  channel: {
+    id: string;
+    name: string;
+    handle: string;
+    thumb: string;
+    subs: number;
+    videos: number;
+    desc: string;
+    shorts: number;
+    latestShort: number;
+    suggestedCat: string;
+  };
+  shorts: MiniShort[];
+  units: number;
+  cached: boolean;
+  fetchedAt: number;
+  quota?: { used: number; budget: number };
 }
 
 const previews = new Map<string, PreviewResponse>(); // this session
 let sortPref: Sort = "newest";
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
-const btn = (label: string, onClick: () => void, cls = "btn sm") => {
-  const b = el("button", cls, label);
-  b.type = "button";
-  b.onclick = onClick;
-  return b;
-};
-const ytUrl = (h: string, id: string) => (h.startsWith("@") ? `https://www.youtube.com/${h}/shorts` : `https://www.youtube.com/channel/${id}/shorts`);
+const ytUrl = (h: string, id: string) =>
+  h.startsWith("@") ? `https://www.youtube.com/${h}/shorts` : `https://www.youtube.com/channel/${id}/shorts`;
 
 function median(nums: number[]) {
   if (!nums.length) return 0;
@@ -54,7 +66,12 @@ export function sortShorts(items: Short[], sort: Sort) {
 }
 
 /** Thumbnail grid shared by the channel page and More like this. */
-export function shortGrid(app: AppApi, items: Short[], onPlay: (i: number) => void, opts: { showChannel?: boolean; badge?: (s: Short) => string } = {}) {
+export function shortGrid(
+  app: AppApi,
+  items: Short[],
+  onPlay: (i: number) => void,
+  opts: { showChannel?: boolean; badge?: (s: Short) => string } = {},
+) {
   const grid = el("div", "sgrid");
   items.forEach((s, i) => {
     const card = el("button", "scard");
@@ -105,8 +122,11 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
     name.href = ytUrl(info.handle, info.id);
     name.target = "_blank";
     name.rel = "noopener";
-    const pill = el("span", `pill st-${status === "listed" ? "active" : status === "removed" ? "removed" : "pending"}`,
-      status === "listed" ? "In your list" : status === "removed" ? "Removed" : "Not in your list");
+    const pill = el(
+      "span",
+      `pill st-${status === "listed" ? "active" : status === "removed" ? "removed" : "pending"}`,
+      status === "listed" ? "In your list" : status === "removed" ? "Removed" : "Not in your list",
+    );
     const hidden = state.hidden.some((h) => h.toLowerCase() === info.handle.toLowerCase());
     const titleRow = el("div", "cp-title-row");
     titleRow.append(name, pill);
@@ -131,25 +151,50 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       cat.onchange = () => setCategory(info.handle, info.name, cat.value);
       actions.append(
         cat,
-        btn(hidden ? "Unhide" : "Hide", () => { act({ t: hidden ? "unhide" : "hide", h: info.handle }); app.onFeedChange(); reopen(); }),
-        btn("Remove", async () => { if (await removeByHandle(info.handle, info.name)) reopen(); }, "btn sm danger"),
+        btn(hidden ? "Unhide" : "Hide", () => {
+          act({ t: hidden ? "unhide" : "hide", h: info.handle });
+          app.onFeedChange();
+          reopen();
+        }),
+        btn(
+          "Remove",
+          async () => {
+            if (await removeByHandle(info.handle, info.name)) reopen();
+          },
+          "btn sm danger",
+        ),
       );
     } else if (status === "removed") {
-      actions.append(btn("Restore to my list", async () => { if (await restoreByHandle(info.handle, info.name)) reopen(); }, "btn sm primary"));
+      actions.append(
+        btn(
+          "Restore to my list",
+          async () => {
+            if (await restoreByHandle(info.handle, info.name)) reopen();
+          },
+          "btn sm primary",
+        ),
+      );
     } else {
       const cat = el("select") as HTMLSelectElement;
       cat.setAttribute("aria-label", "Category");
       for (const c of CATS.filter((c) => c.id !== "all")) cat.append(new Option(c.label, c.id));
       cat.value = info.suggestedCat ?? preview?.channel.suggestedCat ?? "stories";
       const err = el("p", "ch-note warn", "");
-      const addBtn = btn("+ Add to my list", async () => {
-        addBtn.disabled = true;
-        addBtn.textContent = "Adding…";
-        if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cat: cat.value })) { reopen(); return; }
-        addBtn.disabled = false;
-        addBtn.textContent = "+ Add to my list";
-        err.textContent = `Not added: ${lastChangeError}`;
-      }, "btn sm primary");
+      const addBtn = btn(
+        "+ Add to my list",
+        async () => {
+          addBtn.disabled = true;
+          addBtn.textContent = "Adding…";
+          if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cat: cat.value })) {
+            reopen();
+            return;
+          }
+          addBtn.disabled = false;
+          addBtn.textContent = "+ Add to my list";
+          err.textContent = `Not added: ${lastChangeError}`;
+        },
+        "btn sm primary",
+      );
       actions.append(el("span", "ch-note", "Category"), cat, addBtn);
       addError = err;
     }
@@ -169,24 +214,34 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
         el("p", "ch-note", "This channel isn't in your feed data, so its Shorts are loaded from YouTube when you ask."),
         el("p", "ch-note", `Cost: ~${COST.preview} units — free if it was opened in the last 24 hours on any of your devices.`),
       );
-      const go = btn(`Load Shorts · ~${COST.preview} units`, async () => {
-        if (!sync.isConnected()) { app.toast("Log in first (Menu → Sync)"); return; }
-        if (!info.id) { app.toast("Unknown channel ID"); return; }
-        if (!(await confirmCost({ title: `Load ${info.name}'s Shorts`, cost: COST.preview }))) return;
-        go.disabled = true;
-        go.textContent = "Loading…";
-        try {
-          const r = await sync.call<PreviewResponse>("/channel-shorts", { method: "POST", body: JSON.stringify({ id: info.id }) });
-          previews.set(info.id, r);
-          noteSpend(r.units, `Channel preview: ${info.name}`, r.quota);
-          app.toast(spendToast(r.units, r.quota, r.cached));
-          reopen();
-        } catch (e) {
-          app.toast(e instanceof Error ? e.message : "Couldn't load the channel");
-          go.disabled = false;
-          go.textContent = `Load Shorts · ~${COST.preview} units`;
-        }
-      }, "btn primary");
+      const go = btn(
+        `Load Shorts · ~${COST.preview} units`,
+        async () => {
+          if (!sync.isConnected()) {
+            app.toast("Log in first (Menu → Sync)");
+            return;
+          }
+          if (!info.id) {
+            app.toast("Unknown channel ID");
+            return;
+          }
+          if (!(await confirmCost({ title: `Load ${info.name}'s Shorts`, cost: COST.preview }))) return;
+          go.disabled = true;
+          go.textContent = "Loading…";
+          try {
+            const r = await sync.call<PreviewResponse>("/channel-shorts", { method: "POST", body: JSON.stringify({ id: info.id }) });
+            previews.set(info.id, r);
+            noteSpend(r.units, `Channel preview: ${info.name}`, r.quota);
+            app.toast(spendToast(r.units, r.quota, r.cached));
+            reopen();
+          } catch (e) {
+            app.toast(e instanceof Error ? e.message : "Couldn't load the channel");
+            go.disabled = false;
+            go.textContent = `Load Shorts · ~${COST.preview} units`;
+          }
+        },
+        "btn primary",
+      );
       box.append(go);
       body.append(box);
       return;
@@ -198,17 +253,30 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
     }
 
     const tabs = el("div", "cp-tabs");
-    const labels: [Sort, string][] = [["newest", "Newest"], ["popular", "Popular"], ["gems", "Hidden gems"]];
+    const labels: [Sort, string][] = [
+      ["newest", "Newest"],
+      ["popular", "Popular"],
+      ["gems", "Hidden gems"],
+    ];
     for (const [k, label] of labels) {
-      const b = btn(label, () => { sortPref = k; reopen(k); }, `cp-tab${k === sort ? " on" : ""}`);
+      const b = btn(
+        label,
+        () => {
+          sortPref = k;
+          reopen(k);
+        },
+        `cp-tab${k === sort ? " on" : ""}`,
+      );
       tabs.append(b);
     }
     const { list, ratio } = sortShorts(items, sort);
     const play = (i: number) => app.playList(`${info.name} · ${labels.find(([k]) => k === sort)![1]}`, list, i, () => reopen(sort));
     tabs.append(btn("▶ Play all", () => play(0), "btn sm primary cp-playall"));
     body.append(tabs);
-    if (sort === "gems") body.append(el("p", "ch-note", "Shorts that got far more views than this channel's typical Short (×N = times its usual)."));
-    if (preview && !inLibrary) body.append(el("p", "ch-note", `Loaded ${app.ago(preview.fetchedAt)} · newest ${preview.shorts.length} Shorts`));
+    if (sort === "gems")
+      body.append(el("p", "ch-note", "Shorts that got far more views than this channel's typical Short (×N = times its usual)."));
+    if (preview && !inLibrary)
+      body.append(el("p", "ch-note", `Loaded ${app.ago(preview.fetchedAt)} · newest ${preview.shorts.length} Shorts`));
     body.append(shortGrid(app, list, play, { badge: sort === "gems" ? (s) => `×${ratio(s).toFixed(1)}` : undefined }));
   });
 }

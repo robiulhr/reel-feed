@@ -37,7 +37,12 @@ const CATS = ["bangla", "ads", "stories", "founders", "books", "ai"] as const;
 const enc = new TextEncoder();
 
 class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 export default {
@@ -92,38 +97,54 @@ async function withRequestId(req: Request, env: Env, cors: Cors, run: () => Prom
     await env.QUOTA.delete(key); // failed — allow a real retry
     throw e;
   }
-  if (res.status >= 500) { await env.QUOTA.delete(key); return res; }
+  if (res.status >= 500) {
+    await env.QUOTA.delete(key);
+    return res;
+  }
   const body = await res.clone().text();
   if (body.length < 100_000) await env.QUOTA.put(key, JSON.stringify({ status: res.status, body }), { expirationTtl: 600 });
   return res;
 }
 
 async function handle(route: string, req: Request, env: Env, cors: Cors): Promise<Response> {
-  {
-      switch (route) {
-        case "GET /state": return json(await readJsonFile(env, env.DATA_REPO, STATE_FILE), 200, cors);
-        case "PUT /state": return await putState(req, env, cors);
-        case "GET /channels": return json(await readJsonFile(env, env.CODE_REPO, CHANNELS_FILE), 200, cors);
-        case "POST /channels": return await editChannels(req, env, cors);
-        case "POST /lookup": return json(await lookup(req, env), 200, cors);
-        case "GET /quota": return json(await quotaStatus(env), 200, cors);
-        case "POST /quota": return json(await setBudget(req, env), 200, cors);
-        case "POST /channel-shorts": return json(await channelShorts(req, env), 200, cors);
-        case "POST /search-shorts": return json(await searchShorts(req, env), 200, cors);
-        case "POST /refresh": return json(await refresh(env), 200, cors);
-        case "GET /status": return json(await runStatus(env), 200, cors);
-        case "GET /health": return json(await health(env), 200, cors);
-        case "POST /log": return json(await logError(req, env), 200, cors);
-      }
-      return json({ error: "Not found" }, 404, cors);
+  switch (route) {
+    case "GET /state":
+      return json(await readJsonFile(env, env.DATA_REPO, STATE_FILE), 200, cors);
+    case "PUT /state":
+      return await putState(req, env, cors);
+    case "GET /channels":
+      return json(await readJsonFile(env, env.CODE_REPO, CHANNELS_FILE), 200, cors);
+    case "POST /channels":
+      return await editChannels(req, env, cors);
+    case "POST /lookup":
+      return json(await lookup(req, env), 200, cors);
+    case "GET /quota":
+      return json(await quotaStatus(env), 200, cors);
+    case "POST /quota":
+      return json(await setBudget(req, env), 200, cors);
+    case "POST /channel-shorts":
+      return json(await channelShorts(req, env), 200, cors);
+    case "POST /search-shorts":
+      return json(await searchShorts(req, env), 200, cors);
+    case "POST /refresh":
+      return json(await refresh(env), 200, cors);
+    case "GET /status":
+      return json(await runStatus(env), 200, cors);
+    case "GET /health":
+      return json(await health(env), 200, cors);
+    case "POST /log":
+      return json(await logError(req, env), 200, cors);
   }
+  return json({ error: "Not found" }, 404, cors);
 }
 
 // ---------- CORS ----------
 const DEV_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/;
 
 function corsHeaders(origin: string, env: Env): Cors | null {
-  const allowed = env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean);
+  const allowed = env.ALLOWED_ORIGINS.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (!origin || !(allowed.includes(origin) || DEV_ORIGIN.test(origin))) return null;
   return {
     "Access-Control-Allow-Origin": origin,
@@ -162,15 +183,20 @@ function sameBytes(a: Uint8Array, b: Uint8Array) {
 }
 
 const b64url = (bytes: Uint8Array) =>
-  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const fromB64url = (s: string) =>
-  Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+  btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+const fromB64url = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 
 async function hmac(env: Env, data: string) {
   // Key includes the password, so changing the password invalidates every session.
   const key = await crypto.subtle.importKey(
-    "raw", enc.encode(`${env.SESSION_SECRET}:${env.APP_PASSWORD}`),
-    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    "raw",
+    enc.encode(`${env.SESSION_SECRET}:${env.APP_PASSWORD}`),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
   );
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(data)));
 }
@@ -193,7 +219,16 @@ async function login(req: Request, env: Env, cors: Cors) {
     console.warn(`Wrong password (${fails + 1}/${MAX_FAILED_LOGINS}) from ${ip}`);
     await new Promise((r) => setTimeout(r, 800)); // slows down guessing
     const left = MAX_FAILED_LOGINS - fails - 1;
-    return json({ error: left > 0 ? `Wrong password (${left} tr${left === 1 ? "y" : "ies"} left before a 15-minute pause)` : "Wrong password. Too many tries — wait 15 minutes." }, 401, cors);
+    return json(
+      {
+        error:
+          left > 0
+            ? `Wrong password (${left} tr${left === 1 ? "y" : "ies"} left before a 15-minute pause)`
+            : "Wrong password. Too many tries — wait 15 minutes.",
+      },
+      401,
+      cors,
+    );
   }
   if (fails) await env.QUOTA?.delete(failKey);
   const payload = b64url(enc.encode(JSON.stringify({ exp: Date.now() + SESSION_DAYS * 86400_000 })));
@@ -247,7 +282,14 @@ async function health(env: Env) {
   return { ok: true, tokenExpires, errorsLast7d: errors.filter((e) => Date.now() - e.at < 7 * 86400_000).length, now: Date.now() };
 }
 
-interface ErrorReport { at: number; msg: string; where: string; ver: string; ua: string; stack?: string }
+interface ErrorReport {
+  at: number;
+  msg: string;
+  where: string;
+  ver: string;
+  ua: string;
+  stack?: string;
+}
 const MAX_REPORTS_PER_MINUTE = 20;
 
 /** The app reports crashes here; they're printed for `wrangler tail` and the last 50 are kept in KV. */
@@ -277,8 +319,7 @@ function b64encode(text: string) {
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 }
-const b64decode = (b64: string) =>
-  new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+const b64decode = (b64: string) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
 
 async function githubError(r: Response, what: string) {
   if (r.status === 401) return "GitHub token is invalid or expired (update GITHUB_TOKEN)";
@@ -333,8 +374,13 @@ async function putState(req: Request, env: Env, cors: Cors) {
 
 // ---------- /channels ----------
 interface ChannelEntry {
-  name: string; handle: string; cat: string; id?: string;
-  status?: "removed"; addedAt?: string; removedAt?: string;
+  name: string;
+  handle: string;
+  cat: string;
+  id?: string;
+  status?: "removed";
+  addedAt?: string;
+  removedAt?: string;
 }
 type ChannelOp =
   | { t: "add"; channel: { name: string; handle: string; id?: string; cat: string } }
@@ -368,7 +414,8 @@ function applyChannelOp(list: ChannelEntry[], op: ChannelOp): string {
       const existing = list.find((x) => sameHandle(x.handle, handle) || (id && x.id === id));
       if (existing && existing.status !== "removed") throw new HttpError(409, `${existing.name} is already in the list`);
       if (existing) {
-        delete existing.status; delete existing.removedAt;
+        delete existing.status;
+        delete existing.removedAt;
         existing.cat = cat;
         if (id) existing.id = id;
         return `restore ${existing.handle}`;
@@ -378,12 +425,14 @@ function applyChannelOp(list: ChannelEntry[], op: ChannelOp): string {
     }
     case "remove": {
       const c = find(op.h);
-      c.status = "removed"; c.removedAt = now;
+      c.status = "removed";
+      c.removedAt = now;
       return `remove ${c.handle}`;
     }
     case "restore": {
       const c = find(op.h);
-      delete c.status; delete c.removedAt;
+      delete c.status;
+      delete c.removedAt;
       return `restore ${c.handle}`;
     }
     case "delete": {
@@ -414,8 +463,14 @@ async function editChannels(req: Request, env: Env, cors: Cors) {
     const file = await readJsonFile(env, env.CODE_REPO, CHANNELS_FILE);
     const list: ChannelEntry[] = Array.isArray(file.data) ? file.data : [];
     const notes = ops.map((op) => applyChannelOp(list, op));
-    const sha = await writeFile(env, env.CODE_REPO, CHANNELS_FILE, formatChannels(list), file.sha,
-      `Channels (from app): ${notes.join("; ")}`);
+    const sha = await writeFile(
+      env,
+      env.CODE_REPO,
+      CHANNELS_FILE,
+      formatChannels(list),
+      file.sha,
+      `Channels (from app): ${notes.join("; ")}`,
+    );
     if (sha) return json({ data: list, sha }, 200, cors);
   }
   return json({ error: "The channel list kept changing — try again" }, 409, cors);
@@ -423,8 +478,16 @@ async function editChannels(req: Request, env: Env, cors: Cors) {
 
 // ---------- /lookup (YouTube) ----------
 interface ChannelInfo {
-  id: string; name: string; handle: string; thumb: string; subs: number; videos: number;
-  desc: string; shorts: number; latestShort: number; suggestedCat: string;
+  id: string;
+  name: string;
+  handle: string;
+  thumb: string;
+  subs: number;
+  videos: number;
+  desc: string;
+  shorts: number;
+  latestShort: number;
+  suggestedCat: string;
 }
 
 async function yt(env: Env, endpoint: string, params: Record<string, string | number>, used: { units: number }) {
@@ -459,7 +522,9 @@ function parseQuery(raw: string): Query {
       if (u.searchParams.get("v")) return { kind: "video", v: u.searchParams.get("v")! };
       if (parts[0] === "user" && parts[1]) return { kind: "username", v: parts[1] };
       if (parts[0] === "c" && parts[1]) return { kind: "text", v: parts[1] };
-    } catch { /* fall through */ }
+    } catch {
+      /* fall through */
+    }
   }
   if (q.startsWith("@")) return { kind: "handle", v: q };
   if (/^UC[\w-]{22}$/.test(q)) return { kind: "id", v: q };
@@ -482,25 +547,28 @@ async function channelInfo(env: Env, ids: string[], used: { units: number }): Pr
   if (!ids.length) return [];
   const j = await yt(env, "channels", { part: "snippet,statistics", id: ids.join(","), maxResults: 50 }, used);
   const items: any[] = j?.items ?? [];
-  return Promise.all(items.map(async (it) => {
-    // Shorts-only playlist: total count + newest Short (1 unit)
-    const p = await yt(env, "playlistItems", { part: "contentDetails", playlistId: "UUSH" + it.id.slice(2), maxResults: 1 }, used);
-    const desc: string = it.snippet?.description ?? "";
-    const name: string = it.snippet?.title ?? "";
-    return {
-      id: it.id,
-      name,
-      handle: it.snippet?.customUrl ? (it.snippet.customUrl.startsWith("@") ? it.snippet.customUrl : `@${it.snippet.customUrl}`) : it.id,
-      thumb: it.snippet?.thumbnails?.medium?.url ?? it.snippet?.thumbnails?.default?.url ?? "",
-      subs: Number(it.statistics?.subscriberCount ?? 0),
-      videos: Number(it.statistics?.videoCount ?? 0),
-      desc: desc.slice(0, 400),
-      shorts: Number(p?.pageInfo?.totalResults ?? 0),
-      latestShort: p?.items?.[0]?.contentDetails?.videoPublishedAt
-        ? Math.floor(Date.parse(p.items[0].contentDetails.videoPublishedAt) / 1000) : 0,
-      suggestedCat: suggestCat(`${name} ${desc}`),
-    };
-  }));
+  return Promise.all(
+    items.map(async (it) => {
+      // Shorts-only playlist: total count + newest Short (1 unit)
+      const p = await yt(env, "playlistItems", { part: "contentDetails", playlistId: `UUSH${it.id.slice(2)}`, maxResults: 1 }, used);
+      const desc: string = it.snippet?.description ?? "";
+      const name: string = it.snippet?.title ?? "";
+      return {
+        id: it.id,
+        name,
+        handle: it.snippet?.customUrl ? (it.snippet.customUrl.startsWith("@") ? it.snippet.customUrl : `@${it.snippet.customUrl}`) : it.id,
+        thumb: it.snippet?.thumbnails?.medium?.url ?? it.snippet?.thumbnails?.default?.url ?? "",
+        subs: Number(it.statistics?.subscriberCount ?? 0),
+        videos: Number(it.statistics?.videoCount ?? 0),
+        desc: desc.slice(0, 400),
+        shorts: Number(p?.pageInfo?.totalResults ?? 0),
+        latestShort: p?.items?.[0]?.contentDetails?.videoPublishedAt
+          ? Math.floor(Date.parse(p.items[0].contentDetails.videoPublishedAt) / 1000)
+          : 0,
+        suggestedCat: suggestCat(`${name} ${desc}`),
+      };
+    }),
+  );
 }
 
 async function lookup(req: Request, env: Env) {
@@ -574,9 +642,11 @@ async function guard(env: Env, cost: number) {
   const { budget } = await settings(env);
   const used = await counter(env, "used");
   if (used + cost > budget) {
-    throw new HttpError(429,
+    throw new HttpError(
+      429,
       `Today's discovery budget is used up (${used.toLocaleString("en-US")} of ${budget.toLocaleString("en-US")} units). ` +
-      "It resets at midnight Pacific time, or raise the budget on the API usage page.");
+        "It resets at midnight Pacific time, or raise the budget on the API usage page.",
+    );
   }
 }
 
@@ -594,8 +664,16 @@ async function quotaStatus(env: Env) {
   const usedWeek = (await Promise.all(days.map((d) => counter(env, "used", d)))).reduce((a, b) => a + b, 0);
   const recent = ((await env.QUOTA?.get("q:index", "json")) ?? []) as SearchIndexEntry[];
   return {
-    enabled: !!env.QUOTA, day: days[0], used: await counter(env, "used"), budget, reserve,
-    limit: DAILY_LIMIT, maxBudget: DAILY_LIMIT - reserve, savedWeek, usedWeek, recent,
+    enabled: !!env.QUOTA,
+    day: days[0],
+    used: await counter(env, "used"),
+    budget,
+    reserve,
+    limit: DAILY_LIMIT,
+    maxBudget: DAILY_LIMIT - reserve,
+    savedWeek,
+    usedWeek,
+    recent,
   };
 }
 
@@ -605,14 +683,24 @@ async function setBudget(req: Request, env: Env) {
   const { reserve } = await settings(env);
   const budget = Math.round(Number(body.budget));
   if (!Number.isFinite(budget) || budget < MIN_BUDGET || budget > DAILY_LIMIT - reserve) {
-    throw new HttpError(400, `Budget must be between ${MIN_BUDGET} and ${(DAILY_LIMIT - reserve).toLocaleString("en-US")} (the rest is reserved for automatic refreshes)`);
+    throw new HttpError(
+      400,
+      `Budget must be between ${MIN_BUDGET} and ${(DAILY_LIMIT - reserve).toLocaleString("en-US")} (the rest is reserved for automatic refreshes)`,
+    );
   }
   await env.QUOTA.put("settings", JSON.stringify({ budget, reserve }));
   return quotaStatus(env);
 }
 
 // ---------- /channel-shorts: preview any channel ----------
-interface MiniShort { id: string; t: string; p: number; v: number; l: number; c: number }
+interface MiniShort {
+  id: string;
+  t: string;
+  p: number;
+  v: number;
+  l: number;
+  c: number;
+}
 const PREVIEW_TTL = 24 * 3600;
 const PREVIEW_PAGES = 4; // up to 200 newest Shorts
 const PREVIEW_COST_ESTIMATE = 10;
@@ -625,13 +713,23 @@ function isoSeconds(d: string) {
 async function videoStats(env: Env, ids: string[], used: { units: number }) {
   const out: (MiniShort & { chId: string; dur: number })[] = [];
   for (let i = 0; i < ids.length; i += 50) {
-    const j = await yt(env, "videos", { part: "snippet,statistics,contentDetails,status", id: ids.slice(i, i + 50).join(","), maxResults: 50 }, used);
+    const j = await yt(
+      env,
+      "videos",
+      { part: "snippet,statistics,contentDetails,status", id: ids.slice(i, i + 50).join(","), maxResults: 50 },
+      used,
+    );
     for (const it of j?.items ?? []) {
       if (it.status?.embeddable === false || it.status?.privacyStatus === "private") continue;
       out.push({
-        id: it.id, t: it.snippet?.title ?? "", p: Math.floor(Date.parse(it.snippet?.publishedAt) / 1000) || 0,
-        v: Number(it.statistics?.viewCount ?? 0), l: Number(it.statistics?.likeCount ?? 0), c: Number(it.statistics?.commentCount ?? 0),
-        chId: it.snippet?.channelId ?? "", dur: isoSeconds(it.contentDetails?.duration),
+        id: it.id,
+        t: it.snippet?.title ?? "",
+        p: Math.floor(Date.parse(it.snippet?.publishedAt) / 1000) || 0,
+        v: Number(it.statistics?.viewCount ?? 0),
+        l: Number(it.statistics?.likeCount ?? 0),
+        c: Number(it.statistics?.commentCount ?? 0),
+        chId: it.snippet?.channelId ?? "",
+        dur: isoSeconds(it.contentDetails?.duration),
       });
     }
   }
@@ -658,9 +756,17 @@ async function channelShorts(req: Request, env: Env) {
     const ids: string[] = [];
     let pageToken: string | undefined;
     for (let page = 0; page < PREVIEW_PAGES; page++) {
-      const p = await yt(env, "playlistItems", {
-        part: "contentDetails", playlistId: "UUSH" + id.slice(2), maxResults: 50, ...(pageToken ? { pageToken } : {}),
-      }, used);
+      const p = await yt(
+        env,
+        "playlistItems",
+        {
+          part: "contentDetails",
+          playlistId: `UUSH${id.slice(2)}`,
+          maxResults: 50,
+          ...(pageToken ? { pageToken } : {}),
+        },
+        used,
+      );
       if (!p) break;
       for (const it of p.items ?? []) if (it.contentDetails?.videoId) ids.push(it.contentDetails.videoId);
       pageToken = p.nextPageToken;
@@ -677,17 +783,33 @@ async function channelShorts(req: Request, env: Env) {
 }
 
 // ---------- /search-shorts: find similar Shorts on YouTube ----------
-interface SearchIndexEntry { q: string; norm: string; at: number; n: number }
+interface SearchIndexEntry {
+  q: string;
+  norm: string;
+  at: number;
+  n: number;
+}
 const SEARCH_TTL = 7 * 24 * 3600;
 const SEARCH_COST_ESTIMATE = 103;
 const MAX_SHORT_SECONDS = 180;
 
 const normQuery = (q: string) =>
-  [...new Set(q.toLowerCase().split(/[^\p{L}\p{M}\p{N}#]+/u).filter((w) => w.length > 1))].sort().join(" ");
+  [
+    ...new Set(
+      q
+        .toLowerCase()
+        .split(/[^\p{L}\p{M}\p{N}#]+/u)
+        .filter((w) => w.length > 1),
+    ),
+  ]
+    .sort()
+    .join(" ");
 
 async function searchShorts(req: Request, env: Env) {
   const body = (await req.json().catch(() => ({}))) as { q?: string; force?: boolean };
-  const q = String(body.q ?? "").trim().slice(0, 120);
+  const q = String(body.q ?? "")
+    .trim()
+    .slice(0, 120);
   const norm = normQuery(q);
   if (!norm) throw new HttpError(400, "Type some search words");
   const key = `q:${norm}`;
@@ -701,9 +823,19 @@ async function searchShorts(req: Request, env: Env) {
   await guard(env, SEARCH_COST_ESTIMATE);
   const used = { units: 0 };
   try {
-    const s = await yt(env, "search", {
-      part: "snippet", type: "video", videoDuration: "short", q, maxResults: 25, safeSearch: "moderate",
-    }, used);
+    const s = await yt(
+      env,
+      "search",
+      {
+        part: "snippet",
+        type: "video",
+        videoDuration: "short",
+        q,
+        maxResults: 25,
+        safeSearch: "moderate",
+      },
+      used,
+    );
     const ids: string[] = (s?.items ?? []).map((it: any) => it.id?.videoId).filter(Boolean);
     const vids = (await videoStats(env, ids, used)).filter((v) => v.dur > 0 && v.dur <= MAX_SHORT_SECONDS);
     const chIds = [...new Set(vids.map((v) => v.chId))].slice(0, 50);
@@ -713,13 +845,19 @@ async function searchShorts(req: Request, env: Env) {
       for (const it of j?.items ?? []) {
         const cu: string | undefined = it.snippet?.customUrl;
         chs.set(it.id, {
-          id: it.id, name: it.snippet?.title ?? "", thumb: it.snippet?.thumbnails?.default?.url ?? "",
-          handle: cu ? (cu.startsWith("@") ? cu : `@${cu}`) : it.id, subs: Number(it.statistics?.subscriberCount ?? 0),
+          id: it.id,
+          name: it.snippet?.title ?? "",
+          thumb: it.snippet?.thumbnails?.default?.url ?? "",
+          handle: cu ? (cu.startsWith("@") ? cu : `@${cu}`) : it.id,
+          subs: Number(it.statistics?.subscriberCount ?? 0),
           suggestedCat: suggestCat(`${it.snippet?.title ?? ""} ${it.snippet?.description ?? ""}`),
         });
       }
     }
-    const results = vids.map(({ chId, dur, ...v }) => ({ ...v, ch: chs.get(chId) ?? { id: chId, name: "", thumb: "", handle: chId, subs: 0, suggestedCat: "stories" } }));
+    const results = vids.map(({ chId, dur, ...v }) => ({
+      ...v,
+      ch: chs.get(chId) ?? { id: chId, name: "", thumb: "", handle: chId, subs: 0, suggestedCat: "stories" },
+    }));
     const result = { q, results, units: used.units, fetchedAt: Math.floor(Date.now() / 1000) };
     await env.QUOTA?.put(key, JSON.stringify(result), { expirationTtl: SEARCH_TTL });
     const index = ((await env.QUOTA?.get("q:index", "json")) ?? []) as SearchIndexEntry[];

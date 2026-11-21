@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { call, login, setup, TOKEN_EXPIRY } from "./harness";
 
-afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("login attempt limit", () => {
   it("5 wrong passwords lock that connection for 15 minutes — even the right password", async () => {
     const f = setup();
     for (let i = 1; i <= 5; i++) {
-      const r = await call(f, "POST", "/login", { body: { password: "guess" + i }, ip: "9.9.9.9" });
+      const r = await call(f, "POST", "/login", { body: { password: `guess${i}` }, ip: "9.9.9.9" });
       expect(r.status).toBe(401);
     }
     const locked = await call(f, "POST", "/login", { body: { password: "correct horse" }, ip: "9.9.9.9" });

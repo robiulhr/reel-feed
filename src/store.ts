@@ -13,11 +13,20 @@ export interface Shared {
 }
 
 /** One watched Short. `x` keeps title/channel for Shorts that aren't in your library (searches, previews). */
-export interface HistItem { id: string; at: number; f: number; x?: { t: string; n: string; h: string; c: string } }
+export interface HistItem {
+  id: string;
+  at: number;
+  f: number;
+  x?: { t: string; n: string; h: string; c: string };
+}
 const MAX_HIST = 600;
 
 /** One YouTube API spend made from the app (Channels → Add lookups). */
-export interface ApiUse { at: number; units: number; what: string }
+export interface ApiUse {
+  at: number;
+  units: number;
+  what: string;
+}
 const MAX_API_LOG = 300;
 
 /** Settings that stay on each device. */
@@ -64,16 +73,28 @@ export const emptyShared = (): Shared => ({ saved: [], hidden: [], seen: {}, bad
 
 const defaults = (): State => ({
   ...emptyShared(),
-  muted: true, tab: "foryou", win: "all", cat: "all",
-  lastActive: 0, prevVisit: 0,
-  histPaused: false, tipsSeen: false, dataSaver: "auto", rate: 1, autoFull: true, volume: 100, sv: LOCAL_VERSION,
+  muted: true,
+  tab: "foryou",
+  win: "all",
+  cat: "all",
+  lastActive: 0,
+  prevVisit: 0,
+  histPaused: false,
+  tipsSeen: false,
+  dataSaver: "auto",
+  rate: 1,
+  autoFull: true,
+  volume: 100,
+  sv: LOCAL_VERSION,
 });
 
 function read<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (raw) return JSON.parse(raw) as T;
-  } catch { /* storage blocked or corrupt */ }
+  } catch {
+    /* storage blocked or corrupt */
+  }
   return fallback;
 }
 
@@ -98,7 +119,10 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
 
 export const state: State = migrateLocal(read<Partial<State> & Record<string, unknown>>(STORAGE_KEY, {}));
 /** Changes not yet uploaded to GitHub. Kept locally so nothing is lost offline. */
-export const pending: Op[] = (() => { const p = read<unknown>(PENDING_KEY, []); return Array.isArray(p) ? (p as Op[]) : []; })();
+export const pending: Op[] = (() => {
+  const p = read<unknown>(PENDING_KEY, []);
+  return Array.isArray(p) ? (p as Op[]) : [];
+})();
 const MAX_PENDING = 5000;
 
 /** Keeps the upload queue bounded after long offline periods: drops the least important changes first. */
@@ -106,7 +130,8 @@ export function capPending(list: Op[], max = MAX_PENDING) {
   if (list.length <= max) return;
   for (const kind of ["seen", "learn", "api"] as const) {
     for (let i = 0; i < list.length && list.length > max; ) {
-      if (list[i].t === kind) list.splice(i, 1); else i++;
+      if (list[i].t === kind) list.splice(i, 1);
+      else i++;
     }
   }
   if (list.length > max) list.splice(0, list.length - max);
@@ -124,7 +149,9 @@ export function flushPersist() {
     trimSeen(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
-  } catch { /* storage full/blocked — nothing more we can do */ }
+  } catch {
+    /* storage full/blocked — nothing more we can do */
+  }
 }
 
 /** Save soon (batched, so rapid changes cost one write). Flushed immediately when the app is closed or hidden. */
@@ -137,7 +164,9 @@ export function persist() {
 // Never lose the last changes: write right away when the page is closed, reloaded or sent to the background.
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPersist);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushPersist(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPersist();
+  });
 }
 
 function trimSeen(s: Shared) {
@@ -195,9 +224,7 @@ export function applyOp(s: Shared, op: Op) {
       break;
     case "api":
       if (!s.apiLog.some((x) => x.at === op.at && x.what === op.what)) {
-        s.apiLog = [{ at: op.at, units: op.units, what: op.what }, ...s.apiLog]
-          .sort((a, b) => b.at - a.at)
-          .slice(0, MAX_API_LOG);
+        s.apiLog = [{ at: op.at, units: op.units, what: op.what }, ...s.apiLog].sort((a, b) => b.at - a.at).slice(0, MAX_API_LOG);
       }
       break;
   }
@@ -206,7 +233,9 @@ export function applyOp(s: Shared, op: Op) {
 type Listener = () => void;
 const listeners: Listener[] = [];
 /** Lets the sync module know something changed. */
-export function onChange(fn: Listener) { listeners.push(fn); }
+export function onChange(fn: Listener) {
+  listeners.push(fn);
+}
 
 /** Make a change: apply it now, remember it for the next sync. */
 export function act(op: Op) {
@@ -219,7 +248,8 @@ export function act(op: Op) {
 
 /** Works out where "NEW since your last visit" starts. A gap of 30+ minutes counts as a new visit. */
 export function startVisit(now: number) {
-  if (!state.lastActive) state.prevVisit = now - 2 * 86400; // first ever visit: last 48h counts as new
+  if (!state.lastActive)
+    state.prevVisit = now - 2 * 86400; // first ever visit: last 48h counts as new
   else if (now - state.lastActive > 30 * 60) state.prevVisit = state.lastActive;
   state.lastActive = now;
   persist();
@@ -248,14 +278,24 @@ export function toFile(s: Shared): StateFile {
   trimSeen(s);
   const seen = Object.keys(s.seen).sort((a, b) => s.seen[a] - s.seen[b]);
   return {
-    v: FILE_VERSION, updatedAt: new Date().toISOString(),
-    saved: s.saved, hidden: s.hidden, seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat, apiLog: s.apiLog, hist: s.hist,
+    v: FILE_VERSION,
+    updatedAt: new Date().toISOString(),
+    saved: s.saved,
+    hidden: s.hidden,
+    seen,
+    bad: s.bad,
+    affCh: s.affCh,
+    affCat: s.affCat,
+    apiLog: s.apiLog,
+    hist: s.hist,
   };
 }
 
 /** Thrown when the synced file was written by a newer version of the app than this one. */
 export class NewerDataError extends Error {
-  constructor() { super("Your data was saved by a newer version of the app. Close and reopen the app to update it, then sync continues."); }
+  constructor() {
+    super("Your data was saved by a newer version of the app. Close and reopen the app to update it, then sync continues.");
+  }
 }
 
 export function fromFile(f: Partial<StateFile> | null): Shared {
@@ -270,7 +310,9 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
   s.affCat = f.affCat ?? {};
   s.apiLog = f.apiLog ?? [];
   s.hist = f.hist ?? [];
-  (f.seen ?? []).forEach((id, i) => (s.seen[id] = i + 1)); // keeps order; real timestamps sort after these
+  (f.seen ?? []).forEach((id, i) => {
+    s.seen[id] = i + 1;
+  }); // keeps order; real timestamps sort after these
   return s;
 }
 
@@ -288,7 +330,12 @@ export function mergeInto(base: Shared, local: Shared) {
 
 export function sharedOf(s: State): Shared {
   return structuredClone({
-    saved: s.saved, hidden: s.hidden, seen: s.seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat,
+    saved: s.saved,
+    hidden: s.hidden,
+    seen: s.seen,
+    bad: s.bad,
+    affCh: s.affCh,
+    affCat: s.affCat,
     apiLog: s.apiLog ?? [],
     hist: s.hist ?? [],
   });

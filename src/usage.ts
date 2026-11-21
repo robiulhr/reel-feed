@@ -7,6 +7,7 @@ import { COST, getQuota, setBudget, type QuotaStatus } from "./quota";
 import { state } from "./store";
 import * as sync from "./sync";
 import type { Dataset, UsageRun } from "./types";
+import { el, num as n } from "./dom";
 
 const DAILY_LIMIT = 10_000;
 const QUOTA_CONSOLE = "https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas";
@@ -19,7 +20,9 @@ const pacificHour = (ms: number) =>
 
 /** Next midnight Pacific, as a timestamp (handles daylight saving). */
 function nextReset(): number {
-  const [y, m, d] = dayKey(Date.now() / 1000).split("-").map(Number);
+  const [y, m, d] = dayKey(Date.now() / 1000)
+    .split("-")
+    .map(Number);
   for (const utcHour of [7, 8]) {
     const t = Date.UTC(y, m - 1, d + 1, utcHour);
     if (pacificHour(t) === 0) return t;
@@ -27,22 +30,18 @@ function nextReset(): number {
   return Date.UTC(y, m - 1, d + 1, 8);
 }
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
-const n = (x: number) => x.toLocaleString("en-US");
-
 function table(head: string[], rows: (string | number)[][], numericFrom = 1) {
   const t = el("table", "u-table");
   const tr = el("tr");
-  head.forEach((h, i) => tr.append(el("th", i >= numericFrom ? "num" : "", h)));
+  head.forEach((h, i) => {
+    tr.append(el("th", i >= numericFrom ? "num" : "", h));
+  });
   t.append(tr);
   for (const r of rows) {
     const row = el("tr");
-    r.forEach((c, i) => row.append(el("td", i >= numericFrom ? "num" : "", typeof c === "number" ? n(c) : c)));
+    r.forEach((c, i) => {
+      row.append(el("td", i >= numericFrom ? "num" : "", typeof c === "number" ? n(c) : c));
+    });
     t.append(row);
   }
   return t;
@@ -77,7 +76,10 @@ async function renderBudget(box: HTMLElement, runs: UsageRun[]) {
   box.append(el("p", "u-note", "Loading…"));
   const q = await getQuota(true);
   box.replaceChildren(el("h3", "u-h", "Your discovery budget"));
-  if (!q) { box.append(el("p", "u-note", "Couldn't reach the sync server.")); return; }
+  if (!q) {
+    box.append(el("p", "u-note", "Couldn't reach the sync server."));
+    return;
+  }
   drawBudget(box, q, runs);
 }
 
@@ -86,9 +88,14 @@ function drawBudget(box: HTMLElement, q: QuotaStatus, runs: UsageRun[]) {
   const pct = Math.min(100, (q.used / q.budget) * 100);
   const level = pct >= 80 ? "red" : pct >= 50 ? "yellow" : "green";
 
-  box.append(el("p", "u-note",
-    "Paid actions you start — YouTube searches, channel previews and lookups — come out of this daily budget. " +
-    "The sync server refuses anything over it, so a mistake can never drain your quota."));
+  box.append(
+    el(
+      "p",
+      "u-note",
+      "Paid actions you start — YouTube searches, channel previews and lookups — come out of this daily budget. " +
+        "The sync server refuses anything over it, so a mistake can never drain your quota.",
+    ),
+  );
 
   const card = el("div", `u-meter-card lvl-${level}`);
   const meter = el("div", "cost-meter");
@@ -98,25 +105,43 @@ function drawBudget(box: HTMLElement, q: QuotaStatus, runs: UsageRun[]) {
   card.append(
     el("div", "u-of", `${n(q.used)} of ${n(q.budget)} used today (${Math.round(pct)}%)`),
     meter,
-    el("div", "u-sub", `${n(left)} left · room for ~${Math.floor(left / COST.search)} YouTube searches or ~${Math.floor(left / COST.preview)} channel previews`),
+    el(
+      "div",
+      "u-sub",
+      `${n(left)} left · room for ~${Math.floor(left / COST.search)} YouTube searches or ~${Math.floor(left / COST.preview)} channel previews`,
+    ),
   );
   box.append(card);
 
   // split of the whole 10,000
   const need = refreshNeed(runs);
   const okReserve = !need || need <= q.reserve;
-  box.append(table(["Daily quota (10,000)", "Units"], [
-    ["🛡️ Reserved for automatic refreshes", q.reserve],
-    ["🔍 Your discovery budget", q.budget],
-    ["Unused safety margin", Math.max(0, q.limit - q.reserve - q.budget)],
-  ]));
-  box.append(el("p", `u-note${okReserve ? "" : " warn"}`, need
-    ? okReserve
-      ? `Refreshes protected ✓ — they need about ${n(need)} units/day, ${n(q.reserve)} are reserved.`
-      : `⚠️ Refreshes need about ${n(need)} units/day but only ${n(q.reserve)} are reserved. Keep your budget lower so refreshes don't run out.`
-    : `Refreshes protected ✓ — ${n(q.reserve)} units/day are reserved for them.`));
+  box.append(
+    table(
+      ["Daily quota (10,000)", "Units"],
+      [
+        ["🛡️ Reserved for automatic refreshes", q.reserve],
+        ["🔍 Your discovery budget", q.budget],
+        ["Unused safety margin", Math.max(0, q.limit - q.reserve - q.budget)],
+      ],
+    ),
+  );
+  box.append(
+    el(
+      "p",
+      `u-note${okReserve ? "" : " warn"}`,
+      need
+        ? okReserve
+          ? `Refreshes protected ✓ — they need about ${n(need)} units/day, ${n(q.reserve)} are reserved.`
+          : `⚠️ Refreshes need about ${n(need)} units/day but only ${n(q.reserve)} are reserved. Keep your budget lower so refreshes don't run out.`
+        : `Refreshes protected ✓ — ${n(q.reserve)} units/day are reserved for them.`,
+    ),
+  );
 
-  if (q.savedWeek) box.append(el("p", "u-note good", `💚 Caching saved you ${n(q.savedWeek)} units in the last 7 days (repeat searches and previews were free).`));
+  if (q.savedWeek)
+    box.append(
+      el("p", "u-note good", `💚 Caching saved you ${n(q.savedWeek)} units in the last 7 days (repeat searches and previews were free).`),
+    );
 
   // change budget
   const form = el("form", "u-budget-form");
@@ -155,7 +180,8 @@ function drawBudget(box: HTMLElement, q: QuotaStatus, runs: UsageRun[]) {
     "Use specific search words: “pricing psychology customers” beats “business”.",
     "Repeating a search within 7 days, or reopening a channel preview within 24 hours, costs 0.",
     "Watching, saving, hiding, syncing and editing channels never use the quota.",
-  ]) tips.append(el("li", "", t));
+  ])
+    tips.append(el("li", "", t));
   box.append(tips);
 }
 
@@ -177,7 +203,11 @@ export function renderUsagePanel(body: HTMLElement, ds: Dataset, ago: (sec: numb
   hero.append(
     el("div", "u-big", `${n(total)}`),
     el("div", "u-of", `of ${n(DAILY_LIMIT)} units used today (${pct}%)`),
-    el("div", "u-sub", `${n(DAILY_LIMIT - total)} left · resets ${new Date(nextReset()).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} your time (midnight Pacific)`),
+    el(
+      "div",
+      "u-sub",
+      `${n(DAILY_LIMIT - total)} left · resets ${new Date(nextReset()).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} your time (midnight Pacific)`,
+    ),
   );
   body.append(hero);
 
@@ -189,13 +219,18 @@ export function renderUsagePanel(body: HTMLElement, ds: Dataset, ago: (sec: numb
   // ---- where it went today
   const sum = (k: keyof UsageRun["by"]) => todayRuns.reduce((s, r) => s + (r.by?.[k] ?? 0), 0);
   body.append(el("h3", "u-h", "Where today's units went"));
-  body.append(table(["What", "Units"], [
-    [`Checking for new Shorts (${todayRuns.length} refresh${todayRuns.length === 1 ? "" : "es"})`, sum("playlist")],
-    ["Updating views / likes", sum("stats")],
-    ["Channel names, avatars, subscribers", sum("channelInfo") + sum("resolve")],
-    [`Your searches, previews & lookups (${todayLookups.length})`, lookupUnits],
-    ["Total", total],
-  ]));
+  body.append(
+    table(
+      ["What", "Units"],
+      [
+        [`Checking for new Shorts (${todayRuns.length} refresh${todayRuns.length === 1 ? "" : "es"})`, sum("playlist")],
+        ["Updating views / likes", sum("stats")],
+        ["Channel names, avatars, subscribers", sum("channelInfo") + sum("resolve")],
+        [`Your searches, previews & lookups (${todayLookups.length})`, lookupUnits],
+        ["Total", total],
+      ],
+    ),
+  );
 
   // ---- last 7 days
   const days: string[] = [];
@@ -212,41 +247,66 @@ export function renderUsagePanel(body: HTMLElement, ds: Dataset, ago: (sec: numb
   const recent7 = runs.filter((r) => r.at > Date.now() / 1000 - 7 * 86400 && r.ok);
   if (recent7.length) {
     const avg = Math.round(recent7.reduce((s, r) => s + r.units, 0) / recent7.length);
-    body.append(el("p", "u-note", `Average refresh: ~${n(avg)} units. With 6 scheduled refreshes a day that's ~${n(avg * 6)} units/day (${Math.round((avg * 6) / 100)}% of the limit), plus any refreshes your channel edits trigger.`));
+    body.append(
+      el(
+        "p",
+        "u-note",
+        `Average refresh: ~${n(avg)} units. With 6 scheduled refreshes a day that's ~${n(avg * 6)} units/day (${Math.round((avg * 6) / 100)}% of the limit), plus any refreshes your channel edits trigger.`,
+      ),
+    );
   }
 
   // ---- recent refreshes
   body.append(el("h3", "u-h", "Recent refreshes"));
   if (!runs.length) body.append(el("p", "u-note", "No refresh history yet — it appears after the next refresh."));
   else {
-    body.append(table(["When", "Units", "Details"],
-      runs.slice(0, 15).map((r) => [`${r.ok ? "" : "✗ failed · "}${ago(r.at)}${r.where === "local" ? " (PC)" : ""}`, r.units, runDetail(r)]), 1));
+    body.append(
+      table(
+        ["When", "Units", "Details"],
+        runs
+          .slice(0, 15)
+          .map((r) => [`${r.ok ? "" : "✗ failed · "}${ago(r.at)}${r.where === "local" ? " (PC)" : ""}`, r.units, runDetail(r)]),
+        1,
+      ),
+    );
   }
 
   // ---- recent lookups
   body.append(el("h3", "u-h", "Your recent paid actions"));
-  if (!lookups.length) body.append(el("p", "u-note", "None yet. Searches, channel previews and lookups you make will be listed here with their cost."));
-  else body.append(table(["When", "Units", "What"], lookups.slice(0, 10).map((u) => [ago(u.at), u.units, u.what]), 1));
+  if (!lookups.length)
+    body.append(el("p", "u-note", "None yet. Searches, channel previews and lookups you make will be listed here with their cost."));
+  else
+    body.append(
+      table(
+        ["When", "Units", "What"],
+        lookups.slice(0, 10).map((u) => [ago(u.at), u.units, u.what]),
+        1,
+      ),
+    );
 
   // ---- how it's spent
   body.append(el("h3", "u-h", "What costs what"));
-  body.append(table(["Action", "Cost"], [
-    ["Checking a channel's RSS feed for new uploads", "free"],
-    ["Reading a channel's Shorts list (only when RSS shows something new, or weekly)", "1 per 50 Shorts"],
-    ["Updating views/likes (new Shorts every run, < 60 days daily, older weekly)", "1 per 50 Shorts"],
-    ["Channel names/avatars/subscribers (each refresh)", "1 per 50 channels"],
-    ["More like this → In your feed", "free"],
-    ["More like this → On YouTube (new search; repeats within 7 days free)", "~103"],
-    ["Open a channel that isn't in your list (free again for 24 h)", "~10"],
-    ["Add channel: look up a @handle or link", "2–3"],
-    ["Add channel: search by name (only when you tap Search)", "~106"],
-    ["Watching, saving, syncing, removing channels", "free"],
-  ], 1));
+  body.append(
+    table(
+      ["Action", "Cost"],
+      [
+        ["Checking a channel's RSS feed for new uploads", "free"],
+        ["Reading a channel's Shorts list (only when RSS shows something new, or weekly)", "1 per 50 Shorts"],
+        ["Updating views/likes (new Shorts every run, < 60 days daily, older weekly)", "1 per 50 Shorts"],
+        ["Channel names/avatars/subscribers (each refresh)", "1 per 50 channels"],
+        ["More like this → In your feed", "free"],
+        ["More like this → On YouTube (new search; repeats within 7 days free)", "~103"],
+        ["Open a channel that isn't in your list (free again for 24 h)", "~10"],
+        ["Add channel: look up a @handle or link", "2–3"],
+        ["Add channel: search by name (only when you tap Search)", "~106"],
+        ["Watching, saving, syncing, removing channels", "free"],
+      ],
+      1,
+    ),
+  );
 
   const note = el("p", "u-note");
-  note.append(
-    "These numbers are the app's own count. Google's count is the official one: ",
-  );
+  note.append("These numbers are the app's own count. Google's count is the official one: ");
   const a = el("a", "", "Google Cloud → YouTube Data API → Quotas") as HTMLAnchorElement;
   a.href = QUOTA_CONSOLE;
   a.target = "_blank";

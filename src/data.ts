@@ -28,7 +28,9 @@ async function idbGet<T>(key: string): Promise<T | undefined> {
       r.onsuccess = () => resolve(r.result as T);
       r.onerror = () => resolve(undefined);
     });
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 async function idbSet(key: string, value: unknown) {
   try {
@@ -39,10 +41,18 @@ async function idbSet(key: string, value: unknown) {
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     });
-  } catch { /* storage unavailable — fine, we just download again next time */ }
+  } catch {
+    /* storage unavailable — fine, we just download again next time */
+  }
 }
 
-export interface RawData { generatedAt: number; units?: number; usage?: any[]; channels: any[]; videos: any[][] }
+export interface RawData {
+  generatedAt: number;
+  units?: number;
+  usage?: any[];
+  channels: any[];
+  videos: any[][];
+}
 
 export function parse(raw: RawData): Dataset {
   return {
@@ -51,7 +61,17 @@ export function parse(raw: RawData): Dataset {
     usage: raw.usage ?? [],
     channels: raw.channels,
     videos: raw.videos.map((a) => ({
-      id: a[0], ch: a[1], t: a[2], p: a[3], v: a[4], l: a[5], c: a[6], o: a[7], e: a[8], tr: a[9], r: a[10],
+      id: a[0],
+      ch: a[1],
+      t: a[2],
+      p: a[3],
+      v: a[4],
+      l: a[5],
+      c: a[6],
+      o: a[7],
+      e: a[8],
+      tr: a[9],
+      r: a[10],
     })),
   };
 }
@@ -66,8 +86,12 @@ async function get<T>(path: string, timeoutMs: number): Promise<T> {
 async function getRetry<T>(path: string, timeoutMs: number, tries = 3): Promise<T> {
   let last: unknown;
   for (let i = 0; i < tries; i++) {
-    try { return await get<T>(path, timeoutMs * (i + 1)); }
-    catch (e) { last = e; await new Promise((r) => setTimeout(r, 800 * (i + 1))); }
+    try {
+      return await get<T>(path, timeoutMs * (i + 1));
+    } catch (e) {
+      last = e;
+      await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+    }
   }
   throw last;
 }

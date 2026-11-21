@@ -55,7 +55,9 @@ export interface FakeSync {
 export const test = base.extend<{ app: Page; sync: FakeSync }>({
   sync: async ({}, use) => {
     await use({
-      channelPosts: [], statePuts: 0, lookups: 0,
+      channelPosts: [],
+      statePuts: 0,
+      lookups: 0,
       channels: [
         { name: "Alpha Biz", handle: "@alpha", cat: "stories" },
         { name: "Ads Lab", handle: "@ads", cat: "ads" },
@@ -91,7 +93,12 @@ export const test = base.extend<{ app: Page; sync: FakeSync }>({
           : route.fulfill({ status: 401, headers: cors, json: { error: "Wrong password" } });
       }
       if (path === "/state" && method === "GET") return ok({ data: state, sha: state ? `s${stateSha}` : null });
-      if (path === "/state" && method === "PUT") { sync.statePuts++; state = req.postDataJSON().data; stateSha++; return ok({ sha: `s${stateSha}` }); }
+      if (path === "/state" && method === "PUT") {
+        sync.statePuts++;
+        state = req.postDataJSON().data;
+        stateSha++;
+        return ok({ sha: `s${stateSha}` });
+      }
       if (path === "/channels" && method === "GET") return ok({ data: sync.channels, sha: "c" });
       if (path === "/channels" && method === "POST") {
         const { ops } = req.postDataJSON();
@@ -108,12 +115,39 @@ export const test = base.extend<{ app: Page; sync: FakeSync }>({
       }
       if (path === "/lookup") {
         sync.lookups++;
-        return ok({ needsSearch: false, units: 3, quota: { used: 3, budget: 3000 }, results: [{
-          id: "UCpricing00000000000000a", name: "Pricing Lab", handle: "@pricinglab", thumb: "", subs: 54321, videos: 400,
-          desc: "Pricing psychology", shorts: 70, latestShort: Math.floor(Date.now() / 1000) - 3600, suggestedCat: "ads",
-        }] });
+        return ok({
+          needsSearch: false,
+          units: 3,
+          quota: { used: 3, budget: 3000 },
+          results: [
+            {
+              id: "UCpricing00000000000000a",
+              name: "Pricing Lab",
+              handle: "@pricinglab",
+              thumb: "",
+              subs: 54321,
+              videos: 400,
+              desc: "Pricing psychology",
+              shorts: 70,
+              latestShort: Math.floor(Date.now() / 1000) - 3600,
+              suggestedCat: "ads",
+            },
+          ],
+        });
       }
-      if (path === "/quota") return ok({ enabled: true, day: "2026-01-01", used: 0, budget: 3000, reserve: 1500, limit: 10000, maxBudget: 8500, savedWeek: 0, usedWeek: 0, recent: [] });
+      if (path === "/quota")
+        return ok({
+          enabled: true,
+          day: "2026-01-01",
+          used: 0,
+          budget: 3000,
+          reserve: 1500,
+          limit: 10000,
+          maxBudget: 8500,
+          savedWeek: 0,
+          usedWeek: 0,
+          recent: [],
+        });
       if (path === "/status") return ok({ run: null });
       if (path === "/refresh") return ok({ ok: true });
       return route.fulfill({ status: 404, headers: cors, json: { error: "not found" } });
@@ -138,9 +172,10 @@ export async function swipe(page: Page, dir: "up" | "down" | "left") {
   await page.evaluate((dir) => {
     const tap = document.getElementById("tap")!;
     const r = tap.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const [x0, y0, x1, y1] = dir === "up" ? [cx, cy + 150, cx, cy - 150]
-      : dir === "down" ? [cx, cy - 150, cx, cy + 150] : [cx + 120, cy, cx - 120, cy + 5];
+    const cx = r.left + r.width / 2,
+      cy = r.top + r.height / 2;
+    const [x0, y0, x1, y1] =
+      dir === "up" ? [cx, cy + 150, cx, cy - 150] : dir === "down" ? [cx, cy - 150, cx, cy + 150] : [cx + 120, cy, cx - 120, cy + 5];
     const T = (x: number, y: number) => new Touch({ identifier: 1, target: tap, clientX: x, clientY: y });
     tap.dispatchEvent(new TouchEvent("touchstart", { touches: [T(x0, y0)], changedTouches: [T(x0, y0)], bubbles: true }));
     for (let i = 1; i <= 5; i++) {

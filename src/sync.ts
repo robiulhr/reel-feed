@@ -14,16 +14,25 @@ const CFG_KEY = "ecomgy-reel-feed.sync";
 const PUSH_DELAY_MS = 60_000; // batch changes for up to a minute
 const PULL_EVERY_MS = 5 * 60_000; // pick up other devices' changes
 
-interface Cfg { session: string; merged: boolean }
+interface Cfg {
+  session: string;
+  merged: boolean;
+}
 
 function loadCfg(): Cfg | null {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY) || "null"); } catch { return null; }
+  try {
+    return JSON.parse(localStorage.getItem(CFG_KEY) || "null");
+  } catch {
+    return null;
+  }
 }
 function saveCfg(c: Cfg | null) {
   try {
     if (c) localStorage.setItem(CFG_KEY, JSON.stringify(c));
     else localStorage.removeItem(CFG_KEY);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 let cfg = loadCfg();
@@ -82,7 +91,10 @@ async function api(path: string, init: RequestInit = {}) {
         saveCfg(null);
         throw new AuthError("You were logged out (password changed or session expired). Log in again.");
       }
-      if ([502, 503, 504].includes(r.status) && attempt < tries - 1) { await sleep(800 * (attempt + 1)); continue; }
+      if ([502, 503, 504].includes(r.status) && attempt < tries - 1) {
+        await sleep(800 * (attempt + 1));
+        continue;
+      }
       return r;
     } catch (e) {
       if (e instanceof AuthError) throw e;
@@ -91,9 +103,13 @@ async function api(path: string, init: RequestInit = {}) {
     }
   }
   const name = (lastErr as Error)?.name;
-  throw new Error(name === "TimeoutError" || name === "AbortError"
-    ? "The connection is too slow — the server didn't answer in time"
-    : navigator.onLine ? "Couldn't reach the sync server" : "You're offline");
+  throw new Error(
+    name === "TimeoutError" || name === "AbortError"
+      ? "The connection is too slow — the server didn't answer in time"
+      : navigator.onLine
+        ? "Couldn't reach the sync server"
+        : "You're offline",
+  );
 }
 
 async function errorOf(r: Response) {
@@ -180,7 +196,10 @@ export function disconnect() {
 
 function schedulePush() {
   if (!isConnected() || pushTimer) return;
-  pushTimer = window.setTimeout(() => { pushTimer = undefined; syncNow(); }, PUSH_DELAY_MS);
+  pushTimer = window.setTimeout(() => {
+    pushTimer = undefined;
+    syncNow();
+  }, PUSH_DELAY_MS);
 }
 
 /** Start background syncing. `refresh` is called when data from another device arrives. */
@@ -188,7 +207,9 @@ export function startSync(refresh: () => void) {
   onUpdated = refresh;
   onChange(schedulePush);
   syncNow(); // no-op until this device is logged in
-  setInterval(() => { if (!pending.length) syncNow(); }, PULL_EVERY_MS);
+  setInterval(() => {
+    if (!pending.length) syncNow();
+  }, PULL_EVERY_MS);
   document.addEventListener("visibilitychange", () => {
     // upload right away when you leave the page; pull when you come back
     if (document.visibilityState === "hidden" ? pending.length : true) syncNow();

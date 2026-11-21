@@ -11,23 +11,195 @@ import { openChannel, shortGrid } from "./explore";
 import { COST, confirmCost, getQuota, normQuery, noteSpend, similarPastSearch, spendToast, vagueWarning } from "./quota";
 import * as sync from "./sync";
 import type { Short } from "./types";
+import { el, btn } from "./dom";
 
 const STOP = new Set([
   // English
-  "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "for", "with", "at", "by", "from", "is", "are", "was", "were",
-  "be", "been", "it", "its", "this", "that", "these", "those", "you", "your", "i", "me", "my", "we", "our", "they", "their",
-  "he", "she", "his", "her", "as", "if", "so", "not", "no", "do", "does", "did", "can", "will", "just", "how", "what", "why",
-  "when", "who", "which", "all", "more", "most", "about", "into", "than", "then", "there", "here", "have", "has", "had", "get",
-  "got", "make", "made", "one", "two", "new", "now", "out", "up", "very", "really", "every", "ever", "never", "should", "would",
-  "could", "need", "want", "like", "know", "think", "people", "thing", "things", "way", "day", "time", "year", "years",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "with",
+  "at",
+  "by",
+  "from",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "it",
+  "its",
+  "this",
+  "that",
+  "these",
+  "those",
+  "you",
+  "your",
+  "i",
+  "me",
+  "my",
+  "we",
+  "our",
+  "they",
+  "their",
+  "he",
+  "she",
+  "his",
+  "her",
+  "as",
+  "if",
+  "so",
+  "not",
+  "no",
+  "do",
+  "does",
+  "did",
+  "can",
+  "will",
+  "just",
+  "how",
+  "what",
+  "why",
+  "when",
+  "who",
+  "which",
+  "all",
+  "more",
+  "most",
+  "about",
+  "into",
+  "than",
+  "then",
+  "there",
+  "here",
+  "have",
+  "has",
+  "had",
+  "get",
+  "got",
+  "make",
+  "made",
+  "one",
+  "two",
+  "new",
+  "now",
+  "out",
+  "up",
+  "very",
+  "really",
+  "every",
+  "ever",
+  "never",
+  "should",
+  "would",
+  "could",
+  "need",
+  "want",
+  "like",
+  "know",
+  "think",
+  "people",
+  "thing",
+  "things",
+  "way",
+  "day",
+  "time",
+  "year",
+  "years",
   // Platform noise
-  "shorts", "short", "viral", "trending", "fyp", "reels", "reel", "video", "videos", "subscribe", "follow", "watch", "part",
-  "ep", "episode", "full", "official", "youtube", "tiktok", "instagram", "ytshorts", "foryou", "foryoupage", "explore",
+  "shorts",
+  "short",
+  "viral",
+  "trending",
+  "fyp",
+  "reels",
+  "reel",
+  "video",
+  "videos",
+  "subscribe",
+  "follow",
+  "watch",
+  "part",
+  "ep",
+  "episode",
+  "full",
+  "official",
+  "youtube",
+  "tiktok",
+  "instagram",
+  "ytshorts",
+  "foryou",
+  "foryoupage",
+  "explore",
   // Bangla / Banglish
-  "এর", "এই", "কি", "কী", "না", "আর", "করে", "থেকে", "জন্য", "একটি", "এক", "ও", "যে", "তো", "হয়", "হয়", "হবে", "আপনি",
-  "আপনার", "আমি", "আমার", "আমরা", "কেন", "কিভাবে", "কীভাবে", "দিয়ে", "দিয়ে", "নিয়ে", "নিয়ে", "সব", "কোন", "কোনো", "যদি",
-  "তাহলে", "কিন্তু", "এবং", "বা", "শুধু", "আছে", "নেই", "ছিল", "করতে", "করার", "হলে", "মত", "মতো", "ki", "na", "ar", "kore",
-  "theke", "jonno", "ami", "apni", "apnar", "kivabe", "keno", "ei", "er",
+  "এর",
+  "এই",
+  "কি",
+  "কী",
+  "না",
+  "আর",
+  "করে",
+  "থেকে",
+  "জন্য",
+  "একটি",
+  "এক",
+  "ও",
+  "যে",
+  "তো",
+  "হয়",
+  "হয়",
+  "হবে",
+  "আপনি",
+  "আপনার",
+  "আমি",
+  "আমার",
+  "আমরা",
+  "কেন",
+  "কিভাবে",
+  "কীভাবে",
+  "দিয়ে",
+  "দিয়ে",
+  "নিয়ে",
+  "নিয়ে",
+  "সব",
+  "কোন",
+  "কোনো",
+  "যদি",
+  "তাহলে",
+  "কিন্তু",
+  "এবং",
+  "বা",
+  "শুধু",
+  "আছে",
+  "নেই",
+  "ছিল",
+  "করতে",
+  "করার",
+  "হলে",
+  "মত",
+  "মতো",
+  "ki",
+  "na",
+  "ar",
+  "kore",
+  "theke",
+  "jonno",
+  "ami",
+  "apni",
+  "apnar",
+  "kivabe",
+  "keno",
+  "ei",
+  "er",
 ]);
 
 function tokenize(text: string): string[] {
@@ -39,7 +211,12 @@ function tokenize(text: string): string[] {
 }
 
 // ---------- library index (built once, on first use) ----------
-interface Index { docs: Map<string, number>[]; norms: number[]; inv: Map<string, number[]>; idf: Map<string, number> }
+interface Index {
+  docs: Map<string, number>[];
+  norms: number[];
+  inv: Map<string, number[]>;
+  idf: Map<string, number>;
+}
 let index: Index | null = null;
 let indexedFor: Short[] | null = null; // rebuild when the library is replaced
 
@@ -65,7 +242,10 @@ function buildIndex(videos: Short[]): Index {
       // Very common words don't help find matches. (At least 20, so small libraries still match.)
       if (df.get(w)! < Math.max(20, N * 0.05)) {
         let l = inv.get(w);
-        if (!l) inv.set(w, (l = []));
+        if (!l) {
+          l = [];
+          inv.set(w, l);
+        }
         l.push(i);
       }
     }
@@ -128,33 +308,35 @@ export function similarInLibrary(app: AppApi, s: Short, limit = 40): { short: Sh
 export function suggestQuery(app: AppApi, s: Short) {
   const ix = getIndex(app);
   const { vec } = queryVector(ix, s.t);
-  const words = [...vec].sort((a, b) => b[1] - a[1]).map(([w]) => w).slice(0, 4);
+  const words = [...vec]
+    .sort((a, b) => b[1] - a[1])
+    .map(([w]) => w)
+    .slice(0, 4);
   return words.join(" ");
 }
 
 // ---------- page ----------
 interface SearchResult {
-  id: string; t: string; p: number; v: number; l: number; c: number;
+  id: string;
+  t: string;
+  p: number;
+  v: number;
+  l: number;
+  c: number;
   ch: { id: string; name: string; thumb: string; handle: string; subs: number; suggestedCat: string };
 }
-interface SearchResponse { q: string; results: SearchResult[]; units: number; cached: boolean; fetchedAt: number; quota?: { used: number; budget: number } }
+interface SearchResponse {
+  q: string;
+  results: SearchResult[];
+  units: number;
+  cached: boolean;
+  fetchedAt: number;
+  quota?: { used: number; budget: number };
+}
 
 let searching = false;
 const searches = new Map<string, SearchResponse>(); // by source Short id (this session)
 const queries = new Map<string, string>();
-
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
-const btn = (label: string, onClick: () => void, cls = "btn sm") => {
-  const b = el("button", cls, label);
-  b.type = "button";
-  b.onclick = onClick;
-  return b;
-};
 
 export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "feed") {
   app.openPage("More like this", (body) => {
@@ -201,10 +383,19 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
     go.type = "submit";
     form.append(input, go);
     body.append(form);
-    const hint = el("p", "ch-note", "These are the most distinctive words of this Short. Edit them to say what you're really looking for — specific words find better Shorts.");
+    const hint = el(
+      "p",
+      "ch-note",
+      "These are the most distinctive words of this Short. Edit them to say what you're really looking for — specific words find better Shorts.",
+    );
     const warn = el("p", "ch-note warn", "");
-    const updateWarn = () => { warn.textContent = vagueWarning(input.value); };
-    input.oninput = () => { queries.set(s.id, input.value); updateWarn(); };
+    const updateWarn = () => {
+      warn.textContent = vagueWarning(input.value);
+    };
+    input.oninput = () => {
+      queries.set(s.id, input.value);
+      updateWarn();
+    };
     updateWarn();
     body.append(hint, warn);
 
@@ -213,9 +404,16 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
 
     const runSearch = async (q: string) => {
       if (searching) return; // double tap — one search is already on its way
-      if (!sync.isConnected()) { app.toast("Log in first (Menu → Sync)"); return; }
+      if (!sync.isConnected()) {
+        app.toast("Log in first (Menu → Sync)");
+        return;
+      }
       searching = true;
-      try { await doSearch(q); } finally { searching = false; }
+      try {
+        await doSearch(q);
+      } finally {
+        searching = false;
+      }
     };
     const doSearch = async (q: string) => {
       const quota = await getQuota();
@@ -232,7 +430,8 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
           cost: COST.search,
           alwaysAsk: true,
           warning: vagueWarning(q) || undefined,
-          detail: "Finds up to 25 Shorts on all of YouTube, mostly from channels you don't follow yet. Repeating this search within 7 days is free.",
+          detail:
+            "Finds up to 25 Shorts on all of YouTube, mostly from channels you don't follow yet. Repeating this search within 7 days is free.",
           free,
         });
         if (!ok) return;
@@ -251,14 +450,29 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
         go.textContent = `Search · ~${COST.search} units`;
       }
     };
-    form.onsubmit = (e) => { e.preventDefault(); if (input.value.trim()) runSearch(input.value.trim()); };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      if (input.value.trim()) runSearch(input.value.trim());
+    };
 
     const res = searches.get(s.id);
     if (!res) {
-      resultsBox.append(el("p", "ch-note", `Nothing searched yet. Each new search costs ~${COST.search} of your daily units; the cost card shows your budget before anything is spent.`));
+      resultsBox.append(
+        el(
+          "p",
+          "ch-note",
+          `Nothing searched yet. Each new search costs ~${COST.search} of your daily units; the cost card shows your budget before anything is spent.`,
+        ),
+      );
       return;
     }
-    resultsBox.append(el("p", "ch-note", `${res.results.length} Shorts for "${res.q}" · ${res.cached ? "from cache, 0 units" : `${res.units} units`} · ${app.ago(res.fetchedAt)}`));
+    resultsBox.append(
+      el(
+        "p",
+        "ch-note",
+        `${res.results.length} Shorts for "${res.q}" · ${res.cached ? "from cache, 0 units" : `${res.units} units`} · ${app.ago(res.fetchedAt)}`,
+      ),
+    );
 
     // channels found, most frequent first
     const byCh = new Map<string, { ch: SearchResult["ch"]; n: number }>();
@@ -279,8 +493,11 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
       if (ch.thumb) a.src = ch.thumb;
       const t = el("span", "sim-chan-name", ch.name || ch.handle);
       const sub = el("span", "ch-note", `${n} Short${n === 1 ? "" : "s"} here · ${app.fmt(ch.subs)} subs`);
-      const tag = el("span", `pill st-${st === "listed" ? "active" : st === "removed" ? "removed" : "pending"}`,
-        st === "listed" ? "In your list" : st === "removed" ? "Removed" : n >= 2 ? "Good candidate" : "New");
+      const tag = el(
+        "span",
+        `pill st-${st === "listed" ? "active" : st === "removed" ? "removed" : "pending"}`,
+        st === "listed" ? "In your list" : st === "removed" ? "Removed" : n >= 2 ? "Good candidate" : "New",
+      );
       const txt2 = el("span", "sim-chan-txt");
       txt2.append(t, sub);
       row.append(a, txt2, tag);
@@ -290,14 +507,25 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
     resultsBox.append(chBox);
 
     const list: Short[] = res.results.map((r) => ({
-      id: r.id, t: r.t, p: r.p, v: r.v, l: r.l, c: r.c, o: 0, e: 0, tr: 0, r: 0,
+      id: r.id,
+      t: r.t,
+      p: r.p,
+      v: r.v,
+      l: r.l,
+      c: r.c,
+      o: 0,
+      e: 0,
+      tr: 0,
+      r: 0,
       ch: app.ensureChannel(r.ch),
     }));
     const play = (i: number) => app.playList(`YouTube: ${res.q}`, list, i, () => reopen("youtube"));
     resultsBox.append(btn("▶ Play all", () => play(0), "btn sm primary"));
-    resultsBox.append(shortGrid(app, list, play, {
-      showChannel: true,
-      badge: (sh) => (listStatus(app.ds.channels[sh.ch].h, app.ds.channels[sh.ch].id) === "listed" ? "" : "New channel"),
-    }));
+    resultsBox.append(
+      shortGrid(app, list, play, {
+        showChannel: true,
+        badge: (sh) => (listStatus(app.ds.channels[sh.ch].h, app.ds.channels[sh.ch].id) === "listed" ? "" : "New channel"),
+      }),
+    );
   });
 }

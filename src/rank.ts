@@ -82,9 +82,7 @@ function diversify(list: Short[], n: number, lastCh?: number): Short[] {
   while (out.length < n && rest.length) {
     const prev = out.length ? out[out.length - 1].ch : lastCh;
     const recent = out.slice(-20);
-    let pick = rest.findIndex(
-      (s) => s.ch !== prev && recent.filter((r) => r.ch === s.ch).length < 3,
-    );
+    let pick = rest.findIndex((s) => s.ch !== prev && recent.filter((r) => r.ch === s.ch).length < 3);
     // Few channels to choose from: relax "max 3 per 20" but still never repeat the previous channel.
     if (pick < 0) pick = rest.findIndex((s) => s.ch !== prev);
     if (pick < 0) pick = 0; // only one channel left at all

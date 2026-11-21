@@ -51,7 +51,11 @@ export class PlayerPool {
   private active: Slot | null = null;
   private YT: any = null;
 
-  constructor(private container: HTMLElement, private ev: PoolEvents, size: number) {
+  constructor(
+    private container: HTMLElement,
+    private ev: PoolEvents,
+    size: number,
+  ) {
     for (let i = 0; i < size; i++) this.slots.push(this.makeSlot(i));
   }
 
@@ -67,7 +71,9 @@ export class PlayerPool {
     while (this.slots.length < size) this.slots.push(this.makeSlot(this.slots.length));
   }
 
-  get size() { return this.slots.length; }
+  get size() {
+    return this.slots.length;
+  }
 
   private makeSlot(i: number): Slot {
     const el = document.createElement("div");
@@ -77,22 +83,35 @@ export class PlayerPool {
     el.append(inner);
     this.container.append(el);
     const slot: Slot = { el, player: null, ready: Promise.resolve(), id: null, primed: false, preloading: false, failed: null, used: 0 };
-    slot.ready = loadApi().then((YT) => new Promise<void>((resolve) => {
-      this.YT = YT;
-      slot.player = new YT.Player(inner.id, {
-        width: "100%",
-        height: "100%",
-        playerVars: {
-          autoplay: 0, mute: 1, playsinline: 1, controls: 0, rel: 0,
-          modestbranding: 1, iv_load_policy: 3, fs: 0, disablekb: 1,
-        },
-        events: {
-          onReady: () => resolve(),
-          onStateChange: (e: any) => this.onState(slot, e.data),
-          onError: (e: any) => this.onError(slot, e.data),
-        },
-      });
-    }));
+    slot.ready = loadApi().then(
+      (YT) =>
+        new Promise<void>((resolve) => {
+          this.YT = YT;
+          slot.player = new YT.Player(inner.id, {
+            width: "100%",
+            height: "100%",
+            playerVars: {
+              autoplay: 0,
+              mute: 1,
+              playsinline: 1,
+              controls: 0,
+              rel: 0,
+              modestbranding: 1,
+              iv_load_policy: 3,
+              fs: 0,
+              disablekb: 1,
+            },
+            events: {
+              onReady: () => {
+                slot.player?.getIframe?.()?.setAttribute("title", "Short video player");
+                resolve();
+              },
+              onStateChange: (e: any) => this.onState(slot, e.data),
+              onError: (e: any) => this.onError(slot, e.data),
+            },
+          });
+        }),
+    );
     return slot;
   }
 
@@ -113,15 +132,17 @@ export class PlayerPool {
       if (slot.player.getPlaybackRate?.() !== this.rate) slot.player.setPlaybackRate?.(this.rate);
       if (slot.player.getVolume?.() !== this.volume) slot.player.setVolume?.(this.volume);
       this.ev.onPlaying();
-    }
-    else if (state === S.PAUSED) this.ev.onPaused();
+    } else if (state === S.PAUSED) this.ev.onPaused();
     else if (state === S.BUFFERING) this.ev.onBuffering();
     else if (state === S.ENDED) this.ev.onEnded();
   }
 
   private onError(slot: Slot, code: number) {
     if (slot === this.active) this.ev.onError(code);
-    else { slot.failed = code; slot.preloading = false; }
+    else {
+      slot.failed = code;
+      slot.preloading = false;
+    }
   }
 
   private pick(exclude: Slot[]): Slot {
@@ -137,7 +158,10 @@ export class PlayerPool {
   async show(id: string, muted: boolean) {
     let slot = this.slots.find((s) => s.id === id && s.failed === null);
     const failed = this.slots.find((s) => s.id === id && s.failed !== null);
-    if (failed) { this.ev.onError(failed.failed!); return; }
+    if (failed) {
+      this.ev.onError(failed.failed!);
+      return;
+    }
     const prev = this.active;
     if (!slot) slot = this.pick(prev ? [prev] : []);
     this.active = slot;
@@ -147,7 +171,8 @@ export class PlayerPool {
 
     await slot.ready;
     if (this.active !== slot) return; // swiped again meanwhile
-    if (muted) slot.player.mute(); else slot.player.unMute();
+    if (muted) slot.player.mute();
+    else slot.player.unMute();
     slot.player.setVolume?.(this.volume);
     if (slot.id === id) {
       // already loaded here (preloaded, or the one you just swiped away from) — start instantly
@@ -179,7 +204,9 @@ export class PlayerPool {
     slot.player.loadVideoById(id);
   }
 
-  private get p() { return this.active?.player; }
+  private get p() {
+    return this.active?.player;
+  }
   private rate = 1;
   private volume = 100;
   /** Volume 0–100 for the current and following videos. */
@@ -197,11 +224,26 @@ export class PlayerPool {
     this.rate = r;
     this.p?.setPlaybackRate?.(r);
   }
-  play() { this.p?.playVideo?.(); }
-  pause() { this.p?.pauseVideo?.(); }
-  mute() { this.p?.mute?.(); }
-  unMute() { this.p?.unMute?.(); }
-  restart() { this.p?.seekTo?.(0, true); this.p?.playVideo?.(); }
-  time(): number { return this.p?.getCurrentTime?.() ?? 0; }
-  duration(): number { return this.p?.getDuration?.() ?? 0; }
+  play() {
+    this.p?.playVideo?.();
+  }
+  pause() {
+    this.p?.pauseVideo?.();
+  }
+  mute() {
+    this.p?.mute?.();
+  }
+  unMute() {
+    this.p?.unMute?.();
+  }
+  restart() {
+    this.p?.seekTo?.(0, true);
+    this.p?.playVideo?.();
+  }
+  time(): number {
+    return this.p?.getCurrentTime?.() ?? 0;
+  }
+  duration(): number {
+    return this.p?.getDuration?.() ?? 0;
+  }
 }

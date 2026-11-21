@@ -37,6 +37,8 @@ jobs:
       - name: Security audit (known vulnerabilities in libraries)
         run: npm audit --audit-level=high
         continue-on-error: true # warns in the log; Dependabot opens the fix
+      - name: Lint + formatting (Biome)
+        run: npm run lint
       - name: Type check
         run: npm run typecheck
       - name: Unit + server tests

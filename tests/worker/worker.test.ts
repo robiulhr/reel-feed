@@ -50,14 +50,25 @@ describe("channel list edits", () => {
 
     // delete is only allowed after remove (the "second deletion")
     expect((await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "delete", h: "@pricinglab" }] } })).status).toBe(400);
-    await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "remove", h: "@pricinglab" }, { t: "delete", h: "@pricinglab" }] } });
+    await call(f, "POST", "/channels", {
+      session: s,
+      body: {
+        ops: [
+          { t: "remove", h: "@pricinglab" },
+          { t: "delete", h: "@pricinglab" },
+        ],
+      },
+    });
     expect(channelsOnGitHub(f).some((c) => c.handle === "@pricinglab")).toBe(false);
   });
 
   it("accepts Bangla (non-English) handles", async () => {
     const f = setup();
     const s = await login(f);
-    const r = await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "add", channel: { name: "দোকানের গল্প", handle: "@দোকানেরগল্প", cat: "bangla" } }] } });
+    const r = await call(f, "POST", "/channels", {
+      session: s,
+      body: { ops: [{ t: "add", channel: { name: "দোকানের গল্প", handle: "@দোকানেরগল্প", cat: "bangla" } }] },
+    });
     expect(r.status).toBe(200);
   });
 
@@ -65,14 +76,29 @@ describe("channel list edits", () => {
     const f = setup();
     const s = await login(f);
     expect((await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "cat", h: "@hook", cat: "hacker" }] } })).status).toBe(400);
-    expect((await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "add", channel: { name: "x", handle: "no-at-sign", cat: "ads" } }] } })).status).toBe(400);
+    expect(
+      (
+        await call(f, "POST", "/channels", {
+          session: s,
+          body: { ops: [{ t: "add", channel: { name: "x", handle: "no-at-sign", cat: "ads" } }] },
+        })
+      ).status,
+    ).toBe(400);
   });
 
   it("several changes in one request = one GitHub commit", async () => {
     const f = setup();
     const s = await login(f);
     const before = f.ghWrites();
-    await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "cat", h: "@hook", cat: "ads" }, { t: "cat", h: "@hook", cat: "books" }] } });
+    await call(f, "POST", "/channels", {
+      session: s,
+      body: {
+        ops: [
+          { t: "cat", h: "@hook", cat: "ads" },
+          { t: "cat", h: "@hook", cat: "books" },
+        ],
+      },
+    });
     expect(f.ghWrites() - before).toBe(1);
     expect(channelsOnGitHub(f)[0].cat).toBe("books");
   });
@@ -125,7 +151,12 @@ describe("YouTube lookups, previews, searches + quota guard", () => {
   it("looks up a channel from many link styles", async () => {
     const f = setup();
     const s = await login(f);
-    for (const q of ["@pricinglab", "pricinglab", "https://www.youtube.com/@pricinglab/shorts", "youtube.com/channel/UCpricing00000000000000a"]) {
+    for (const q of [
+      "@pricinglab",
+      "pricinglab",
+      "https://www.youtube.com/@pricinglab/shorts",
+      "youtube.com/channel/UCpricing00000000000000a",
+    ]) {
       const r = await call(f, "POST", "/lookup", { session: s, body: { q } });
       expect(r.status, q).toBe(200);
       expect(r.body.results[0]?.name, q).toBe("Pricing Lab");

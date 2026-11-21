@@ -19,8 +19,12 @@ export function memKV() {
       if (v === undefined) return null;
       return type === "json" ? JSON.parse(v) : v;
     },
-    async put(key: string, value: string) { m.set(key, value); },
-    async delete(key: string) { m.delete(key); },
+    async put(key: string, value: string) {
+      m.set(key, value);
+    },
+    async delete(key: string) {
+      m.delete(key);
+    },
   };
 }
 
@@ -73,7 +77,12 @@ export function setup(initialChannels: unknown[] = [{ name: "Hook", handle: "@ho
         return json(200, { content: { sha: nf.sha } });
       }
       if (url.pathname.endsWith("/dispatches")) return json(204);
-      if (url.pathname.endsWith("/runs")) return json(200, { workflow_runs: [{ status: "completed", conclusion: "success", event: "push", created_at: new Date().toISOString(), html_url: "x" }] });
+      if (url.pathname.endsWith("/runs"))
+        return json(200, {
+          workflow_runs: [
+            { status: "completed", conclusion: "success", event: "push", created_at: new Date().toISOString(), html_url: "x" },
+          ],
+        });
       if (/^\/repos\/[^/]+\/[^/]+$/.test(url.pathname)) return json(200, { private: true });
       return json(404, {});
     }
@@ -81,22 +90,47 @@ export function setup(initialChannels: unknown[] = [{ name: "Hook", handle: "@ho
     if (url.host === "yt.test") {
       const p = url.pathname;
       if (p.endsWith("/channels")) {
-        if (url.searchParams.get("forHandle")) return json(200, url.searchParams.get("forHandle")!.toLowerCase() === "@pricinglab" ? { items: [{ id: "UCpricing00000000000000a" }] } : {});
+        if (url.searchParams.get("forHandle"))
+          return json(
+            200,
+            url.searchParams.get("forHandle")!.toLowerCase() === "@pricinglab" ? { items: [{ id: "UCpricing00000000000000a" }] } : {},
+          );
         const ids = (url.searchParams.get("id") ?? "").split(",").filter((i) => CH[i]);
-        return json(200, { items: ids.map((id) => ({ id, snippet: { title: CH[id].title, customUrl: CH[id].customUrl, description: CH[id].desc, thumbnails: { default: { url: "" } } }, statistics: { subscriberCount: "1000", videoCount: "50" } })) });
+        return json(200, {
+          items: ids.map((id) => ({
+            id,
+            snippet: { title: CH[id].title, customUrl: CH[id].customUrl, description: CH[id].desc, thumbnails: { default: { url: "" } } },
+            statistics: { subscriberCount: "1000", videoCount: "50" },
+          })),
+        });
       }
       if (p.endsWith("/playlistItems")) {
-        if (url.searchParams.get("maxResults") === "1") return json(200, { pageInfo: { totalResults: 12 }, items: [{ contentDetails: { videoId: "aaaaaaaaaaa", videoPublishedAt: new Date().toISOString() } }] });
-        return json(200, { items: Array.from({ length: 12 }, (_, i) => ({ contentDetails: { videoId: `short${String(i).padStart(6, "0")}` } })) });
+        if (url.searchParams.get("maxResults") === "1")
+          return json(200, {
+            pageInfo: { totalResults: 12 },
+            items: [{ contentDetails: { videoId: "aaaaaaaaaaa", videoPublishedAt: new Date().toISOString() } }],
+          });
+        return json(200, {
+          items: Array.from({ length: 12 }, (_, i) => ({ contentDetails: { videoId: `short${String(i).padStart(6, "0")}` } })),
+        });
       }
-      if (p.endsWith("/search")) return json(200, { items: ["s1", "s2", "longvideo"].map((v) => ({ id: { videoId: v.padEnd(11, "x") } })) });
+      if (p.endsWith("/search"))
+        return json(200, { items: ["s1", "s2", "longvideo"].map((v) => ({ id: { videoId: v.padEnd(11, "x") } })) });
       if (p.endsWith("/videos")) {
         const ids = (url.searchParams.get("id") ?? "").split(",");
-        return json(200, { items: ids.map((id, k) => ({
-          id, snippet: { title: `Video ${k}`, publishedAt: new Date().toISOString(), channelId: k % 2 ? "UCbangla000000000000000a" : "UCpricing00000000000000a" },
-          statistics: { viewCount: "1000", likeCount: "10", commentCount: "1" },
-          contentDetails: { duration: id.startsWith("long") ? "PT10M" : "PT40S" }, status: { embeddable: true, privacyStatus: "public" },
-        })) });
+        return json(200, {
+          items: ids.map((id, k) => ({
+            id,
+            snippet: {
+              title: `Video ${k}`,
+              publishedAt: new Date().toISOString(),
+              channelId: k % 2 ? "UCbangla000000000000000a" : "UCpricing00000000000000a",
+            },
+            statistics: { viewCount: "1000", likeCount: "10", commentCount: "1" },
+            contentDetails: { duration: id.startsWith("long") ? "PT10M" : "PT40S" },
+            status: { embeddable: true, privacyStatus: "public" },
+          })),
+        });
       }
       return json(404, {});
     }
@@ -104,26 +138,47 @@ export function setup(initialChannels: unknown[] = [{ name: "Hook", handle: "@ho
   });
 
   const env = {
-    GITHUB_TOKEN: "test", APP_PASSWORD: "correct horse", SESSION_SECRET: "secret", YOUTUBE_API_KEY: "key",
-    DATA_REPO: "me/data", CODE_REPO: "me/code", WORKFLOW_FILE: "deploy.yml", ALLOWED_ORIGINS: ORIGIN,
-    GITHUB_API: "http://gh.test", YOUTUBE_API: "http://yt.test", QUOTA: kv as unknown as KVNamespace,
+    GITHUB_TOKEN: "test",
+    APP_PASSWORD: "correct horse",
+    SESSION_SECRET: "secret",
+    YOUTUBE_API_KEY: "key",
+    DATA_REPO: "me/data",
+    CODE_REPO: "me/code",
+    WORKFLOW_FILE: "deploy.yml",
+    ALLOWED_ORIGINS: ORIGIN,
+    GITHUB_API: "http://gh.test",
+    YOUTUBE_API: "http://yt.test",
+    QUOTA: kv as unknown as KVNamespace,
   } as Env;
 
   return {
-    env, kv, files, calls,
+    env,
+    kv,
+    files,
+    calls,
     ghWrites: () => calls.filter((c) => c.startsWith("PUT gh.test")).length,
     ytUnits: () => calls.filter((c) => c.includes("yt.test")).reduce((s, c) => s + (c.endsWith("/search") ? 100 : 1), 0),
   };
 }
 
-export async function call(f: Fake, method: string, path: string, opts: { body?: unknown; session?: string; origin?: string; rid?: string; ip?: string } = {}) {
+export async function call(
+  f: Fake,
+  method: string,
+  path: string,
+  opts: { body?: unknown; session?: string; origin?: string; rid?: string; ip?: string } = {},
+) {
   const headers: Record<string, string> = { Origin: opts.origin ?? ORIGIN, "CF-Connecting-IP": opts.ip ?? "1.2.3.4" };
   if (opts.session) headers.Authorization = `Bearer ${opts.session}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (opts.rid) headers["X-Request-Id"] = opts.rid;
-  const res = await worker.fetch(new Request(`https://w.test${path}`, {
-    method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-  }), f.env);
+  const res = await worker.fetch(
+    new Request(`https://w.test${path}`, {
+      method,
+      headers,
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    }),
+    f.env,
+  );
   const text = await res.text();
   return { status: res.status, headers: res.headers, body: text ? JSON.parse(text) : null };
 }

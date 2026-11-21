@@ -22,18 +22,18 @@
       <div class="shell">
         <header class="top">
           <div class="ctx-bar" id="ctxBar" hidden>
-            <button class="icon-btn" id="ctxBack" aria-label="Back to your feed" title="Back (Esc)">←</button>
+            <button type="button" class="icon-btn" id="ctxBack" aria-label="Back to your feed" title="Back (Esc)">←</button>
             <div class="ctx-text"><div class="ctx-title" id="ctxTitle"></div><div class="ctx-sub" id="ctxSub"></div></div>
           </div>
           <div class="row1">
             <nav class="tabs" id="tabs">
-              <button data-tab="foryou">For You</button>
-              <button data-tab="trending">Trending</button>
-              <button data-tab="popular">Popular</button>
-              <button data-tab="newest">Newest</button>
+              <button type="button" data-tab="foryou">For You</button>
+              <button type="button" data-tab="trending">Trending</button>
+              <button type="button" data-tab="popular">Popular</button>
+              <button type="button" data-tab="newest">Newest</button>
             </nav>
-            <button class="icon-btn" id="refreshBtn" aria-label="Refresh feed" title="Refresh feed & check for new Shorts"><span>↻</span></button>
-            <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
+            <button type="button" class="icon-btn" id="refreshBtn" aria-label="Refresh feed" title="Refresh feed & check for new Shorts"><span>↻</span></button>
+            <button type="button" class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
           </div>
           <div class="row2">
             <select id="win" aria-label="Time range">
@@ -50,28 +50,29 @@
           <div class="track" id="track">
             <img class="peek peek-prev" id="peekPrev" alt="" />
             <div class="players" id="players"></div>
-            <img id="poster" class="poster" alt="" />
+            <img id="poster" class="poster" alt="" aria-hidden="true" />
             <img class="peek peek-next" id="peekNext" alt="" />
           </div>
-          <div class="tap" id="tap" aria-label="Tap to pause, double-tap to save, swipe up for next, swipe left for the channel"></div>
+          <!-- touch surface; keyboard and screen-reader users have the buttons and shortcuts instead -->
+          <div class="tap" id="tap" aria-hidden="true"></div>
           <div class="center-icon" id="centerIcon" aria-hidden="true"></div>
-          <div class="spinner" id="spinner" hidden></div>
+          <div class="spinner" id="spinner" role="status" aria-label="Loading" hidden></div>
           <div class="skip-hint" id="skipHint" aria-hidden="true"></div>
-          <div class="speed-hint" id="speedHint" hidden>2× ⏩</div>
-          <button class="banner" id="banner" hidden></button>
-          <div class="scrub-time" id="scrubTime" hidden></div>
+          <div class="speed-hint" id="speedHint" aria-hidden="true" hidden>2× ⏩</div>
+          <button type="button" class="banner" id="banner" hidden></button>
+          <div class="scrub-time" id="scrubTime" aria-hidden="true" hidden></div>
           <div class="progress" id="progress" title="Drag to jump"><div class="progress-line"><div id="bar"></div></div></div>
           <div class="empty" id="empty" hidden></div>
           <div class="tips" id="tips" hidden>
             <div class="tips-card">
-              <div class="tips-title">Quick tips</div>
+              <h2 class="tips-title">Quick tips</h2>
               <div class="tip">👆 <b>Swipe up</b> for the next Short, down to go back</div>
               <div class="tip">👈 <b>Swipe left</b> (or tap the channel name) to explore the channel</div>
               <div class="tip">👆👆 <b>Double-tap left/right</b> to skip 10 s · middle to save · tap to pause</div>
               <div class="tip">✋ <b>Hold</b> for 2× speed · drag the bar at the bottom to jump</div>
               <div class="tip">⋯ <b>More like this</b>, hide a channel, open on YouTube</div>
               <div class="tip">↻ <b>Refresh</b> for a fresh feed and new Shorts</div>
-              <button class="btn primary" id="tipsOk">Got it</button>
+              <button type="button" class="btn primary" id="tipsOk">Got it</button>
             </div>
           </div>
         </div>
@@ -83,7 +84,7 @@
               <a id="chName" class="ch-name" href="#" title="Explore this channel"></a>
               <span id="badge" class="badge" hidden>NEW</span>
             </div>
-            <p id="title" class="title"></p>
+            <h1 id="title" class="title"></h1>
             <p id="meta" class="meta"></p>
           </div>
           <div class="actions">
@@ -92,17 +93,17 @@
               <input class="vol-range" type="range" min="0" max="100" step="1" aria-label="Volume" />
               <span class="vol-pct">100%</span>
             </div>
-            <button class="act" id="muteBtn" aria-label="Sound: tap to mute or unmute, hold for volume" title="Sound (m) · hold for volume (+/−)"><span class="ico">🔇</span></button>
-            <button class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
-            <button class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>
-            <button class="act" id="moreBtn" aria-label="More" title="More like this, channel, hide…"><span class="ico">⋯</span></button>
+            <button type="button" class="act" id="muteBtn" aria-label="Sound: tap to mute or unmute, hold for volume" title="Sound (m) · hold for volume (+/−)"><span class="ico">🔇</span></button>
+            <button type="button" class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
+            <button type="button" class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>
+            <button type="button" class="act" id="moreBtn" aria-label="More" title="More like this, channel, hide…"><span class="ico">⋯</span></button>
           </div>
         </footer>
       </div>
 
       <div class="side-nav">
-        <button class="icon-btn" id="prevBtn" aria-label="Previous" title="Previous (↑)">▲</button>
-        <button class="icon-btn" id="nextBtn" aria-label="Next" title="Next (↓)">▼</button>
+        <button type="button" class="icon-btn" id="prevBtn" aria-label="Previous" title="Previous (↑)">▲</button>
+        <button type="button" class="icon-btn" id="nextBtn" aria-label="Next" title="Next (↓)">▼</button>
       </div>
     </div>
 
@@ -110,15 +111,15 @@
       <div class="panel-inner">
         <div class="panel-head">
           <nav class="ptabs" id="ptabs">
-            <button data-p="channels">Channels</button>
-            <button data-p="history">History</button>
-            <button data-p="saved">Saved</button>
-            <button data-p="hidden">Hidden</button>
-            <button data-p="sync">Sync</button>
-            <button data-p="api">API usage</button>
-            <button data-p="about">About</button>
+            <button type="button" data-p="channels">Channels</button>
+            <button type="button" data-p="history">History</button>
+            <button type="button" data-p="saved">Saved</button>
+            <button type="button" data-p="hidden">Hidden</button>
+            <button type="button" data-p="sync">Sync</button>
+            <button type="button" data-p="api">API usage</button>
+            <button type="button" data-p="about">About</button>
           </nav>
-          <button class="icon-btn" id="closePanel" aria-label="Close">✕</button>
+          <button class="icon-btn" id="closePanel" aria-label="Close menu" type="button">✕</button>
         </div>
         <div class="panel-body" id="panelBody"></div>
       </div>
@@ -134,26 +135,26 @@
         </div>
         <div class="speed-row">
           <span>Speed</span>
-          <button data-r="0.5">0.5×</button>
-          <button data-r="0.75">0.75×</button>
-          <button data-r="1">1×</button>
-          <button data-r="1.25">1.25×</button>
-          <button data-r="1.5">1.5×</button>
-          <button data-r="2">2×</button>
+          <button type="button" data-r="0.5">0.5×</button>
+          <button type="button" data-r="0.75">0.75×</button>
+          <button type="button" data-r="1">1×</button>
+          <button type="button" data-r="1.25">1.25×</button>
+          <button type="button" data-r="1.5">1.5×</button>
+          <button type="button" data-r="2">2×</button>
         </div>
-        <button data-a="similar">✨ More like this</button>
-        <button data-a="full" id="fsBtn" hidden>⛶ Full screen</button>
-        <button data-a="channel">👤 Explore this channel</button>
-        <button data-a="hide">⊘ Hide this channel</button>
-        <button data-a="open">↗ Open on YouTube</button>
-        <button data-a="cancel" class="sheet-cancel">Cancel</button>
+        <button type="button" data-a="similar">✨ More like this</button>
+        <button type="button" data-a="full" id="fsBtn" hidden>⛶ Full screen</button>
+        <button type="button" data-a="channel">👤 Explore this channel</button>
+        <button type="button" data-a="hide">⊘ Hide this channel</button>
+        <button type="button" data-a="open">↗ Open on YouTube</button>
+        <button type="button" data-a="cancel" class="sheet-cancel">Cancel</button>
       </div>
     </div>
 
     <div class="page" id="page" hidden>
       <div class="page-inner">
         <div class="page-head">
-          <button class="icon-btn" id="pageClose" aria-label="Close">✕</button>
+          <button class="icon-btn" id="pageClose" aria-label="Close page" type="button">✕</button>
           <div class="page-title" id="pageTitle"></div>
         </div>
         <div class="page-body" id="pageBody"></div>

@@ -54,7 +54,11 @@ test.describe("watching", () => {
     await closeTips(page);
     await page.waitForTimeout(300);
     const box = (await page.locator("#tap").boundingBox())!;
-    await page.evaluate(() => (window as any).__yt.players.forEach((p: any) => p.seekTo(20)));
+    await page.evaluate(() =>
+      (window as any).__yt.players.forEach((p: any) => {
+        p.seekTo(20);
+      }),
+    );
     const before = (await player(page))!.t;
     await page.mouse.dblclick(box.x + box.width * 0.85, box.y + box.height / 2);
     await expect(page.locator("#skipHint")).toHaveText(/10s/);

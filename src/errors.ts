@@ -23,10 +23,14 @@ export function report(msg: string, where: string, stack?: string) {
   toastError("Something went wrong. If the app misbehaves, reload it.", () => location.reload());
   if (!sync.isConnected() || reportsThisSession >= 10) return;
   reportsThisSession++;
-  sync.call("/log", {
-    method: "POST",
-    body: JSON.stringify({ msg, where, stack: stack?.slice(0, 1500), ver: typeof __BUILD__ === "string" ? __BUILD__ : "" }),
-  }).catch(() => { /* reporting must never cause more errors */ });
+  sync
+    .call("/log", {
+      method: "POST",
+      body: JSON.stringify({ msg, where, stack: stack?.slice(0, 1500), ver: typeof __BUILD__ === "string" ? __BUILD__ : "" }),
+    })
+    .catch(() => {
+      /* reporting must never cause more errors */
+    });
 }
 
 export function installErrorCatcher() {

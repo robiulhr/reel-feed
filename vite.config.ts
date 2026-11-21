@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
 /**
@@ -31,6 +32,33 @@ function securityPolicy(syncUrl: string): Plugin {
   };
 }
 
+/**
+ * Performance budget: the build FAILS if the app's code grows past these sizes (gzip, what phones
+ * actually download), so it stays fast on weak networks. Raise a limit only on purpose.
+ * Sizes when the budget was set (Phase 4): JS 29 kB, CSS 5.7 kB.
+ */
+export const BUDGET_KB = { js: 40, css: 10 };
+
+function sizeBudget(): Plugin {
+  return {
+    name: "size-budget",
+    apply: "build",
+    generateBundle(_opts, bundle) {
+      const total = { js: 0, css: 0 };
+      for (const f of Object.values(bundle)) {
+        const kind = f.fileName.endsWith(".js") ? "js" : f.fileName.endsWith(".css") ? "css" : null;
+        if (!kind) continue;
+        const src = f.type === "chunk" ? f.code : f.source;
+        total[kind] += gzipSync(typeof src === "string" ? src : Buffer.from(src)).length / 1024;
+      }
+      const report = (k: "js" | "css") => `${k.toUpperCase()} ${total[k].toFixed(1)} kB of ${BUDGET_KB[k]} kB`;
+      const over = (["js", "css"] as const).filter((k) => total[k] > BUDGET_KB[k]);
+      if (over.length) this.error(`Performance budget exceeded: ${over.map(report).join(", ")} (gzip). See vite.config.ts.`);
+      this.info(`Performance budget OK: ${report("js")}, ${report("css")} (gzip)`);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const syncUrl = process.env.VITE_SYNC_URL || env.VITE_SYNC_URL || "";
@@ -41,6 +69,6 @@ export default defineConfig(({ mode }) => {
       // shown in Menu → About, so you can tell which version the app is running
       __BUILD__: JSON.stringify(new Date().toISOString()),
     },
-    plugins: [securityPolicy(syncUrl)],
+    plugins: [securityPolicy(syncUrl), sizeBudget()],
   };
 });

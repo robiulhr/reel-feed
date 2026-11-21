@@ -37,13 +37,40 @@ const FORCE_PLAYLIST_CHECK = 7 * DAY; // safety net in case RSS misses something
 type Cat = "bangla" | "ads" | "stories" | "founders" | "books" | "ai" | "other";
 const CAT_PRIOR: Record<Cat, number> = { ads: 1, stories: 1, bangla: 0.8, founders: 0.8, books: 0.5, ai: 0.5, other: 0.4 };
 
-interface ChannelInput { name: string; handle: string; cat?: Cat; id?: string; status?: "removed" }
-interface CachedChannel {
-  id: string; title: string; thumb: string; subs: number; known: string[];
-  noShorts?: boolean; rss?: string[]; checkedAt?: number;
+interface ChannelInput {
+  name: string;
+  handle: string;
+  cat?: Cat;
+  id?: string;
+  status?: "removed";
 }
-interface CachedVideo { ch: string; t: string; p: number; v: number; l: number; c: number; kw: number; emb: boolean; bn: boolean; s?: number }
-interface Cache { channels: Record<string, CachedChannel>; videos: Record<string, CachedVideo>; usage?: UsageRun[] }
+interface CachedChannel {
+  id: string;
+  title: string;
+  thumb: string;
+  subs: number;
+  known: string[];
+  noShorts?: boolean;
+  rss?: string[];
+  checkedAt?: number;
+}
+interface CachedVideo {
+  ch: string;
+  t: string;
+  p: number;
+  v: number;
+  l: number;
+  c: number;
+  kw: number;
+  emb: boolean;
+  bn: boolean;
+  s?: number;
+}
+interface Cache {
+  channels: Record<string, CachedChannel>;
+  videos: Record<string, CachedVideo>;
+  usage?: UsageRun[];
+}
 
 /** What each API call was for — shown on the app's API usage page. */
 type UsageTag = "resolve" | "channelInfo" | "playlist" | "stats";
@@ -63,13 +90,64 @@ interface UsageRun {
 const USAGE_HISTORY = 300; // ~7 weeks of refreshes every 4 hours
 
 const KEYWORDS = [
-  "business", "brand", "marketing", "sales", "sell", "startup", "founder", "ceo", "company", "companies",
-  "meta ads", "facebook", "instagram", "customer", "price", "pricing", "profit", "ecommerce", "e-commerce",
-  "shopify", "amazon", "money", "revenue", "strategy", "entrepreneur", "billion", "million", "product",
-  "growth", "offer", "funnel", "agency", "dropship", "negotiat", "invest", "mindset", "viral", "content",
-  "creative", "advertis", "copywrit", "retention", "scale", "scaling",
-  "ব্যবসা", "বিজনেস", "ব্র্যান্ড", "মার্কেটিং", "কাস্টমার", "অফার", "প্রোডাক্ট", "উদ্যোক্তা", "কোম্পানি",
-  "টাকা", "বিক্রি", "ফেসবুক", "বিজ্ঞাপন", "সেল",
+  "business",
+  "brand",
+  "marketing",
+  "sales",
+  "sell",
+  "startup",
+  "founder",
+  "ceo",
+  "company",
+  "companies",
+  "meta ads",
+  "facebook",
+  "instagram",
+  "customer",
+  "price",
+  "pricing",
+  "profit",
+  "ecommerce",
+  "e-commerce",
+  "shopify",
+  "amazon",
+  "money",
+  "revenue",
+  "strategy",
+  "entrepreneur",
+  "billion",
+  "million",
+  "product",
+  "growth",
+  "offer",
+  "funnel",
+  "agency",
+  "dropship",
+  "negotiat",
+  "invest",
+  "mindset",
+  "viral",
+  "content",
+  "creative",
+  "advertis",
+  "copywrit",
+  "retention",
+  "scale",
+  "scaling",
+  "ব্যবসা",
+  "বিজনেস",
+  "ব্র্যান্ড",
+  "মার্কেটিং",
+  "কাস্টমার",
+  "অফার",
+  "প্রোডাক্ট",
+  "উদ্যোক্তা",
+  "কোম্পানি",
+  "টাকা",
+  "বিক্রি",
+  "ফেসবুক",
+  "বিজ্ঞাপন",
+  "সেল",
 ];
 const BENGALI = /[ঀ-৿]/;
 
@@ -103,7 +181,10 @@ async function yt(endpoint: string, params: Record<string, string | number>, tag
     try {
       res = await fetch(url);
     } catch {
-      if (attempt < 2) { await sleep(1000 * (attempt + 1)); continue; }
+      if (attempt < 2) {
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
       throw new Error(`Network error calling ${endpoint}`);
     }
     if (res.ok) return res.json();
@@ -113,7 +194,10 @@ async function yt(endpoint: string, params: Record<string, string | number>, tag
     if (res.status === 403 && /quota/i.test(reason)) {
       throw new QuotaError("Daily YouTube API quota is used up. It resets at midnight Pacific time.");
     }
-    if (res.status >= 500 && attempt < 2) { await sleep(1000 * (attempt + 1)); continue; }
+    if (res.status >= 500 && attempt < 2) {
+      await sleep(1000 * (attempt + 1));
+      continue;
+    }
     throw new Error(`${endpoint} failed: HTTP ${res.status} ${reason} ${body?.error?.message ?? ""}`.trim());
   }
 }
@@ -140,7 +224,7 @@ async function pool<T>(items: T[], n: number, fn: (item: T) => Promise<void>) {
   await Promise.all(workers);
 }
 
-const chunk = <T,>(arr: T[], size: number) =>
+const chunk = <T>(arr: T[], size: number) =>
   Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 
 function kwScore(text: string) {
@@ -161,7 +245,7 @@ function percentiles(values: number[]) {
   const order = values.map((v, i) => [v, i] as const).sort((a, b) => a[0] - b[0]);
   const out = new Array<number>(values.length);
   const denom = Math.max(1, values.length - 1);
-  order.forEach(([, i], rank) => (out[i] = rank / denom));
+  for (const [rank, [, i]] of order.entries()) out[i] = rank / denom;
   return out;
 }
 
@@ -208,9 +292,7 @@ async function main() {
   const t0 = Date.now();
   const now = Math.floor(t0 / 1000);
   const list: ChannelInput[] = JSON.parse(readFileSync(CHANNELS_FILE, "utf8"));
-  const cache: Cache = existsSync(CACHE_FILE)
-    ? JSON.parse(readFileSync(CACHE_FILE, "utf8"))
-    : { channels: {}, videos: {} };
+  const cache: Cache = existsSync(CACHE_FILE) ? JSON.parse(readFileSync(CACHE_FILE, "utf8")) : { channels: {}, videos: {} };
   cacheRef = cache;
   runStartedAt = now;
 
@@ -235,11 +317,16 @@ async function main() {
     }
     const j = await yt("channels", { part: "snippet,statistics", forHandle: c.handle }, "resolve");
     const item = j?.items?.[0];
-    if (!item) { notFound.push(`${c.name} (${c.handle})`); return; }
+    if (!item) {
+      notFound.push(`${c.name} (${c.handle})`);
+      return;
+    }
     cache.channels[c.handle] = {
-      id: item.id, title: item.snippet.title,
+      id: item.id,
+      title: item.snippet.title,
       thumb: item.snippet.thumbnails?.default?.url ?? "",
-      subs: Number(item.statistics?.subscriberCount ?? 0), known: [],
+      subs: Number(item.statistics?.subscriberCount ?? 0),
+      known: [],
     };
   });
 
@@ -249,7 +336,11 @@ async function main() {
 
   // 2. Channel names, avatars, subscriber counts (1 unit per 50 channels)
   await pool(chunk(active, 50), CONCURRENCY, async (batch) => {
-    const j = await yt("channels", { part: "snippet,statistics", id: batch.map(([, ch]) => ch.id).join(","), maxResults: 50 }, "channelInfo");
+    const j = await yt(
+      "channels",
+      { part: "snippet,statistics", id: batch.map(([, ch]) => ch.id).join(","), maxResults: 50 },
+      "channelInfo",
+    );
     const byId = new Map<string, any>((j?.items ?? []).map((it: any) => [it.id, it]));
     for (const [, ch] of batch) {
       const it = byId.get(ch.id);
@@ -266,8 +357,10 @@ async function main() {
   await pool(active, CONCURRENCY, async ([, ch]) => {
     let needPlaylist = DEEP || !ch.checkedAt || now - ch.checkedAt > FORCE_PLAYLIST_CHECK;
     const feed = await rssIds(ch.id);
-    if (feed === null) { counts.rssFailed++; needPlaylist = true; }
-    else {
+    if (feed === null) {
+      counts.rssFailed++;
+      needPlaylist = true;
+    } else {
       counts.rssOk++;
       const seen = new Set(ch.rss ?? []);
       if (feed.some((id) => !seen.has(id))) needPlaylist = true;
@@ -281,19 +374,29 @@ async function main() {
     let pageToken: string | undefined;
     let pages = 0;
     do {
-      const j = await yt("playlistItems", {
-        part: "contentDetails",
-        playlistId: "UUSH" + ch.id.slice(2),
-        maxResults: 50,
-        ...(pageToken ? { pageToken } : {}),
-      }, "playlist");
-      if (!j) { ch.noShorts = known.size === 0; break; }
+      const j = await yt(
+        "playlistItems",
+        {
+          part: "contentDetails",
+          playlistId: `UUSH${ch.id.slice(2)}`,
+          maxResults: 50,
+          ...(pageToken ? { pageToken } : {}),
+        },
+        "playlist",
+      );
+      if (!j) {
+        ch.noShorts = known.size === 0;
+        break;
+      }
       ch.noShorts = false;
       let hitKnown = false;
       for (const it of j.items ?? []) {
         const id: string | undefined = it.contentDetails?.videoId;
         if (!id) continue;
-        if (known.has(id)) { hitKnown = true; continue; }
+        if (known.has(id)) {
+          hitKnown = true;
+          continue;
+        }
         known.add(id);
         fresh.push(id);
       }
@@ -346,8 +449,16 @@ async function main() {
   // 5. Score and write the website data. Every listed channel is included (for the Channels panel);
   //    only active ones contribute Shorts.
   type OutChannel = {
-    h: string; n: string; cat: Cat; bn: boolean; subs: number; thumb: string;
-    id: string; st: "active" | "noShorts" | "notFound" | "removed"; cnt: number; last: number;
+    h: string;
+    n: string;
+    cat: Cat;
+    bn: boolean;
+    subs: number;
+    thumb: string;
+    id: string;
+    st: "active" | "noShorts" | "notFound" | "removed";
+    cnt: number;
+    last: number;
   };
   const outChannels: OutChannel[] = [];
   const rows: { id: string; ch: number; v: CachedVideo; o: number; e: number; tr: number; r: number }[] = [];
@@ -357,11 +468,25 @@ async function main() {
     const ch = cache.channels[c.handle];
     const cat: Cat = c.cat ?? "other";
     const base: OutChannel = {
-      h: c.handle, n: ch?.title || c.name, cat, bn: cat === "bangla", subs: ch?.subs ?? 0,
-      thumb: ch?.thumb ?? "", id: ch?.id ?? c.id ?? "", st: "notFound", cnt: 0, last: 0,
+      h: c.handle,
+      n: ch?.title || c.name,
+      cat,
+      bn: cat === "bangla",
+      subs: ch?.subs ?? 0,
+      thumb: ch?.thumb ?? "",
+      id: ch?.id ?? c.id ?? "",
+      st: "notFound",
+      cnt: 0,
+      last: 0,
     };
-    if (c.status === "removed") { outChannels.push({ ...base, st: "removed" }); continue; }
-    if (!ch?.id) { outChannels.push(base); continue; }
+    if (c.status === "removed") {
+      outChannels.push({ ...base, st: "removed" });
+      continue;
+    }
+    if (!ch?.id) {
+      outChannels.push(base);
+      continue;
+    }
 
     const vids = ch.known
       .map((id) => [id, cache.videos[id]] as const)
@@ -376,21 +501,29 @@ async function main() {
     const scored = vids.map(([id, v]) => {
       const ageDays = Math.max((now - v.p) / DAY, 0.25);
       return {
-        id, v, ageDays,
+        id,
+        v,
+        ageDays,
         o: Math.log((v.v + 1) / (med + 1)),
         tr: Math.log1p(v.v / ageDays),
         e: (v.l + 3 * v.c + 1) / (v.v + 100),
       };
     });
     const best = new Set(
-      [...scored].sort((a, b) => b.o + b.tr - (a.o + a.tr)).slice(0, KEEP_PER_CHANNEL).map((s) => s.id),
+      [...scored]
+        .sort((a, b) => b.o + b.tr - (a.o + a.tr))
+        .slice(0, KEEP_PER_CHANNEL)
+        .map((s) => s.id),
     );
     const kept = scored.filter((s) => best.has(s.id) || s.ageDays <= KEEP_RECENT_DAYS);
 
     const idx = outChannels.length;
     const bnShare = vids.filter(([, v]) => v.bn).length / vids.length;
     outChannels.push({
-      ...base, bn: bnShare >= 0.3, st: "active", cnt: kept.length,
+      ...base,
+      bn: bnShare >= 0.3,
+      st: "active",
+      cnt: kept.length,
       last: Math.max(...vids.map(([, v]) => v.p)),
     });
     for (const s of kept) rows.push({ id: s.id, ch: idx, v: s.v, o: s.o, e: s.e, tr: s.tr, r: 0.5 * s.v.kw + 0.5 * CAT_PRIOR[cat] });

@@ -97,14 +97,25 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **Upload queue cap**: at most 5,000 waiting changes offline; if exceeded, the least important ones go first (seen marks → learning signals → API log), saves/hides are kept.
 - **Dependencies**: Dependabot opens weekly update PRs (app + Worker) and monthly ones for GitHub Actions; each PR runs all tests and `npm audit` before anything can be published.
 
+### Clean code, accessibility & speed (engineering Phase 4)
+- **Main file split** (was ~1,300 lines) into clear parts: `feed.ts` (what's on screen, next/back, lists, newer data), `player.ts` (player pool, watch clock, data saver), `controls.ts` (play, skip, progress bar, speed, sound, save, share, refresh), `gestures.ts` (swipe/tap/hold/wheel/keys), `panels.ts` (menu, pages, ⋯ sheet, tips, top bar), `settings.ts` (About + Sync), `fullscreen.ts`, `network.ts`, `view.ts` (page elements). `main.ts` only wires them and starts the app. Helpers that were copied into 7 files now live once in `dom.ts`.
+- **Lint + formatting**: [Biome](https://biomejs.dev) (`biome.json`) checks for mistakes and keeps one code style. `npm run lint` checks, `npm run format` fixes. CI fails on lint errors. (Biome instead of ESLint because the TypeScript plugin for ESLint doesn't support TypeScript 7 yet.)
+- **Accessibility** (`src/a11y.ts`):
+  - Menu, pages, ⋯ sheet, tips and the app's dialogs are real dialogs for screen readers; focus moves into them, **Tab stays inside**, **Esc closes**, and focus goes back to the button that opened them.
+  - Buttons say what they are and whether they're on (Save, sound, feed tabs, categories, speed); the progress bar is a slider (←/→ = 5 s when focused); each new Short is read out ("channel: title"); saved/history cards work with Enter/Space.
+  - A visible focus ring for keyboard users; the phone's **reduce motion** setting turns off slides and animations; white text on red now meets the 4.5:1 contrast minimum.
+  - Fixed: pressing **Enter while "Cancel" was focused in a confirm dialog confirmed it** (e.g. Delete). Enter now presses the focused button.
+- **Performance budget** (`vite.config.ts`): the build fails if the app's code grows past **40 kB JS / 10 kB CSS** (gzip). At the time it was set: 28 kB / 5.6 kB. Raise it only on purpose.
+
 ### Automated tests (engineering Phase 3) — `tests/`
 | Kind | Tool | What it covers | Run |
 |---|---|---|---|
 | Unit | Vitest + happy-dom | Data changes & merging across devices, sync file format, ranking & diversity rules, quota helpers, "More like this", button locking | `npm test` |
 | Server | Vitest (real Worker code, in-memory KV, fake GitHub/YouTube) | Login & sessions, CORS, add/remove/restore/delete rules, Bangla handles, one commit per batch, **duplicate request protection**, lookups from any link style, preview/search caching, **budget lock**, sync conflicts, refresh | `npm test` |
+| Accessibility | Playwright + axe-core | WCAG 2.1 A/AA scan of the main screen, tips, menu tabs and ⋯ sheet; menu keyboard focus (opens, stays inside, Esc returns focus); Enter on Cancel never confirms; on/off states announced; reduce-motion | `npm run test:e2e` |
 | Browser | Playwright (Pixel 7 + 320 px phone, touch) with a fake YouTube player, fake sync server and sample data | Layout fits / no overlap, tips, swipe up/down/left, double-tap skip & save, hold 2×, drag progress bar, volume & speed, History, Refresh, offline banner, Add / Remove with triple taps (exactly one save, never the wrong channel), Delete dialog | `npm run test:e2e` |
 
-- Everything: `npm run test:all` (type check + unit + server + browser). First time on a PC: `npx playwright install chromium`.
+- Everything: `npm run test:all` (lint + type check + unit + server + browser). First time on a PC: `npx playwright install chromium`.
 - **On GitHub**: every code push runs all tests first; **if any fails, the site is not published** (the report is attached to the failed run). Scheduled refreshes, "Refresh now" and channel edits from the app skip the tests (no code changed).
 - Bugs the tests already caught (fixed): stuck "busy" buttons after a failed action; same channel twice in a row with few channels; "More like this" finding nothing in small libraries; the last 0.3 s of changes lost when closing the app; the › arrow covering a menu tab; an outdated "Removed… Undo" message hiding newer ones; **a double tap on Remove could remove the next channel** (the row slid under your finger) — changed rows now stay in place with a short button cooldown.
 
@@ -374,7 +385,16 @@ npx wrangler deploy                      # prints the Worker address (https://re
 |---|---|
 | `channels.json` | Channel list with categories |
 | `scripts/fetch.ts` | YouTube fetch + scoring → `public/data/shorts.json` |
-| `src/main.ts` | Feed UI, gestures, player events, panels |
+| `src/main.ts` | Entry point: wires the parts together, boot, app updates |
+| `src/feed.ts` | What's on screen, next/back, temporary lists, learning signal, newer data |
+| `src/player.ts` | YouTube player pool instance, watch clock, data saver |
+| `src/controls.ts` | Play/pause, skip, progress bar, speed, sound, save, share, refresh |
+| `src/gestures.ts` | Swipe, tap, hold, wheel and keyboard shortcuts |
+| `src/panels.ts` | Menu panel (Saved, Hidden…), pages, ⋯ sheet, tips, top bar |
+| `src/settings.ts` | About + Sync panels |
+| `src/fullscreen.ts`, `src/network.ts` | Full screen; offline / slow-network handling |
+| `src/view.ts`, `src/dom.ts`, `src/a11y.ts` | Page elements; shared helpers; accessibility helpers |
+| `src/errors.ts`, `src/health.ts` | Crash reporting; Health box |
 | `src/rank.ts` | Recommendation logic |
 | `src/store.ts` | Local state, change operations, file format |
 | `src/sync.ts` | Sync with the Worker |
@@ -384,15 +404,15 @@ npx wrangler deploy                      # prints the Worker address (https://re
 | `src/explore.ts` | Channel explorer page + Short grid |
 | `src/similar.ts` | More like this (library similarity + YouTube search) |
 | `src/app.ts` | Interface the feature modules use to talk to the main app |
-| `src/pool.ts` | Pool of YouTube players for instant swipes (replaces `player.ts`) |
+| `src/pool.ts` | Pool of YouTube players for instant swipes |
 | `src/data.ts` | Starter/full/saved library loading, update checks, slow-network detection |
 | `src/history.ts` | Watch history panel |
 | `public/sw.js`, `public/manifest.webmanifest`, `public/icon.svg` | Offline app files, install support, icon |
 | `public/data/meta.json`, `starter.json` | Generated by the fetch: version check + fast-start subset |
-| `src/player.ts` | YouTube IFrame Player wrapper |
 | `src/style.css`, `index.html` | Layout: top bar / video / bottom bar |
 | `worker/` | Cloudflare Worker (login, sessions, `user-state.json`, `channels.json` edits, channel lookups, refresh trigger) |
-| `.github/workflows/deploy.yml` | Scheduled fetch + build + deploy to Pages |
+| `.github/workflows/deploy.yml` | Tests (lint, types, unit, server, browser) → scheduled fetch + build + deploy to Pages |
+| `biome.json` | Lint + formatting rules |
 | `.env`, `.env.local`, `worker/.dev.vars`, `data/`, `public/data/` | Local-only / generated (git-ignored) |
 
 Tech: Vite + TypeScript (no UI framework), YouTube Data API v3, YouTube IFrame Player API, Cloudflare Workers, GitHub Actions + Pages. Scripts run with `tsx` so they work on Node 20.

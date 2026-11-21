@@ -2,7 +2,12 @@
 import type { Dataset, Short } from "./types";
 
 export interface ExternalChannelInfo {
-  id: string; name: string; handle: string; thumb: string; subs: number; suggestedCat?: string;
+  id: string;
+  name: string;
+  handle: string;
+  thumb: string;
+  subs: number;
+  suggestedCat?: string;
 }
 
 export interface AppApi {

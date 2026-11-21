@@ -5,20 +5,114 @@ export const NOW = Math.floor(Date.now() / 1000);
 const DAY = 86400;
 
 export const CHANNELS: Channel[] = [
-  { h: "@alpha", n: "Alpha Biz", cat: "stories", bn: false, subs: 100000, thumb: "", id: "UCalpha000000000000000aa", st: "active", cnt: 6, last: NOW - DAY },
-  { h: "@bangla", n: "বাংলা ব্যবসা", cat: "bangla", bn: true, subs: 50000, thumb: "", id: "UCbangla00000000000000aa", st: "active", cnt: 6, last: NOW - 2 * DAY },
-  { h: "@ads", n: "Ads Lab", cat: "ads", bn: false, subs: 20000, thumb: "", id: "UCads0000000000000000aaa", st: "active", cnt: 6, last: NOW - 3 * DAY },
-  { h: "@founder", n: "Founder Talk", cat: "founders", bn: false, subs: 900000, thumb: "", id: "UCfounder000000000000aaa", st: "active", cnt: 6, last: NOW - DAY },
-  { h: "@books", n: "Book Bits", cat: "books", bn: false, subs: 300000, thumb: "", id: "UCbooks00000000000000aaa", st: "active", cnt: 6, last: NOW - 40 * DAY },
-  { h: "@gone", n: "Removed Channel", cat: "ai", bn: false, subs: 1000, thumb: "", id: "UCgone000000000000000aaa", st: "removed", cnt: 0, last: 0 },
+  {
+    h: "@alpha",
+    n: "Alpha Biz",
+    cat: "stories",
+    bn: false,
+    subs: 100000,
+    thumb: "",
+    id: "UCalpha000000000000000aa",
+    st: "active",
+    cnt: 6,
+    last: NOW - DAY,
+  },
+  {
+    h: "@bangla",
+    n: "বাংলা ব্যবসা",
+    cat: "bangla",
+    bn: true,
+    subs: 50000,
+    thumb: "",
+    id: "UCbangla00000000000000aa",
+    st: "active",
+    cnt: 6,
+    last: NOW - 2 * DAY,
+  },
+  {
+    h: "@ads",
+    n: "Ads Lab",
+    cat: "ads",
+    bn: false,
+    subs: 20000,
+    thumb: "",
+    id: "UCads0000000000000000aaa",
+    st: "active",
+    cnt: 6,
+    last: NOW - 3 * DAY,
+  },
+  {
+    h: "@founder",
+    n: "Founder Talk",
+    cat: "founders",
+    bn: false,
+    subs: 900000,
+    thumb: "",
+    id: "UCfounder000000000000aaa",
+    st: "active",
+    cnt: 6,
+    last: NOW - DAY,
+  },
+  {
+    h: "@books",
+    n: "Book Bits",
+    cat: "books",
+    bn: false,
+    subs: 300000,
+    thumb: "",
+    id: "UCbooks00000000000000aaa",
+    st: "active",
+    cnt: 6,
+    last: NOW - 40 * DAY,
+  },
+  {
+    h: "@gone",
+    n: "Removed Channel",
+    cat: "ai",
+    bn: false,
+    subs: 1000,
+    thumb: "",
+    id: "UCgone000000000000000aaa",
+    st: "removed",
+    cnt: 0,
+    last: 0,
+  },
 ];
 
 const TITLES: Record<string, string[]> = {
-  "@alpha": ["How Rolex controls its prices", "Pricing psychology secrets", "Why Apple never discounts", "Brand story of Nike", "Coca-Cola marketing trick", "Amazon customer obsession"],
+  "@alpha": [
+    "How Rolex controls its prices",
+    "Pricing psychology secrets",
+    "Why Apple never discounts",
+    "Brand story of Nike",
+    "Coca-Cola marketing trick",
+    "Amazon customer obsession",
+  ],
   "@bangla": ["ব্যবসায় দাম কমানো ভুল", "কাস্টমার ধরে রাখার উপায়", "ফেসবুক বিজ্ঞাপন টিপস", "উদ্যোক্তার ভুল", "প্রোডাক্ট প্রাইসিং", "অফার দেওয়ার নিয়ম"],
-  "@ads": ["Meta ads scaling in 2026", "Creative testing framework", "Pricing psychology for ecommerce", "Retargeting that works", "Shopify conversion tips", "Facebook ads budget mistakes"],
-  "@founder": ["Founder mindset on failure", "How I built a million dollar brand", "Hiring your first employee", "Pricing your product right", "Sales calls that close", "Why most startups fail"],
-  "@books": ["Atomic habits summary", "Psychology of money", "Zero to one lessons", "Deep work ideas", "Influence by Cialdini", "Rich dad poor dad"],
+  "@ads": [
+    "Meta ads scaling in 2026",
+    "Creative testing framework",
+    "Pricing psychology for ecommerce",
+    "Retargeting that works",
+    "Shopify conversion tips",
+    "Facebook ads budget mistakes",
+  ],
+  "@founder": [
+    "Founder mindset on failure",
+    "How I built a million dollar brand",
+    "Hiring your first employee",
+    "Pricing your product right",
+    "Sales calls that close",
+    "Why most startups fail",
+  ],
+  "@books": [
+    "Atomic habits summary",
+    "Psychology of money",
+    "Zero to one lessons",
+    "Deep work ideas",
+    "Influence by Cialdini",
+    "Rich dad poor dad",
+  ],
 };
 
 /** 30 Shorts: 6 per active channel, varied age/views so ranking has something to do. */
@@ -29,10 +123,16 @@ export function makeDataset(): Dataset {
       const i = ci * 10 + k;
       videos.push({
         id: `vid${String(i).padStart(8, "0")}`, // 11 chars like a real YouTube ID
-        ch: ci, t,
+        ch: ci,
+        t,
         p: NOW - (k + 1) * 3 * DAY,
-        v: 1000 * (k + 1) * (ci + 1), l: 50 * (k + 1), c: 5 * k,
-        o: (k % 3) / 2, e: ((k + ci) % 4) / 3, tr: (5 - k) / 5, r: 0.6,
+        v: 1000 * (k + 1) * (ci + 1),
+        l: 50 * (k + 1),
+        c: 5 * k,
+        o: (k % 3) / 2,
+        e: ((k + ci) % 4) / 3,
+        tr: (5 - k) / 5,
+        r: 0.6,
       });
     });
   });
@@ -42,7 +142,10 @@ export function makeDataset(): Dataset {
 /** The same dataset in the compact file format the site downloads (shorts.json / starter.json). */
 export function asFile(ds: Dataset) {
   return {
-    generatedAt: ds.generatedAt, units: ds.units, usage: ds.usage, channels: ds.channels,
+    generatedAt: ds.generatedAt,
+    units: ds.units,
+    usage: ds.usage,
+    channels: ds.channels,
     videos: ds.videos.map((s) => [s.id, s.ch, s.t, s.p, s.v, s.l, s.c, s.o, s.e, s.tr, s.r]),
   };
 }

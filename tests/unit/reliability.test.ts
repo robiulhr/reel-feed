@@ -41,7 +41,10 @@ describe("upload queue size limit", () => {
 
 describe("token expiry", () => {
   it("reads GitHub's date format", () => {
-    const in40 = new Date(Date.now() + 40.5 * 86400_000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+    const in40 = new Date(Date.now() + 40.5 * 86400_000)
+      .toISOString()
+      .replace("T", " ")
+      .replace(/\.\d+Z$/, " UTC");
     expect(daysLeft(in40)).toBe(40);
     expect(daysLeft(null)).toBeNull();
     expect(daysLeft("garbage")).toBeNull();

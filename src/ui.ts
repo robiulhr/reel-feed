@@ -7,9 +7,15 @@
  *  - busy(): locks a button while its action runs, so double taps can't run it twice.
  *  - latest(): "only the newest request counts" helper for searches/lookups.
  */
+import { holdFocus } from "./a11y";
 
 type Kind = "info" | "error";
-interface ToastItem { msg: string; action?: { label: string; run: () => void }; ms: number; kind: Kind }
+interface ToastItem {
+  msg: string;
+  action?: { label: string; run: () => void };
+  ms: number;
+  kind: Kind;
+}
 
 const queue: ToastItem[] = [];
 let showing: ToastItem | null = null;
@@ -22,14 +28,20 @@ function toastEl() {
 function showNext() {
   const box = toastEl();
   showing = queue.shift() ?? null;
-  if (!showing) { box.hidden = true; return; }
+  if (!showing) {
+    box.hidden = true;
+    return;
+  }
   const item = showing;
   box.className = `toast${item.kind === "error" ? " error" : ""}`;
   box.replaceChildren(Object.assign(document.createElement("span"), { textContent: item.msg }));
   if (item.action) {
     const b = document.createElement("button");
     b.textContent = item.action.label;
-    b.onclick = () => { item.action!.run(); dismiss(); };
+    b.onclick = () => {
+      item.action!.run();
+      dismiss();
+    };
     box.append(b);
   }
   if (item.kind === "error") {
@@ -62,7 +74,11 @@ export function toast(msg: string, action?: { label: string; run: () => void }, 
   // after you already restored). Error messages are never replaced; they wait or stay until dismissed.
   if (kind === "info") {
     for (let i = queue.length - 1; i >= 0; i--) if (queue[i].kind === "info") queue.splice(i, 1);
-    if (showing && showing.kind === "info") { queue.unshift(item); dismissNow(); return; }
+    if (showing && showing.kind === "info") {
+      queue.unshift(item);
+      dismissNow();
+      return;
+    }
   }
   queue.push(item);
   if (queue.length > 4) queue.splice(0, queue.length - 4);
@@ -79,7 +95,14 @@ export function toastError(msg: string, retry?: () => void) {
 }
 
 // ---------- dialogs ----------
-interface DialogOptions { title: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; extra?: HTMLElement }
+interface DialogOptions {
+  title: string;
+  body?: string;
+  confirm?: string;
+  cancel?: string;
+  danger?: boolean;
+  extra?: HTMLElement;
+}
 
 /** Resolves true if confirmed. Esc / tapping outside = cancel. */
 export function confirmDialog(o: DialogOptions): Promise<boolean> {
@@ -88,8 +111,6 @@ export function confirmDialog(o: DialogOptions): Promise<boolean> {
     overlay.className = "dlg-overlay";
     const box = document.createElement("div");
     box.className = "dlg";
-    box.setAttribute("role", "dialog");
-    box.setAttribute("aria-modal", "true");
     const h = Object.assign(document.createElement("div"), { className: "dlg-title", textContent: o.title });
     box.append(h);
     if (o.body) box.append(Object.assign(document.createElement("p"), { className: "dlg-body", textContent: o.body }));
@@ -100,23 +121,34 @@ export function confirmDialog(o: DialogOptions): Promise<boolean> {
     let yes: HTMLButtonElement | null = null;
     if (o.confirm !== "") {
       yes = Object.assign(document.createElement("button"), {
-        className: `btn ${o.danger ? "danger-solid" : "primary"}`, textContent: o.confirm ?? "OK", type: "button",
+        className: `btn ${o.danger ? "danger-solid" : "primary"}`,
+        textContent: o.confirm ?? "OK",
+        type: "button",
       });
       row.append(yes);
     }
     box.append(row);
     overlay.append(box);
+    const release = holdFocus(overlay, box, o.title, () => done(false));
     const done = (v: boolean) => {
-      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("keydown", onEnter, true);
       overlay.remove();
+      release();
       resolve(v);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); done(false); }
-      if (e.key === "Enter" && yes) { e.stopPropagation(); done(true); }
+    // Enter confirms — unless focus is on another button (Enter on "Cancel" must cancel, not confirm)
+    const onEnter = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || !yes) return;
+      const a = document.activeElement;
+      if (a instanceof HTMLButtonElement && a !== yes) return;
+      e.preventDefault();
+      e.stopPropagation();
+      done(true);
     };
-    document.addEventListener("keydown", onKey, true);
-    overlay.onclick = (e) => { if (e.target === overlay) done(false); };
+    document.addEventListener("keydown", onEnter, true);
+    overlay.onclick = (e) => {
+      if (e.target === overlay) done(false);
+    };
     no.onclick = () => done(false);
     if (yes) yes.onclick = () => done(true);
     document.body.append(overlay);
@@ -162,7 +194,11 @@ export function once<A extends unknown[]>(fn: (...a: A) => Promise<unknown>) {
   return async (...a: A) => {
     if (running) return;
     running = true;
-    try { await fn(...a); } finally { running = false; }
+    try {
+      await fn(...a);
+    } finally {
+      running = false;
+    }
   };
 }
 
@@ -174,5 +210,4 @@ export function latest() {
 }
 
 /** Random ID for a request, so the server can recognise (and ignore) a repeat of the same request. */
-export const requestId = () =>
-  (crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
+export const requestId = () => crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
