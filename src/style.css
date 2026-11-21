@@ -50,9 +50,11 @@ p { margin: 0; }
   padding-top: max(6px, env(safe-area-inset-top));
 }
 .row1 { display: flex; align-items: center; gap: 6px; }
-.tabs { flex: 1; display: flex; min-width: 0; }
+/* Tabs never squeeze into each other: if they don't fit they scroll sideways (with ‹ › buttons) */
+.tabs { flex: 1; display: flex; min-width: 0; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; }
+.tabs::-webkit-scrollbar { display: none; }
 .tabs button {
-  flex: 1; min-width: 0; background: none; border: 0; padding: 8px 2px; cursor: pointer;
+  flex: 1 0 auto; background: none; border: 0; padding: 8px 9px; cursor: pointer;
   font-weight: 600; font-size: 14px; color: var(--muted); white-space: nowrap;
   border-bottom: 2px solid transparent;
 }
@@ -65,7 +67,7 @@ p { margin: 0; }
 }
 .row2 select option { background: var(--panel); }
 .chips {
-  flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth;
   /* soft fade at the right edge hints that the row scrolls */
   mask-image: linear-gradient(to right, #000 85%, transparent);
   -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
@@ -82,6 +84,17 @@ p { margin: 0; }
   flex: none; background: var(--chip); border: 0; border-radius: 999px; width: 36px; height: 36px;
   display: grid; place-items: center; cursor: pointer; font-size: 16px;
 }
+
+/* ‹ › buttons on rows that scroll sideways (tabs, categories, menu tabs) */
+.scroll-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.scroll-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 28px; height: 28px; border: 0;
+  border-radius: 50%; background: var(--panel-2); color: var(--text); font-size: 18px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; box-shadow: 0 0 10px 6px var(--bg);
+}
+.scroll-arrow.left { left: 0; }
+.scroll-arrow.right { right: 0; }
+.scroll-arrow[hidden] { display: none; }
 
 /* ---------- Video ---------- */
 .frame { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #000; }
@@ -117,7 +130,10 @@ p { margin: 0; }
 
 .tips { position: absolute; inset: 0; z-index: 8; background: rgba(0, 0, 0, 0.75); display: grid; place-items: center; padding: 16px; }
 .tips[hidden] { display: none; }
-.tips-card { background: var(--panel); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; max-width: 340px; }
+.tips-card {
+  background: var(--panel); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+  max-width: 340px; max-height: calc(100% - 16px); overflow-y: auto;
+}
 .tips-title { font-weight: 800; font-size: 17px; }
 .tip { font-size: 14px; line-height: 1.4; }
 .tips-card .btn { margin: 6px 0 0; align-self: stretch; padding: 11px; }
@@ -180,6 +196,20 @@ p { margin: 0; }
   background: rgba(0, 0, 0, 0.65); padding: 6px 12px; border-radius: 999px; font-weight: 800; font-size: 14px;
 }
 .speed-hint[hidden] { display: none; }
+
+/* Volume: popup above the sound button + row in the ⋯ sheet */
+.actions { position: relative; }
+.vol-pop {
+  position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 12; width: min(260px, calc(100vw - 24px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.vol-pop[hidden] { display: none; }
+.vol-range { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
+.vol-pct { font-size: 12px; color: var(--muted); min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+.vol-mute { flex: none; background: var(--panel-2); border: 0; border-radius: 8px; padding: 6px 8px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.sheet-inner .vol-row { flex-wrap: nowrap; }
+.sheet-inner .vol-row .vol-mute { padding: 7px 9px; font-size: 13px; text-align: center; }
 
 /* Speed choice in the ⋯ sheet */
 .speed-row { display: flex; align-items: center; gap: 4px; padding: 8px 12px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -308,6 +338,7 @@ p { margin: 0; }
 .sheet-inner {
   width: min(420px, 100vw); background: var(--panel); border-radius: 16px 16px 0 0; padding: 8px;
   padding-bottom: max(8px, env(safe-area-inset-bottom)); display: flex; flex-direction: column;
+  max-height: 88dvh; overflow-y: auto;
 }
 .sheet-inner button { background: none; border: 0; text-align: left; padding: 14px 12px; font-size: 15px; border-radius: 10px; cursor: pointer; }
 .sheet-inner button:hover { background: var(--panel-2); }
@@ -431,7 +462,8 @@ p { margin: 0; }
 
 /* ---------- Channels panel ---------- */
 .panel-inner { width: min(680px, 100vw); }
-.ptabs { overflow-x: auto; scrollbar-width: none; }
+.ptabs { overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; flex: 1; min-width: 0; }
+.panel-head .scroll-wrap { flex: 1; }
 .ptabs::-webkit-scrollbar { display: none; }
 .ptabs button { white-space: nowrap; padding: 8px 10px; }
 .btn.sm { padding: 6px 10px; font-size: 13px; margin: 0; }

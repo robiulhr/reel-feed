@@ -32,7 +32,6 @@
               <button data-tab="popular">Popular</button>
               <button data-tab="newest">Newest</button>
             </nav>
-            <button class="icon-btn" id="fsBtn" aria-label="Full screen" title="Full screen (f)" hidden>⛶</button>
             <button class="icon-btn" id="refreshBtn" aria-label="Refresh feed" title="Refresh feed & check for new Shorts"><span>↻</span></button>
             <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
           </div>
@@ -88,7 +87,12 @@
             <p id="meta" class="meta"></p>
           </div>
           <div class="actions">
-            <button class="act" id="muteBtn" aria-label="Sound on/off" title="Sound (m)"><span class="ico">🔇</span></button>
+            <div class="vol-pop" id="volPop" hidden>
+              <button class="vol-mute" type="button">🔊 Mute</button>
+              <input class="vol-range" type="range" min="0" max="100" step="1" aria-label="Volume" />
+              <span class="vol-pct">100%</span>
+            </div>
+            <button class="act" id="muteBtn" aria-label="Sound: tap to mute or unmute, hold for volume" title="Sound (m) · hold for volume (+/−)"><span class="ico">🔇</span></button>
             <button class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
             <button class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>
             <button class="act" id="moreBtn" aria-label="More" title="More like this, channel, hide…"><span class="ico">⋯</span></button>
@@ -122,6 +126,12 @@
 
     <div class="sheet" id="moreSheet" hidden>
       <div class="sheet-inner">
+        <div class="speed-row vol-row">
+          <span>Volume</span>
+          <button class="vol-mute" type="button">🔊 Mute</button>
+          <input class="vol-range" type="range" min="0" max="100" step="1" aria-label="Volume" />
+          <span class="vol-pct">100%</span>
+        </div>
         <div class="speed-row">
           <span>Speed</span>
           <button data-r="0.5">0.5×</button>
@@ -132,6 +142,7 @@
           <button data-r="2">2×</button>
         </div>
         <button data-a="similar">✨ More like this</button>
+        <button data-a="full" id="fsBtn" hidden>⛶ Full screen</button>
         <button data-a="channel">👤 Explore this channel</button>
         <button data-a="hide">⊘ Hide this channel</button>
         <button data-a="open">↗ Open on YouTube</button>

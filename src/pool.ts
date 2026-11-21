@@ -111,6 +111,7 @@ export class PlayerPool {
     if (state === S.PLAYING) {
       // each video starts at normal speed in YouTube's player — keep your chosen speed
       if (slot.player.getPlaybackRate?.() !== this.rate) slot.player.setPlaybackRate?.(this.rate);
+      if (slot.player.getVolume?.() !== this.volume) slot.player.setVolume?.(this.volume);
       this.ev.onPlaying();
     }
     else if (state === S.PAUSED) this.ev.onPaused();
@@ -147,6 +148,7 @@ export class PlayerPool {
     await slot.ready;
     if (this.active !== slot) return; // swiped again meanwhile
     if (muted) slot.player.mute(); else slot.player.unMute();
+    slot.player.setVolume?.(this.volume);
     if (slot.id === id) {
       // already loaded here (preloaded, or the one you just swiped away from) — start instantly
       slot.preloading = false;
@@ -179,6 +181,12 @@ export class PlayerPool {
 
   private get p() { return this.active?.player; }
   private rate = 1;
+  private volume = 100;
+  /** Volume 0–100 for the current and following videos. */
+  setVolume(v: number) {
+    this.volume = Math.max(0, Math.min(100, Math.round(v)));
+    this.p?.setVolume?.(this.volume);
+  }
   /** Jump to a time (seconds) in the current video. */
   seek(t: number) {
     const d = this.duration();

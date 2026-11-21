@@ -78,8 +78,18 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - Keys: `←/→` (or `h/l`) 10 s, `↑/↓` (or `j/k`) previous/next, `c` channel, `f` full screen.
 - Skipped seconds don't count as "watched" for learning or history.
 
+### Sound
+- **Tap 🔊** = mute/unmute; unmuting shows a **volume slider** for 3 s. **Press and hold 🔊** = volume slider any time.
+- Volume (with Mute) is also at the top of the **⋯** menu, next to Speed. Icon shows the level 🔇 🔈 🔉 🔊; volume is remembered per device. Keys: `+` / `−` volume, `m` mute.
+- Note: on iPhone, web pages can't set the volume — use the phone's volume buttons there.
+
+### Layout on small phones
+- Top bar keeps only **↻** and **☰** (always visible); ⛶ Full screen moved into **⋯**.
+- Tabs, categories and the menu's tabs **scroll sideways** instead of squeezing together, with **›** / **‹** buttons at the edges to reveal the rest. Checked at 320 / 360 / 412 px wide, including large text.
+- The ⋯ menu and tips card scroll if the screen is short.
+
 ### Full screen
-- **In the browser**: on phones the app goes **full screen on your first tap** (hides the address bar; Android Chrome and most Android browsers). ⛶ in the top bar toggles it; if you leave full screen yourself it won't push it again that session. About → turn the automatic part off. iPhone Safari doesn't allow web pages to go full screen → install it instead.
+- **In the browser**: on phones the app goes **full screen on your first tap** (hides the address bar; Android Chrome and most Android browsers). ⋯ → ⛶ Full screen toggles it; if you leave full screen yourself it won't push it again that session. About → turn the automatic part off. iPhone Safari doesn't allow web pages to go full screen → install it instead.
 - **Installed app** (browser menu → *Install app* / *Add to Home screen*): opens full screen with no browser bar (`display: fullscreen` in the manifest).
 
 ### First-time tips

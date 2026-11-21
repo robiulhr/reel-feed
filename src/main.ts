@@ -27,6 +27,7 @@ const el = {
   skipHint: $("skipHint"),
   speedHint: $("speedHint"),
   progress: $("progress"),
+  volPop: $("volPop"),
   scrubTime: $("scrubTime"),
   banner: $<HTMLButtonElement>("banner"),
   tips: $("tips"),
@@ -594,6 +595,8 @@ window.addEventListener("keydown", (e) => {
     case "<": setRate([0.5, 0.75, 1, 1.25, 1.5, 2].reverse().find((r) => r < state.rate) ?? 0.5); break;
     case " ": e.preventDefault(); togglePlay(); break;
     case "m": toggleMute(); break;
+    case "+": case "=": setVolume(state.volume + 10); showVolume(); break;
+    case "-": case "_": setVolume(state.volume - 10); showVolume(); break;
     case "s": toggleSave(); break;
     case "r": refreshFeed(); break;
   }
@@ -609,16 +612,64 @@ function togglePlay() {
   else { pool.play(); el.centerIcon.className = "center-icon"; }
 }
 
+// ---------- sound: mute + volume ----------
+const volIcon = () => (state.muted || state.volume === 0 ? "🔇" : state.volume < 34 ? "🔈" : state.volume < 67 ? "🔉" : "🔊");
 function renderMute() {
-  el.muteBtn.querySelector(".ico")!.textContent = state.muted ? "🔇" : "🔊";
+  el.muteBtn.querySelector(".ico")!.textContent = volIcon();
   el.muteBtn.classList.toggle("pulse", state.muted);
+  for (const r of document.querySelectorAll<HTMLInputElement>(".vol-range")) r.value = String(state.muted ? 0 : state.volume);
+  for (const t of document.querySelectorAll<HTMLElement>(".vol-pct")) t.textContent = state.muted ? "Muted" : `${state.volume}%`;
+  for (const b of document.querySelectorAll<HTMLElement>(".vol-mute")) b.textContent = state.muted ? "🔇 Unmute" : "🔊 Mute";
 }
 function toggleMute() {
   state.muted = !state.muted;
-  if (state.muted) pool.mute(); else pool.unMute();
+  if (state.muted) pool.mute();
+  else {
+    if (state.volume === 0) state.volume = 60;
+    pool.setVolume(state.volume);
+    pool.unMute();
+    showVolume(); // unmuting → show the slider briefly so you can set the level
+  }
   renderMute();
   persist();
 }
+function setVolume(v: number) {
+  state.volume = Math.max(0, Math.min(100, Math.round(v)));
+  pool.setVolume(state.volume);
+  if (state.volume === 0 && !state.muted) { state.muted = true; pool.mute(); }
+  else if (state.volume > 0 && state.muted) { state.muted = false; pool.unMute(); }
+  renderMute();
+  persist();
+}
+/** Wire a volume slider (popup above the sound button, and the one in the ⋯ menu). */
+function bindVolume(range: HTMLInputElement) {
+  range.addEventListener("input", () => { setVolume(Number(range.value)); keepVolume(); });
+}
+let volTimer: number | undefined;
+function keepVolume() {
+  clearTimeout(volTimer);
+  volTimer = window.setTimeout(() => (el.volPop.hidden = true), 3000);
+}
+function showVolume() {
+  el.volPop.hidden = false;
+  renderMute();
+  keepVolume();
+}
+bindVolume(el.volPop.querySelector<HTMLInputElement>(".vol-range")!);
+bindVolume(el.moreSheet.querySelector<HTMLInputElement>(".vol-range")!);
+for (const b of document.querySelectorAll<HTMLElement>(".vol-mute")) b.addEventListener("click", (e) => { e.stopPropagation(); toggleMute(); keepVolume(); });
+el.volPop.addEventListener("pointerdown", () => keepVolume());
+
+// Sound button: tap = mute/unmute, press & hold = volume slider
+let volHold: number | undefined;
+let volHeld = false;
+el.muteBtn.addEventListener("pointerdown", () => {
+  volHeld = false;
+  volHold = window.setTimeout(() => { volHeld = true; showVolume(); }, 400);
+});
+el.muteBtn.addEventListener("pointerup", () => clearTimeout(volHold));
+el.muteBtn.addEventListener("pointerleave", () => clearTimeout(volHold));
+el.muteBtn.addEventListener("contextmenu", (e) => e.preventDefault());
 
 function renderSave() {
   const on = !!cur && state.saved.includes(cur.id);
@@ -651,7 +702,7 @@ function hideChannel() {
   next();
 }
 
-el.muteBtn.onclick = toggleMute;
+el.muteBtn.onclick = () => { if (volHeld) { volHeld = false; return; } toggleMute(); };
 el.saveBtn.onclick = () => toggleSave();
 el.shareBtn.onclick = shareCurrent;
 
@@ -799,6 +850,39 @@ el.moreSheet.addEventListener("click", (e) => {
   else if (a === "open") window.open(`https://www.youtube.com/shorts/${cur.id}`, "_blank", "noopener");
 });
 
+// ---------- ‹ › buttons for rows that don't fit (tabs, categories, menu tabs) ----------
+function scrollArrows(row: HTMLElement) {
+  const wrap = document.createElement("div");
+  wrap.className = "scroll-wrap";
+  row.replaceWith(wrap);
+  wrap.append(row);
+  const mk = (cls: string, label: string, dir: number) => {
+    const b = document.createElement("button");
+    b.className = `scroll-arrow ${cls}`;
+    b.type = "button";
+    b.textContent = label;
+    b.setAttribute("aria-label", dir > 0 ? "Show more options" : "Back");
+    b.onclick = (e) => { e.stopPropagation(); row.scrollBy({ left: dir * row.clientWidth * 0.7 }); };
+    wrap.append(b);
+    return b;
+  };
+  const left = mk("left", "‹", -1);
+  const right = mk("right", "›", 1);
+  const update = () => {
+    const max = row.scrollWidth - row.clientWidth;
+    left.hidden = row.scrollLeft <= 4;
+    right.hidden = max <= 4 || row.scrollLeft >= max - 4;
+  };
+  row.addEventListener("scroll", update, { passive: true });
+  new ResizeObserver(update).observe(row);
+  // keep the selected item in view
+  row.addEventListener("click", (e) => (e.target as HTMLElement).closest("button")?.scrollIntoView({ inline: "nearest", block: "nearest" }));
+  update();
+}
+scrollArrows(el.tabs);
+scrollArrows(el.chips);
+scrollArrows(el.ptabs);
+
 // ---------- full screen ----------
 // On phones the browser's address bar stays because the page never scrolls; the Fullscreen API
 // hides it (Android Chrome etc.). Installed as an app, the manifest opens it full screen anyway.
@@ -820,9 +904,9 @@ function toggleFull() {
   else enterFull();
 }
 function renderFsBtn() {
+  // lives in the ⋯ menu (the top bar had no room for it on phones)
   fsBtn.hidden = !canFull();
-  fsBtn.textContent = document.fullscreenElement ? "🗗" : "⛶";
-  fsBtn.title = document.fullscreenElement ? "Exit full screen (f)" : "Full screen (f)";
+  fsBtn.textContent = document.fullscreenElement ? "🗗 Exit full screen" : "⛶ Full screen";
 }
 fsBtn.onclick = toggleFull;
 document.addEventListener("fullscreenchange", () => {
@@ -1158,6 +1242,7 @@ async function boot() {
   startVisit(Math.floor(nowSec()));
   loadApi(); // start loading the YouTube player right away
   pool.setRate(state.rate ?? 1);
+  pool.setVolume(state.volume ?? 100);
   sync.startSync(onSyncUpdate);
   onNetworkChange(() => applyNetwork());
 
