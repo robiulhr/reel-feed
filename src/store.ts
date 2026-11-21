@@ -9,7 +9,12 @@ export interface Shared {
   affCh: Record<string, number>; // learned liking per channel
   affCat: Record<string, number>; // learned liking per category
   apiLog: ApiUse[]; // YouTube API units spent by channel lookups (newest first)
+  hist: HistItem[]; // watch history, newest first
 }
+
+/** One watched Short. `x` keeps title/channel for Shorts that aren't in your library (searches, previews). */
+export interface HistItem { id: string; at: number; f: number; x?: { t: string; n: string; h: string; c: string } }
+const MAX_HIST = 600;
 
 /** One YouTube API spend made from the app (Channels → Add lookups). */
 export interface ApiUse { at: number; units: number; what: string }
@@ -23,6 +28,9 @@ export interface DevicePrefs {
   cat: string;
   lastActive: number; // unix seconds
   prevVisit: number; // unix seconds — start of "NEW since last visit"
+  histPaused: boolean; // don't record watch history on this device
+  tipsSeen: boolean; // first-time tips shown
+  dataSaver: "auto" | "on" | "off"; // auto = on when the connection is slow
 }
 
 export type State = Shared & DevicePrefs;
@@ -38,19 +46,23 @@ export type Op =
   | { t: "learn"; h: string; cat: string; d: number }
   | { t: "resetLearn" }
   | { t: "clearSeen" }
-  | { t: "api"; at: number; units: number; what: string };
+  | { t: "api"; at: number; units: number; what: string }
+  | { t: "watch"; item: HistItem }
+  | { t: "histDel"; id: string }
+  | { t: "histClear" };
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
 const PENDING_KEY = "ecomgy-reel-feed.pending";
 export const MAX_SEEN = 20000;
-export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog"] as const;
+export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog", "hist"] as const;
 
-export const emptyShared = (): Shared => ({ saved: [], hidden: [], seen: {}, bad: [], affCh: {}, affCat: {}, apiLog: [] });
+export const emptyShared = (): Shared => ({ saved: [], hidden: [], seen: {}, bad: [], affCh: {}, affCat: {}, apiLog: [], hist: [] });
 
 const defaults = (): State => ({
   ...emptyShared(),
   muted: true, tab: "foryou", win: "all", cat: "all",
   lastActive: 0, prevVisit: 0,
+  histPaused: false, tipsSeen: false, dataSaver: "auto",
 });
 
 function read<T>(key: string, fallback: T): T {
@@ -118,6 +130,18 @@ export function applyOp(s: Shared, op: Op) {
     case "clearSeen":
       s.seen = {};
       break;
+    case "watch": {
+      const prev = s.hist.find((h) => h.id === op.item.id);
+      const item = { ...op.item, f: Math.max(op.item.f, prev && op.item.at - prev.at < 3600 ? prev.f : 0) };
+      s.hist = [item, ...s.hist.filter((h) => h.id !== op.item.id)].sort((a, b) => b.at - a.at).slice(0, MAX_HIST);
+      break;
+    }
+    case "histDel":
+      s.hist = s.hist.filter((h) => h.id !== op.id);
+      break;
+    case "histClear":
+      s.hist = [];
+      break;
     case "api":
       if (!s.apiLog.some((x) => x.at === op.at && x.what === op.what)) {
         s.apiLog = [{ at: op.at, units: op.units, what: op.what }, ...s.apiLog]
@@ -165,6 +189,7 @@ export interface StateFile {
   affCh: Record<string, number>;
   affCat: Record<string, number>;
   apiLog?: ApiUse[];
+  hist?: HistItem[];
 }
 
 export function toFile(s: Shared): StateFile {
@@ -172,7 +197,7 @@ export function toFile(s: Shared): StateFile {
   const seen = Object.keys(s.seen).sort((a, b) => s.seen[a] - s.seen[b]);
   return {
     v: 1, updatedAt: new Date().toISOString(),
-    saved: s.saved, hidden: s.hidden, seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat, apiLog: s.apiLog,
+    saved: s.saved, hidden: s.hidden, seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat, apiLog: s.apiLog, hist: s.hist,
   };
 }
 
@@ -185,6 +210,7 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
   s.affCh = f.affCh ?? {};
   s.affCat = f.affCat ?? {};
   s.apiLog = f.apiLog ?? [];
+  s.hist = f.hist ?? [];
   (f.seen ?? []).forEach((id, i) => (s.seen[id] = i + 1)); // keeps order; real timestamps sort after these
   return s;
 }
@@ -197,6 +223,7 @@ export function mergeInto(base: Shared, local: Shared) {
   for (const [id, at] of Object.entries(local.seen)) base.seen[id] = Math.max(base.seen[id] ?? 0, at);
   for (const [k, v] of Object.entries(local.affCh)) if (!(k in base.affCh)) base.affCh[k] = v;
   for (const u of local.apiLog ?? []) applyOp(base, { t: "api", ...u });
+  for (const h of local.hist ?? []) applyOp(base, { t: "watch", item: h });
   for (const [k, v] of Object.entries(local.affCat)) if (!(k in base.affCat)) base.affCat[k] = v;
 }
 
@@ -204,6 +231,7 @@ export function sharedOf(s: State): Shared {
   return structuredClone({
     saved: s.saved, hidden: s.hidden, seen: s.seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat,
     apiLog: s.apiLog ?? [],
+    hist: s.hist ?? [],
   });
 }
 

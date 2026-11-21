@@ -405,6 +405,19 @@ async function main() {
   const usage = recordUsage(true);
   writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: now, units, usage, channels: outChannels, videos }));
 
+  // Small files for a fast first start on weak networks:
+  //  meta.json    — "is there newer data?" check (~200 bytes)
+  //  starter.json — the ~400 best Shorts (same channel list/indexes as shorts.json) so the
+  //                 first video plays within about a second while the full library downloads.
+  writeFileSync(join(OUT_DIR, "meta.json"), JSON.stringify({ generatedAt: now, videos: videos.length }));
+  const fresh = (p: number) => Math.exp(-Math.max(0, now - p) / DAY / 10);
+  const starter = videos
+    .map((v, i) => ({ v, s: 0.35 * oP[i] + 0.25 * tP[i] + 0.15 * eP[i] + 0.15 * fresh(v[3] as number) + 0.1 * rows[i].r }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 400)
+    .map((x) => x.v);
+  writeFileSync(join(OUT_DIR, "starter.json"), JSON.stringify({ generatedAt: now, units, channels: outChannels, videos: starter }));
+
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   const activeCount = outChannels.filter((c) => c.st === "active").length;
   console.log(`\nDone in ${secs}s — ${videos.length} Shorts from ${activeCount} channels written to public/data/shorts.json`);

@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0b0f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <!-- Connect early to the hosts every video needs -->
+    <link rel="preconnect" href="https://www.youtube.com" />
+    <link rel="preconnect" href="https://i.ytimg.com" />
+    <link rel="preconnect" href="https://www.google.com" />
+    <link rel="preload" as="script" href="https://www.youtube.com/iframe_api" />
     <title>Ecomgy Reel Feed</title>
   </head>
   <body>
@@ -21,6 +32,7 @@
               <button data-tab="popular">Popular</button>
               <button data-tab="newest">Newest</button>
             </nav>
+            <button class="icon-btn" id="refreshBtn" aria-label="Refresh feed" title="Refresh feed & check for new Shorts"><span>↻</span></button>
             <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
           </div>
           <div class="row2">
@@ -35,12 +47,29 @@
         </header>
 
         <div class="frame" id="frame">
-          <img id="poster" class="poster" alt="" />
-          <div id="player"></div>
-          <div class="tap" id="tap" aria-label="Tap to pause, double-tap to save, swipe for next"></div>
+          <div class="track" id="track">
+            <img class="peek peek-prev" id="peekPrev" alt="" />
+            <div class="players" id="players"></div>
+            <img id="poster" class="poster" alt="" />
+            <img class="peek peek-next" id="peekNext" alt="" />
+          </div>
+          <div class="tap" id="tap" aria-label="Tap to pause, double-tap to save, swipe up for next, swipe left for the channel"></div>
           <div class="center-icon" id="centerIcon" aria-hidden="true"></div>
+          <div class="spinner" id="spinner" hidden></div>
+          <button class="banner" id="banner" hidden></button>
           <div class="progress"><div id="bar"></div></div>
           <div class="empty" id="empty" hidden></div>
+          <div class="tips" id="tips" hidden>
+            <div class="tips-card">
+              <div class="tips-title">Quick tips</div>
+              <div class="tip">👆 <b>Swipe up</b> for the next Short, down to go back</div>
+              <div class="tip">👈 <b>Swipe left</b> (or tap the channel name) to explore the channel</div>
+              <div class="tip">👆👆 <b>Double-tap</b> to save · tap to pause</div>
+              <div class="tip">⋯ <b>More like this</b>, hide a channel, open on YouTube</div>
+              <div class="tip">↻ <b>Refresh</b> for a fresh feed and new Shorts</div>
+              <button class="btn primary" id="tipsOk">Got it</button>
+            </div>
+          </div>
         </div>
 
         <footer class="bottom">
@@ -73,6 +102,7 @@
         <div class="panel-head">
           <nav class="ptabs" id="ptabs">
             <button data-p="channels">Channels</button>
+            <button data-p="history">History</button>
             <button data-p="saved">Saved</button>
             <button data-p="hidden">Hidden</button>
             <button data-p="sync">Sync</button>

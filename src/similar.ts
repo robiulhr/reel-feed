@@ -41,7 +41,7 @@ function tokenize(text: string): string[] {
 // ---------- library index (built once, on first use) ----------
 interface Index { docs: Map<string, number>[]; norms: number[]; inv: Map<string, number[]>; idf: Map<string, number> }
 let index: Index | null = null;
-let indexedCount = 0;
+let indexedFor: Short[] | null = null; // rebuild when the library is replaced
 
 function buildIndex(videos: Short[]): Index {
   const docs: Map<string, number>[] = [];
@@ -74,9 +74,9 @@ function buildIndex(videos: Short[]): Index {
 }
 
 function getIndex(app: AppApi) {
-  if (!index || indexedCount !== app.ds.videos.length) {
+  if (!index || indexedFor !== app.ds.videos) {
     index = buildIndex(app.ds.videos);
-    indexedCount = app.ds.videos.length;
+    indexedFor = app.ds.videos;
   }
   return index;
 }
