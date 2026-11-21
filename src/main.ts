@@ -994,6 +994,16 @@ function renderAbout(body: HTMLElement) {
     stats.append(d);
   }
   body.append(stats, para(`Shorts last updated: ${updated}. New Shorts arrive automatically every 4 hours — tap ↻ for a fresh feed.`));
+  const builtAt = new Date(__BUILD__);
+  body.append(
+    para(`App version: ${builtAt.toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`, "ver"),
+    button("Check for app update", async () => {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      await reg?.update().catch(() => {});
+      toast(reg?.installing || reg?.waiting ? "Updating — the app will reload" : "Checked ✓ — if the version above doesn't change, close the app fully and open it again");
+      if (!reg) location.reload();
+    }),
+  );
 
   // data saver
   const ds1 = document.createElement("div");
@@ -1190,8 +1200,25 @@ async function boot() {
 }
 
 // Keep the app on the device (opens instantly, works offline). Only in the built site.
+// Updates: check for a new app version when the app opens, when you come back to it, and every
+// 30 minutes. When a new version takes over: reload right away if you just opened the app,
+// otherwise show "New version — tap to update" (never interrupts a video by itself).
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+  const hadController = !!navigator.serviceWorker.controller;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((reg) => {
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+      setInterval(check, 30 * 60_000);
+    }).catch(() => {});
+  });
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloading) return; // first install — nothing to update
+    const reload = () => { reloading = true; location.reload(); };
+    if (performance.now() < 10_000) reload();
+    else banner("🆕 New version of the app — tap to update", reload);
+  });
 }
 
 boot();

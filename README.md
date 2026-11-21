@@ -64,6 +64,12 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **Continue watching**: if you left a Short unfinished in the last 24 h, the app offers **Resume**.
 - Saved and History also work for Shorts found outside your library (title/channel are remembered).
 
+### App updates (installed app included)
+- The page is always fetched fresh (bypassing the browser cache). On a slow connection the saved copy opens after 3 s **and** the new version keeps downloading in the background.
+- The app checks for a new version when opened, when you come back to it, and every 30 min. A new version reloads automatically if you just opened the app, otherwise shows **"🆕 New version of the app — tap to update"**.
+- **Menu → About → App version** shows the build time; **Check for app update** forces a check.
+- If an old copy ever sticks: close the app fully (swipe it away), open it again with internet. Last resort: Chrome → Settings → Site settings → robiulhr.github.io → *Clear & reset* (you'll need to log in again; your data is safe in GitHub).
+
 ### Playback controls
 - **Double-tap left / right third** of the video = **10 s back / forward** (keep tapping to skip more); double-tap the middle = save; single tap = pause.
 - **Press and hold** = **2×** while held (mouse too).

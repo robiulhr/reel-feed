@@ -2,8 +2,12 @@
  * Service worker: keeps the app itself on the device so it opens instantly and works on weak or
  * no connection. Data (data/*.json) is handled by the app (saved in IndexedDB), and videos stream
  * from YouTube, so they aren't cached here.
+ *
+ * Updates: the page is always fetched fresh (bypassing the browser cache). If the network is slow,
+ * the saved copy opens right away AND the fresh page keeps downloading in the background, so the
+ * next open (or the "tap to update" banner) gets the new version. Never stuck on an old version.
  */
-const CACHE = "reel-feed-app-v1";
+const CACHE = "reel-feed-app-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {
@@ -20,18 +24,24 @@ self.addEventListener("fetch", (e) => {
   if (url.pathname.includes("/data/")) return; // always fresh from the network (the app caches it itself)
 
   if (req.mode === "navigate") {
-    // The page: try the network (3 s), fall back to the saved copy.
     e.respondWith((async () => {
       const cache = await caches.open(CACHE);
+      // fresh copy, never from the browser's HTTP cache
+      const fresh = fetch(new Request(req.url, { cache: "no-store", credentials: "same-origin" }))
+        .then(async (res) => {
+          if (res.ok) await cache.put("index.html", res.clone());
+          return res;
+        });
+      e.waitUntil(fresh.catch(() => {})); // keep downloading even if we answer from the saved copy
       try {
-        const res = await Promise.race([
-          fetch(req),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+        return await Promise.race([
+          fresh,
+          new Promise((_, reject) => setTimeout(() => reject(new Error("slow")), 3000)),
         ]);
-        if (res.ok) cache.put("index.html", res.clone());
-        return res;
       } catch {
-        return (await cache.match("index.html")) || (await cache.match(req)) || Response.error();
+        const saved = await cache.match("index.html");
+        if (saved) return saved;
+        return fresh; // nothing saved yet — just wait for the network
       }
     })());
     return;
