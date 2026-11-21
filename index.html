@@ -32,6 +32,7 @@
               <button data-tab="popular">Popular</button>
               <button data-tab="newest">Newest</button>
             </nav>
+            <button class="icon-btn" id="fsBtn" aria-label="Full screen" title="Full screen (f)" hidden>⛶</button>
             <button class="icon-btn" id="refreshBtn" aria-label="Refresh feed" title="Refresh feed & check for new Shorts"><span>↻</span></button>
             <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
           </div>
@@ -56,15 +57,19 @@
           <div class="tap" id="tap" aria-label="Tap to pause, double-tap to save, swipe up for next, swipe left for the channel"></div>
           <div class="center-icon" id="centerIcon" aria-hidden="true"></div>
           <div class="spinner" id="spinner" hidden></div>
+          <div class="skip-hint" id="skipHint" aria-hidden="true"></div>
+          <div class="speed-hint" id="speedHint" hidden>2× ⏩</div>
           <button class="banner" id="banner" hidden></button>
-          <div class="progress"><div id="bar"></div></div>
+          <div class="scrub-time" id="scrubTime" hidden></div>
+          <div class="progress" id="progress" title="Drag to jump"><div class="progress-line"><div id="bar"></div></div></div>
           <div class="empty" id="empty" hidden></div>
           <div class="tips" id="tips" hidden>
             <div class="tips-card">
               <div class="tips-title">Quick tips</div>
               <div class="tip">👆 <b>Swipe up</b> for the next Short, down to go back</div>
               <div class="tip">👈 <b>Swipe left</b> (or tap the channel name) to explore the channel</div>
-              <div class="tip">👆👆 <b>Double-tap</b> to save · tap to pause</div>
+              <div class="tip">👆👆 <b>Double-tap left/right</b> to skip 10 s · middle to save · tap to pause</div>
+              <div class="tip">✋ <b>Hold</b> for 2× speed · drag the bar at the bottom to jump</div>
               <div class="tip">⋯ <b>More like this</b>, hide a channel, open on YouTube</div>
               <div class="tip">↻ <b>Refresh</b> for a fresh feed and new Shorts</div>
               <button class="btn primary" id="tipsOk">Got it</button>
@@ -117,6 +122,15 @@
 
     <div class="sheet" id="moreSheet" hidden>
       <div class="sheet-inner">
+        <div class="speed-row">
+          <span>Speed</span>
+          <button data-r="0.5">0.5×</button>
+          <button data-r="0.75">0.75×</button>
+          <button data-r="1">1×</button>
+          <button data-r="1.25">1.25×</button>
+          <button data-r="1.5">1.5×</button>
+          <button data-r="2">2×</button>
+        </div>
         <button data-a="similar">✨ More like this</button>
         <button data-a="channel">👤 Explore this channel</button>
         <button data-a="hide">⊘ Hide this channel</button>

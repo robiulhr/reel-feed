@@ -108,7 +108,11 @@ export class PlayerPool {
       }
       return;
     }
-    if (state === S.PLAYING) this.ev.onPlaying();
+    if (state === S.PLAYING) {
+      // each video starts at normal speed in YouTube's player — keep your chosen speed
+      if (slot.player.getPlaybackRate?.() !== this.rate) slot.player.setPlaybackRate?.(this.rate);
+      this.ev.onPlaying();
+    }
     else if (state === S.PAUSED) this.ev.onPaused();
     else if (state === S.BUFFERING) this.ev.onBuffering();
     else if (state === S.ENDED) this.ev.onEnded();
@@ -174,6 +178,17 @@ export class PlayerPool {
   }
 
   private get p() { return this.active?.player; }
+  private rate = 1;
+  /** Jump to a time (seconds) in the current video. */
+  seek(t: number) {
+    const d = this.duration();
+    this.p?.seekTo?.(Math.max(0, d ? Math.min(t, d - 0.3) : t), true);
+  }
+  /** Playback speed for the current and following videos (0.25–2). */
+  setRate(r: number) {
+    this.rate = r;
+    this.p?.setPlaybackRate?.(r);
+  }
   play() { this.p?.playVideo?.(); }
   pause() { this.p?.pauseVideo?.(); }
   mute() { this.p?.mute?.(); }

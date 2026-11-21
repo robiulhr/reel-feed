@@ -64,6 +64,18 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **Continue watching**: if you left a Short unfinished in the last 24 h, the app offers **Resume**.
 - Saved and History also work for Shorts found outside your library (title/channel are remembered).
 
+### Playback controls
+- **Double-tap left / right third** of the video = **10 s back / forward** (keep tapping to skip more); double-tap the middle = save; single tap = pause.
+- **Press and hold** = **2×** while held (mouse too).
+- **Progress bar**: drag it (large touch area) to jump; shows `0:57 / 1:54` while dragging.
+- **Speed**: ⋯ → 0.5× – 2× (remembered per device; shown in the info line when not 1×). Keys `<` / `>`.
+- Keys: `←/→` (or `h/l`) 10 s, `↑/↓` (or `j/k`) previous/next, `c` channel, `f` full screen.
+- Skipped seconds don't count as "watched" for learning or history.
+
+### Full screen
+- **In the browser**: on phones the app goes **full screen on your first tap** (hides the address bar; Android Chrome and most Android browsers). ⛶ in the top bar toggles it; if you leave full screen yourself it won't push it again that session. About → turn the automatic part off. iPhone Safari doesn't allow web pages to go full screen → install it instead.
+- **Installed app** (browser menu → *Install app* / *Add to Home screen*): opens full screen with no browser bar (`display: fullscreen` in the manifest).
+
 ### First-time tips
 Shown once (Swipe up/down, swipe left, double-tap, ⋯, ↻). About → *Show the tips again*.
 

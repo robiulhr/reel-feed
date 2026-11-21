@@ -31,6 +31,8 @@ export interface DevicePrefs {
   histPaused: boolean; // don't record watch history on this device
   tipsSeen: boolean; // first-time tips shown
   dataSaver: "auto" | "on" | "off"; // auto = on when the connection is slow
+  rate: number; // playback speed
+  autoFull: boolean; // go full screen on the first tap (phones, in the browser)
 }
 
 export type State = Shared & DevicePrefs;
@@ -62,7 +64,7 @@ const defaults = (): State => ({
   ...emptyShared(),
   muted: true, tab: "foryou", win: "all", cat: "all",
   lastActive: 0, prevVisit: 0,
-  histPaused: false, tipsSeen: false, dataSaver: "auto",
+  histPaused: false, tipsSeen: false, dataSaver: "auto", rate: 1, autoFull: true,
 });
 
 function read<T>(key: string, fallback: T): T {

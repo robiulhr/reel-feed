@@ -24,6 +24,10 @@ const el = {
   tap: $("tap"),
   centerIcon: $("centerIcon"),
   spinner: $("spinner"),
+  skipHint: $("skipHint"),
+  speedHint: $("speedHint"),
+  progress: $("progress"),
+  scrubTime: $("scrubTime"),
   banner: $<HTMLButtonElement>("banner"),
   tips: $("tips"),
   tabs: $("tabs"),
@@ -64,7 +68,7 @@ let idx = -1;
 let queue: Short[] = [];
 let cur: Short | null = null;
 let playing = false;
-let watch = { playMs: 0, since: 0, maxT: 0, loops: 0, shownAt: 0 };
+let watch = { playMs: 0, since: 0, maxT: 0, loops: 0, shownAt: 0, skipped: 0 };
 /** A temporary list you're swiping through (a channel's Shorts, "More like this", History). null = main feed. */
 let ctx: { title: string; items: Short[]; i: number; onBack?: () => void } | null = null;
 let pendingData: Dataset | null = null; // newer data downloaded, waiting for you to tap the banner
@@ -178,12 +182,78 @@ function stopClock() {
 }
 
 setInterval(() => {
-  if (!cur) return;
+  if (!cur || scrubbing) return;
   const t = pool.time();
   const d = pool.duration();
   if (t > watch.maxT) watch.maxT = t;
   el.bar.style.width = d ? `${Math.min(100, (t / d) * 100)}%` : "0";
 }, 200);
+
+// ---------- skip, scrub, speed ----------
+const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+/** Skip forward/back (seconds). Skipped seconds don't count as "watched" for learning. */
+function skip(sec: number) {
+  if (!cur) return;
+  const t = pool.time();
+  if (sec > 0) watch.skipped += Math.min(sec, Math.max(0, pool.duration() - t));
+  pool.seek(t + sec);
+  flashSkip(sec);
+}
+let skipTimer: number | undefined;
+function flashSkip(sec: number) {
+  el.skipHint.textContent = sec > 0 ? `${sec}s ⏩` : `⏪ ${-sec}s`;
+  el.skipHint.className = `skip-hint show ${sec > 0 ? "right" : "left"}`;
+  clearTimeout(skipTimer);
+  skipTimer = window.setTimeout(() => (el.skipHint.className = "skip-hint"), 650);
+}
+
+let scrubbing = false;
+function scrubTo(clientX: number, commit: boolean) {
+  const r = el.progress.getBoundingClientRect();
+  const f = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  const d = pool.duration();
+  el.bar.style.width = `${f * 100}%`;
+  el.scrubTime.hidden = !d || commit;
+  if (d) el.scrubTime.textContent = `${fmtTime(f * d)} / ${fmtTime(d)}`;
+  if (commit && d) {
+    const t = pool.time();
+    if (f * d > t) watch.skipped += f * d - t;
+    pool.seek(f * d);
+  }
+}
+el.progress.addEventListener("pointerdown", (e) => {
+  if (!cur) return;
+  scrubbing = true;
+  el.progress.classList.add("scrubbing");
+  el.progress.setPointerCapture(e.pointerId);
+  scrubTo(e.clientX, false);
+});
+el.progress.addEventListener("pointermove", (e) => { if (scrubbing) scrubTo(e.clientX, false); });
+const endScrub = (e: PointerEvent) => {
+  if (!scrubbing) return;
+  scrubbing = false;
+  el.progress.classList.remove("scrubbing");
+  scrubTo(e.clientX, true);
+};
+el.progress.addEventListener("pointerup", endScrub);
+el.progress.addEventListener("pointercancel", endScrub);
+
+function renderMeta() {
+  const s = cur;
+  const bits: string[] = [];
+  if (state.rate !== 1) bits.push(`${state.rate}×`);
+  if (s?.v) bits.push(`${compact.format(s.v)} views`, `${compact.format(s.l)} likes`, ago(s.p));
+  el.meta.textContent = bits.join(" · ");
+}
+
+function setRate(r: number) {
+  state.rate = r;
+  persist();
+  pool.setRate(r);
+  renderMeta();
+  toast(r === 1 ? "Normal speed" : `Speed ${r}×`);
+}
 
 /** Turn how you watched the current Short into a learning signal + a history entry. */
 function finishCurrent() {
@@ -191,7 +261,9 @@ function finishCurrent() {
   stopClock();
   const d = pool.duration();
   const dwell = watch.playMs / 1000;
-  const frac = d ? Math.min(1, watch.maxT / d) : 0;
+  // If you skipped ahead, count only what you actually watched.
+  const watchedSec = watch.skipped ? Math.min(watch.maxT, (watch.playMs / 1000) * state.rate) : watch.maxT;
+  const frac = d ? Math.min(1, watchedSec / d) : 0;
   let delta = 0;
   if (watch.loops > 0 || frac >= 0.9) delta = Math.min(2.5, 1 + 0.5 * watch.loops);
   else if (frac >= 0.5) delta = 0.5;
@@ -323,7 +395,7 @@ function show(s: Short) {
   el.empty.hidden = true;
   cur = s;
   playing = false;
-  watch = { playMs: 0, since: 0, maxT: 0, loops: 0, shownAt: nowSec() };
+  watch = { playMs: 0, since: 0, maxT: 0, loops: 0, shownAt: nowSec(), skipped: 0 };
   el.bar.style.width = "0";
 
   const ch = ds.channels[s.ch];
@@ -337,9 +409,7 @@ function show(s: Short) {
   el.chName.textContent = ch?.n ?? "";
   el.badge.hidden = !(s.p && s.p > state.prevVisit);
   el.title.textContent = s.t;
-  el.meta.textContent = s.v
-    ? `${compact.format(s.v)} views · ${compact.format(s.l)} likes · ${ago(s.p)}`
-    : "";
+  renderMeta();
   renderSave();
   if (ctx) renderCtxBar();
 
@@ -393,12 +463,33 @@ function snapBack() {
 
 const drag = { on: false, x0: 0, y0: 0, t0: 0, dx: 0, dy: 0, axis: "" as "" | "x" | "y" };
 let swiped = false;
+// Press and hold = 2× speed while held (like Shorts)
+let holdTimer: number | undefined;
+let holding = false;
+function startHold() {
+  if (!cur || !playing) return;
+  holding = true;
+  if (state.rate < 2) pool.setRate(2);
+  el.speedHint.hidden = false;
+  navigator.vibrate?.(8);
+}
+function endHold() {
+  clearTimeout(holdTimer);
+  if (!holding) return;
+  holding = false;
+  pool.setRate(state.rate);
+  el.speedHint.hidden = true;
+  swiped = true; // don't treat the release as a tap
+}
+
 el.tap.addEventListener("touchstart", (e) => {
   if (animating) return;
   const t = e.touches[0];
   Object.assign(drag, { on: true, x0: t.clientX, y0: t.clientY, t0: performance.now(), dx: 0, dy: 0, axis: "" });
   swiped = false;
   el.track.style.transition = "none";
+  clearTimeout(holdTimer);
+  holdTimer = window.setTimeout(() => { if (drag.on && !drag.axis) startHold(); }, 450);
 }, { passive: true });
 
 el.tap.addEventListener("touchmove", (e) => {
@@ -406,8 +497,10 @@ el.tap.addEventListener("touchmove", (e) => {
   const t = e.touches[0];
   drag.dx = t.clientX - drag.x0;
   drag.dy = t.clientY - drag.y0;
+  if (holding) return; // holding for 2× — ignore small finger movement
   if (!drag.axis && (Math.abs(drag.dx) > 10 || Math.abs(drag.dy) > 10)) {
     drag.axis = Math.abs(drag.dy) >= Math.abs(drag.dx) ? "y" : "x";
+    clearTimeout(holdTimer);
   }
   if (drag.axis === "y") {
     const canGo = drag.dy < 0 ? !!upcoming(1) : !!upcoming(-1);
@@ -421,6 +514,8 @@ el.tap.addEventListener("touchmove", (e) => {
 el.tap.addEventListener("touchend", () => {
   if (!drag.on) return;
   drag.on = false;
+  if (holding) { endHold(); snapBack(); return; }
+  clearTimeout(holdTimer);
   const ms = Math.max(1, performance.now() - drag.t0);
   if (drag.axis === "y") {
     swiped = true;
@@ -435,21 +530,37 @@ el.tap.addEventListener("touchend", () => {
     if (drag.dx < -70) exploreCurrent(); // swipe left → channel
   }
 });
-el.tap.addEventListener("touchcancel", () => { drag.on = false; snapBack(); });
+el.tap.addEventListener("touchcancel", () => { drag.on = false; endHold(); snapBack(); });
 
-let lastClick = 0, clickTimer: number | undefined;
-el.tap.addEventListener("click", () => {
+// Tap = pause/play. Double-tap: left third = back 10 s, right third = forward 10 s, middle = save.
+let lastClick = 0, lastZone = "", clickTimer: number | undefined;
+el.tap.addEventListener("click", (e) => {
   if (swiped) { swiped = false; return; }
+  const r = el.tap.getBoundingClientRect();
+  const rel = (e.clientX - r.left) / r.width;
+  const zone = rel < 0.33 ? "left" : rel > 0.67 ? "right" : "mid";
   const t = Date.now();
-  if (t - lastClick < 280) {
+  if (t - lastClick < 300 && zone === lastZone) {
     clearTimeout(clickTimer);
-    lastClick = 0;
-    toggleSave(true); // double-tap = save
+    if (zone === "left") skip(-10);
+    else if (zone === "right") skip(10);
+    else toggleSave(true);
+    // keep the double-tap window open on the sides, so tapping again keeps skipping
+    lastClick = zone === "mid" ? 0 : t;
     return;
   }
   lastClick = t;
-  clickTimer = window.setTimeout(togglePlay, 280);
+  lastZone = zone;
+  clickTimer = window.setTimeout(togglePlay, 300);
 });
+
+// Desktop: hold the mouse button for 2×
+el.tap.addEventListener("mousedown", () => {
+  clearTimeout(holdTimer);
+  holdTimer = window.setTimeout(startHold, 450);
+});
+el.tap.addEventListener("mouseup", () => { if (holding) endHold(); else clearTimeout(holdTimer); });
+el.tap.addEventListener("mouseleave", () => endHold());
 
 let wheelAcc = 0, wheelLock = 0;
 window.addEventListener("wheel", (e) => {
@@ -475,7 +586,12 @@ window.addEventListener("keydown", (e) => {
   switch (e.key) {
     case "ArrowDown": case "j": e.preventDefault(); animateTo(1); break;
     case "ArrowUp": case "k": e.preventDefault(); animateTo(-1); break;
-    case "ArrowRight": case "c": exploreCurrent(); break;
+    case "ArrowRight": case "l": e.preventDefault(); skip(10); break;
+    case "ArrowLeft": case "h": e.preventDefault(); skip(-10); break;
+    case "c": exploreCurrent(); break;
+    case "f": toggleFull(); break;
+    case ">": setRate(Math.min(2, [0.5, 0.75, 1, 1.25, 1.5, 2].find((r) => r > state.rate) ?? 2)); break;
+    case "<": setRate([0.5, 0.75, 1, 1.25, 1.5, 2].reverse().find((r) => r < state.rate) ?? 0.5); break;
     case " ": e.preventDefault(); togglePlay(); break;
     case "m": toggleMute(); break;
     case "s": toggleSave(); break;
@@ -662,8 +778,17 @@ function exploreCurrent() {
 el.chName.addEventListener("click", (e) => { e.preventDefault(); exploreCurrent(); });
 el.chThumb.addEventListener("click", exploreCurrent);
 
-el.moreBtn.onclick = () => { if (cur) el.moreSheet.hidden = false; };
+function renderSpeedRow() {
+  el.moreSheet.querySelectorAll<HTMLButtonElement>("button[data-r]").forEach((b) => b.classList.toggle("on", Number(b.dataset.r) === state.rate));
+}
+el.moreBtn.onclick = () => { if (cur) { renderSpeedRow(); el.moreSheet.hidden = false; } };
 el.moreSheet.addEventListener("click", (e) => {
+  const rateBtn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-r]");
+  if (rateBtn) {
+    setRate(Number(rateBtn.dataset.r));
+    renderSpeedRow();
+    return;
+  }
   const a = (e.target as HTMLElement).closest("button")?.dataset.a;
   if (e.target !== el.moreSheet && !a) return;
   el.moreSheet.hidden = true;
@@ -674,8 +799,48 @@ el.moreSheet.addEventListener("click", (e) => {
   else if (a === "open") window.open(`https://www.youtube.com/shorts/${cur.id}`, "_blank", "noopener");
 });
 
+// ---------- full screen ----------
+// On phones the browser's address bar stays because the page never scrolls; the Fullscreen API
+// hides it (Android Chrome etc.). Installed as an app, the manifest opens it full screen anyway.
+const fsBtn = $("fsBtn");
+const isStandalone = () =>
+  matchMedia("(display-mode: fullscreen)").matches || matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone;
+const isPhone = () => matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 820;
+const canFull = () => !!document.documentElement.requestFullscreen && document.fullscreenEnabled && !isStandalone();
+let fullDeclined = false; // you left full screen yourself → don't push it again this session
+
+async function enterFull() {
+  try {
+    await document.documentElement.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
+    (screen.orientation as any)?.lock?.("portrait").catch(() => {});
+  } catch { /* not allowed here (e.g. iPhone Safari) */ }
+}
+function toggleFull() {
+  if (document.fullscreenElement) { fullDeclined = true; document.exitFullscreen().catch(() => {}); }
+  else enterFull();
+}
+function renderFsBtn() {
+  fsBtn.hidden = !canFull();
+  fsBtn.textContent = document.fullscreenElement ? "🗗" : "⛶";
+  fsBtn.title = document.fullscreenElement ? "Exit full screen (f)" : "Full screen (f)";
+}
+fsBtn.onclick = toggleFull;
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && wasFull) fullDeclined = true;
+  wasFull = !!document.fullscreenElement;
+  renderFsBtn();
+});
+let wasFull = false;
+/** First tap on a phone → full screen (needs a tap; browsers don't allow it on page load). */
+function maybeAutoFull() {
+  if (state.autoFull && !fullDeclined && !document.fullscreenElement && canFull() && isPhone()) enterFull();
+}
+el.tap.addEventListener("touchend", maybeAutoFull);
+renderFsBtn();
+
 // ---------- tips ----------
 function closeTips() {
+  maybeAutoFull(); // "Got it" is a tap — a good moment to go full screen
   el.tips.hidden = true;
   state.tipsSeen = true;
   persist();
@@ -842,8 +1007,19 @@ function renderAbout(body: HTMLElement) {
     ? "Data saver is ON now: smaller thumbnails and less preloading, so it works better on slow connections."
     : "Data saver is off now: the next video is preloaded so swiping is instant."));
 
+  const fsRow = document.createElement("label");
+  fsRow.className = "u-budget-form";
+  const fsBox = document.createElement("input");
+  fsBox.type = "checkbox";
+  fsBox.checked = state.autoFull;
+  fsBox.onchange = () => { state.autoFull = fsBox.checked; persist(); };
+  fsRow.append(fsBox, para("Full screen automatically on phones (hides the browser's address bar after your first tap). ⛶ in the top bar toggles it."));
+  body.append(fsRow, para(isStandalone()
+    ? "You're using the installed app — it's always full screen."
+    : "Tip: install it (browser menu → Install app / Add to Home screen) to open full screen like a normal app."));
+
   const keys = document.createElement("p");
-  keys.innerHTML = "Phone: <b>swipe up/down</b> · <b>swipe left</b> for the channel · tap to pause · double-tap to save.<br>Keys: <b>↑/↓</b> move · <b>→</b> channel · <b>Space</b> pause · <b>m</b> sound · <b>s</b> save · <b>r</b> refresh.";
+  keys.innerHTML = "Phone: <b>swipe up/down</b> · <b>swipe left</b> for the channel · tap to pause · <b>double-tap left/right</b> = 10 s back/forward · double-tap middle = save · <b>hold</b> = 2× · drag the progress bar to jump · speed in ⋯.<br>Keys: <b>↑/↓</b> move · <b>←/→</b> 10 s · <b>&lt; &gt;</b> speed · <b>c</b> channel · <b>Space</b> pause · <b>m</b> sound · <b>s</b> save · <b>r</b> refresh.";
   body.append(keys,
     button("Show the tips again", () => { closePanel(); el.tips.hidden = false; }),
     button("Reset what the feed learned", () => { act({ t: "resetLearn" }); toast("Learning reset"); }),
@@ -971,6 +1147,7 @@ async function boot() {
   renderMute();
   startVisit(Math.floor(nowSec()));
   loadApi(); // start loading the YouTube player right away
+  pool.setRate(state.rate ?? 1);
   sync.startSync(onSyncUpdate);
   onNetworkChange(() => applyNetwork());
 
