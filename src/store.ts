@@ -81,15 +81,31 @@ export const state: State = { ...defaults(), ...read<Partial<State>>(STORAGE_KEY
 export const pending: Op[] = read<Op[]>(PENDING_KEY, []);
 
 let timer: number | undefined;
-export function persist() {
+let dirty = false;
+
+/** Write to the device now. */
+export function flushPersist() {
   clearTimeout(timer);
-  timer = window.setTimeout(() => {
-    try {
-      trimSeen(state);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
-    } catch { /* ignore */ }
-  }, 300);
+  if (!dirty) return;
+  dirty = false;
+  try {
+    trimSeen(state);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+  } catch { /* storage full/blocked — nothing more we can do */ }
+}
+
+/** Save soon (batched, so rapid changes cost one write). Flushed immediately when the app is closed or hidden. */
+export function persist() {
+  dirty = true;
+  clearTimeout(timer);
+  timer = window.setTimeout(flushPersist, 300);
+}
+
+// Never lose the last changes: write right away when the page is closed, reloaded or sent to the background.
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPersist);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushPersist(); });
 }
 
 function trimSeen(s: Shared) {

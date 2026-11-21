@@ -14,3 +14,7 @@ public/data/
 # Worker local secrets & build output
 worker/.dev.vars
 worker/.wrangler/
+
+# Test output
+test-results/
+playwright-report/

@@ -58,10 +58,11 @@ function dismiss() {
 export function toast(msg: string, action?: { label: string; run: () => void }, ms?: number, kind: Kind = "info") {
   const item: ToastItem = { msg, action, kind, ms: ms ?? (kind === "error" ? 8000 : action ? 6000 : 2600) };
   if (showing?.msg === msg || queue.some((q) => q.msg === msg)) return;
-  // Plain info messages replace each other (newest wins); errors and messages with a button wait their turn.
-  if (kind === "info" && !action) {
-    for (let i = queue.length - 1; i >= 0; i--) if (queue[i].kind === "info" && !queue[i].action) queue.splice(i, 1);
-    if (showing && showing.kind === "info" && !showing.action) { queue.unshift(item); dismissNow(); return; }
+  // A new normal message replaces an older normal one (it's out of date — e.g. "Removed… Undo"
+  // after you already restored). Error messages are never replaced; they wait or stay until dismissed.
+  if (kind === "info") {
+    for (let i = queue.length - 1; i >= 0; i--) if (queue[i].kind === "info") queue.splice(i, 1);
+    if (showing && showing.kind === "info") { queue.unshift(item); dismissNow(); return; }
   }
   queue.push(item);
   if (queue.length > 4) queue.splice(0, queue.length - 4);
@@ -145,13 +146,12 @@ export async function busy<T>(btn: HTMLButtonElement | null | undefined, busyLab
   try {
     return await fn();
   } finally {
-    if (btn && btn.isConnected) {
+    // Always unlock — even if the action failed or the screen was redrawn meanwhile.
+    if (btn) {
       delete btn.dataset.busy;
       btn.disabled = false;
       btn.removeAttribute("aria-busy");
       if (busyLabel) btn.textContent = label;
-    } else if (btn) {
-      delete btn.dataset.busy;
     }
   }
 }

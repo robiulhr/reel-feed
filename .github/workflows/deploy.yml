@@ -17,7 +17,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Automated tests — run when the app's code changes. A failure stops the deploy below,
+  # so a broken version never reaches your phone. Skipped for scheduled refreshes,
+  # "Refresh now", and channel-list edits from the app (no code changed → nothing to test).
+  test:
+    if: github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'Channels (from app)')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit + server tests
+        run: npm test
+      - name: Install browser for tests
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests (phone sizes)
+        run: npm run test:e2e
+      - name: Keep the test report if something failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
   build:
+    needs: test
+    # run after passing tests, or when tests were skipped (scheduled refresh / channel edits)
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

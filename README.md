@@ -88,6 +88,17 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **App dialogs** replace the browser's `confirm`/`prompt` (Delete channel, Clear history, Log out, copy-link fallback).
 - Taps during the slide animation are ignored; "Get newer" can't start two fetches.
 
+### Automated tests (engineering Phase 3) — `tests/`
+| Kind | Tool | What it covers | Run |
+|---|---|---|---|
+| Unit | Vitest + happy-dom | Data changes & merging across devices, sync file format, ranking & diversity rules, quota helpers, "More like this", button locking | `npm test` |
+| Server | Vitest (real Worker code, in-memory KV, fake GitHub/YouTube) | Login & sessions, CORS, add/remove/restore/delete rules, Bangla handles, one commit per batch, **duplicate request protection**, lookups from any link style, preview/search caching, **budget lock**, sync conflicts, refresh | `npm test` |
+| Browser | Playwright (Pixel 7 + 320 px phone, touch) with a fake YouTube player, fake sync server and sample data | Layout fits / no overlap, tips, swipe up/down/left, double-tap skip & save, hold 2×, drag progress bar, volume & speed, History, Refresh, offline banner, Add / Remove with triple taps (exactly one save, never the wrong channel), Delete dialog | `npm run test:e2e` |
+
+- Everything: `npm run test:all` (type check + unit + server + browser). First time on a PC: `npx playwright install chromium`.
+- **On GitHub**: every code push runs all tests first; **if any fails, the site is not published** (the report is attached to the failed run). Scheduled refreshes, "Refresh now" and channel edits from the app skip the tests (no code changed).
+- Bugs the tests already caught (fixed): stuck "busy" buttons after a failed action; same channel twice in a row with few channels; "More like this" finding nothing in small libraries; the last 0.3 s of changes lost when closing the app; the › arrow covering a menu tab; an outdated "Removed… Undo" message hiding newer ones; **a double tap on Remove could remove the next channel** (the row slid under your finger) — changed rows now stay in place with a short button cooldown.
+
 ### Sound
 - **Tap 🔊** = mute/unmute; unmuting shows a **volume slider** for 3 s. **Press and hold 🔊** = volume slider any time.
 - Volume (with Mute) is also at the top of the **⋯** menu, next to Speed. Icon shows the level 🔇 🔈 🔉 🔊; volume is remembered per device. Keys: `+` / `−` volume, `m` mute.

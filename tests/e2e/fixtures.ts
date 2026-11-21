@@ -1,0 +1,168 @@
+/**
+ * Browser-test setup: every network request is answered by the test itself.
+ *  - Shorts data → small made-up library (tests/fixtures/data.ts)
+ *  - YouTube player → a fake YT.Player that behaves like the real one (states, time, speed, volume)
+ *  - thumbnails → a tiny image
+ *  - sync server (http://sync.test) → an in-memory fake that counts every change it receives
+ */
+import { test as base, expect, type Page } from "@playwright/test";
+import { asFile, makeDataset } from "../fixtures/data";
+
+const FAKE_YT = `
+(function () {
+  var S = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
+  window.__yt = { players: [] };
+  function Player(id, o) {
+    var holder = document.getElementById(id);
+    var f = document.createElement('iframe');
+    f.src = 'about:blank';
+    holder.replaceWith(f);
+    this.f = f; this.o = o; this.t = 0; this.rate = 1; this.vol = 100; this.muted = true;
+    this.state = -1; this.vid = null; this.last = 0;
+    window.__yt.players.push(this);
+    var self = this;
+    setTimeout(function () { o.events && o.events.onReady && o.events.onReady({ target: self }); }, 0);
+  }
+  Player.prototype._set = function (s) { this.state = s; var e = this.o.events; e && e.onStateChange && e.onStateChange({ data: s, target: this }); };
+  Player.prototype._tick = function () { if (this.state === 1) { var n = performance.now(); this.t = Math.min(60, this.t + (n - this.last) / 1000 * this.rate); this.last = n; } };
+  Player.prototype.loadVideoById = function (id) { var self = this; this.vid = id; this.f.dataset.vid = id; this.t = 0; this._set(3); setTimeout(function () { self.last = performance.now(); self._set(1); }, 30); };
+  Player.prototype.playVideo = function () { this.last = performance.now(); this._set(1); };
+  Player.prototype.pauseVideo = function () { this._tick(); this._set(2); };
+  Player.prototype.seekTo = function (t) { this._tick(); this.t = t; };
+  Player.prototype.getCurrentTime = function () { this._tick(); return this.t; };
+  Player.prototype.getDuration = function () { return this.vid ? 60 : 0; };
+  Player.prototype.mute = function () { this.muted = true; };
+  Player.prototype.unMute = function () { this.muted = false; };
+  Player.prototype.isMuted = function () { return this.muted; };
+  Player.prototype.setVolume = function (v) { this.vol = v; };
+  Player.prototype.getVolume = function () { return this.vol; };
+  Player.prototype.setPlaybackRate = function (r) { this._tick(); this.rate = r; };
+  Player.prototype.getPlaybackRate = function () { return this.rate; };
+  Player.prototype.destroy = function () {};
+  window.YT = { Player: Player, PlayerState: S };
+  setTimeout(function () { window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(); }, 0);
+})();`;
+
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
+
+export interface FakeSync {
+  channelPosts: { ops: any[] }[];
+  statePuts: number;
+  channels: any[];
+  lookups: number;
+}
+
+export const test = base.extend<{ app: Page; sync: FakeSync }>({
+  sync: async ({}, use) => {
+    await use({
+      channelPosts: [], statePuts: 0, lookups: 0,
+      channels: [
+        { name: "Alpha Biz", handle: "@alpha", cat: "stories" },
+        { name: "Ads Lab", handle: "@ads", cat: "ads" },
+        { name: "Founder Talk", handle: "@founder", cat: "founders" },
+      ],
+    });
+  },
+  app: async ({ page, sync }, use) => {
+    const file = asFile(makeDataset());
+    await page.route("**/data/meta.json", (r) => r.fulfill({ json: { generatedAt: file.generatedAt, videos: file.videos.length } }));
+    await page.route("**/data/starter.json", (r) => r.fulfill({ json: file }));
+    await page.route("**/data/shorts.json", (r) => r.fulfill({ json: file }));
+    await page.route("https://www.youtube.com/iframe_api", (r) => r.fulfill({ contentType: "text/javascript", body: FAKE_YT }));
+    await page.route("https://i.ytimg.com/**", (r) => r.fulfill({ contentType: "image/png", body: PNG }));
+    await page.route("https://fonts.googleapis.com/**", (r) => r.abort());
+
+    let state: any = null;
+    let stateSha = 0;
+    const cors = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Request-Id",
+      "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
+    };
+    await page.route("http://sync.test/**", async (route) => {
+      const req = route.request();
+      const path = new URL(req.url()).pathname;
+      const method = req.method();
+      const ok = (json: unknown) => route.fulfill({ status: 200, headers: cors, json });
+      if (method === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+      if (path === "/login") {
+        return req.postDataJSON().password === "pw"
+          ? ok({ session: "test.session" })
+          : route.fulfill({ status: 401, headers: cors, json: { error: "Wrong password" } });
+      }
+      if (path === "/state" && method === "GET") return ok({ data: state, sha: state ? `s${stateSha}` : null });
+      if (path === "/state" && method === "PUT") { sync.statePuts++; state = req.postDataJSON().data; stateSha++; return ok({ sha: `s${stateSha}` }); }
+      if (path === "/channels" && method === "GET") return ok({ data: sync.channels, sha: "c" });
+      if (path === "/channels" && method === "POST") {
+        const { ops } = req.postDataJSON();
+        sync.channelPosts.push({ ops });
+        for (const op of ops) {
+          const c = sync.channels.find((x) => x.handle.toLowerCase() === (op.h ?? op.channel?.handle ?? "").toLowerCase());
+          if (op.t === "add" && !c) sync.channels.push({ ...op.channel });
+          if (op.t === "remove" && c) c.status = "removed";
+          if (op.t === "restore" && c) delete c.status;
+          if (op.t === "cat" && c) c.cat = op.cat;
+          if (op.t === "delete" && c) sync.channels.splice(sync.channels.indexOf(c), 1);
+        }
+        return ok({ data: sync.channels });
+      }
+      if (path === "/lookup") {
+        sync.lookups++;
+        return ok({ needsSearch: false, units: 3, quota: { used: 3, budget: 3000 }, results: [{
+          id: "UCpricing00000000000000a", name: "Pricing Lab", handle: "@pricinglab", thumb: "", subs: 54321, videos: 400,
+          desc: "Pricing psychology", shorts: 70, latestShort: Math.floor(Date.now() / 1000) - 3600, suggestedCat: "ads",
+        }] });
+      }
+      if (path === "/quota") return ok({ enabled: true, day: "2026-01-01", used: 0, budget: 3000, reserve: 1500, limit: 10000, maxBudget: 8500, savedWeek: 0, usedWeek: 0, recent: [] });
+      if (path === "/status") return ok({ run: null });
+      if (path === "/refresh") return ok({ ok: true });
+      return route.fulfill({ status: 404, headers: cors, json: { error: "not found" } });
+    });
+
+    await page.goto("/");
+    await expect(page.locator("#title")).not.toBeEmpty();
+    await use(page);
+  },
+});
+
+export { expect };
+
+// ---------- helpers ----------
+export async function closeTips(page: Page) {
+  const ok = page.locator("#tipsOk");
+  if (await ok.isVisible()) await ok.click();
+}
+
+/** Swipe on the video with real touch events (up = next, down = previous, left = channel). */
+export async function swipe(page: Page, dir: "up" | "down" | "left") {
+  await page.evaluate((dir) => {
+    const tap = document.getElementById("tap")!;
+    const r = tap.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const [x0, y0, x1, y1] = dir === "up" ? [cx, cy + 150, cx, cy - 150]
+      : dir === "down" ? [cx, cy - 150, cx, cy + 150] : [cx + 120, cy, cx - 120, cy + 5];
+    const T = (x: number, y: number) => new Touch({ identifier: 1, target: tap, clientX: x, clientY: y });
+    tap.dispatchEvent(new TouchEvent("touchstart", { touches: [T(x0, y0)], changedTouches: [T(x0, y0)], bubbles: true }));
+    for (let i = 1; i <= 5; i++) {
+      tap.dispatchEvent(new TouchEvent("touchmove", { touches: [T(x0 + ((x1 - x0) * i) / 5, y0 + ((y1 - y0) * i) / 5)], bubbles: true }));
+    }
+    tap.dispatchEvent(new TouchEvent("touchend", { changedTouches: [T(x1, y1)], bubbles: true }));
+  }, dir);
+  await page.waitForTimeout(400);
+}
+
+/** The fake player that's currently visible. */
+export async function player(page: Page) {
+  return page.evaluate(() => {
+    const p = (window as any).__yt.players.find((x: any) => x.f.closest(".yt-slot")?.classList.contains("on"));
+    return p ? { t: p.getCurrentTime(), rate: p.rate, vol: p.vol, muted: p.muted, vid: p.vid, state: p.state } : null;
+  });
+}
+
+export async function login(page: Page) {
+  await page.locator("#menuBtn").click();
+  await page.locator('[data-p="sync"]').click();
+  await page.locator('#panelBody input[name="password"]').fill("pw");
+  await page.locator("#panelBody form button[type=submit]").click();
+  await expect(page.locator("#panelBody")).toContainText("This device is logged in");
+}

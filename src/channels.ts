@@ -197,6 +197,10 @@ interface Job {
   resolve: (ok: boolean) => void;
 }
 let jobs: Job[] = [];
+/** Channels changed since you last searched/filtered — kept in place in the list. */
+const sticky = new Set<string>();
+/** Channel → time until its buttons unlock again after a change. */
+const cooldown = new Map<string, number>();
 let flushTimer: number | undefined;
 let sending: Promise<void> = Promise.resolve();
 const BATCH_MS = 400;
@@ -224,7 +228,13 @@ async function change(ops: Op[], success: string, undo?: { label: string; run: (
     entriesBefore: structuredClone(entries),
     dsBefore: ctx.ds.channels.map((c) => ({ st: c.st, cat: c.cat })),
   };
-  for (const op of ops) { applyLocal(entries, op); applyFeed(op); }
+  for (const op of ops) {
+    applyLocal(entries, op);
+    applyFeed(op);
+    const h = "h" in op ? op.h : op.channel.handle;
+    sticky.add(lc(h));
+    cooldown.set(lc(h), Date.now() + 700);
+  }
   renderHead();
   renderList();
   const done = new Promise<boolean>((resolve) => (job.resolve = resolve));
@@ -382,14 +392,14 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
   search.placeholder = "Search channels…";
   search.value = view.q;
   let t: number | undefined;
-  search.oninput = () => { clearTimeout(t); t = window.setTimeout(() => { view.q = search.value; renderList(); }, 120); };
+  search.oninput = () => { clearTimeout(t); t = window.setTimeout(() => { view.q = search.value; sticky.clear(); renderList(); }, 120); };
 
   const sel = (options: [string, string][], value: string, onChange: (v: string) => void, label: string) => {
     const s = el("select") as HTMLSelectElement;
     s.setAttribute("aria-label", label);
     for (const [v, l] of options) s.append(new Option(l, v));
     s.value = value;
-    s.onchange = () => onChange(s.value);
+    s.onchange = () => { sticky.clear(); onChange(s.value); };
     return s;
   };
   controls.append(
@@ -538,6 +548,8 @@ function renderList() {
     })
     .filter(({ e, ch, st, hidden: isHidden }) => {
       if (q && !lc(`${e.name} ${e.handle} ${ch?.n ?? ""}`).includes(q)) return false;
+      // A channel you just changed stays where it is (so the next row can't slide under your finger)
+      if (sticky.has(lc(e.handle))) return true;
       if (view.cat !== "all" && e.cat !== view.cat) return false;
       if (view.status === "listed") return st !== "removed";
       if (view.status === "hidden") return isHidden && st !== "removed";
@@ -599,6 +611,12 @@ function renderList() {
       );
     }
     if (!canEdit) actions.querySelectorAll("button").forEach((b) => { if (b.textContent !== "Hide" && b.textContent !== "Unhide") b.disabled = true; });
+    // Short cooldown after a change, so a double tap can't immediately undo it (Remove → Restore)
+    const coolUntil = cooldown.get(lc(e.handle)) ?? 0;
+    if (coolUntil > Date.now()) {
+      actions.querySelectorAll<HTMLButtonElement | HTMLSelectElement>("button, select").forEach((b) => (b.disabled = true));
+      window.setTimeout(renderList, coolUntil - Date.now() + 20);
+    }
     item.append(img, main, actions);
     listEl.append(item);
   }

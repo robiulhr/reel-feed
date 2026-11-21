@@ -62,7 +62,8 @@ function buildIndex(videos: Short[]): Index {
     for (const [w, c] of tf) {
       const x = c * idf.get(w)!;
       sq += x * x;
-      if (df.get(w)! < N * 0.05) { // very common words don't help find matches
+      // Very common words don't help find matches. (At least 20, so small libraries still match.)
+      if (df.get(w)! < Math.max(20, N * 0.05)) {
         let l = inv.get(w);
         if (!l) inv.set(w, (l = []));
         l.push(i);
