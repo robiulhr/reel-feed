@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildQueue } from "../../src/rank";
-import { emptyShared, type State } from "../../src/store";
+import { emptyShared, migrateLocal, type State } from "../../src/store";
 import { makeDataset, NOW } from "../fixtures/data";
 import type { Dataset } from "../../src/types";
 
@@ -10,8 +10,7 @@ const opts = (exclude: string[] = []) => ({ prevVisit: NOW - 86400, exclude: new
 
 beforeEach(() => {
   ds = makeDataset();
-  st = { ...emptyShared(), muted: true, tab: "foryou", win: "all", cat: "all", lastActive: 0, prevVisit: 0,
-    histPaused: false, tipsSeen: true, dataSaver: "off", rate: 1, autoFull: false, volume: 100 };
+  st = migrateLocal({ ...emptyShared(), tipsSeen: true, dataSaver: "off", autoFull: false });
 });
 
 describe("ranking (buildQueue)", () => {

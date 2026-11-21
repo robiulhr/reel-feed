@@ -542,3 +542,8 @@ button[aria-busy="true"] { opacity: 0.65; cursor: progress; }
 .stat { background: var(--panel-2); border-radius: 10px; padding: 12px; }
 .stat b { display: block; font-size: 20px; }
 .stat span { font-size: 12px; color: var(--muted); }
+
+/* Health table values */
+.u-table td.h-val.good { color: #5fd68f; }
+.u-table td.h-val.warn { color: #f5b14c; }
+.u-table td.h-val.bad { color: var(--accent); font-weight: 700; }

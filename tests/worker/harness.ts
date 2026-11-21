@@ -34,8 +34,13 @@ export interface Fake {
 }
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
+export const TOKEN_EXPIRY = "2027-11-20 00:00:00 UTC";
 const json = (status: number, body?: unknown) =>
-  new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  new Response(body === undefined || status === 204 ? null : JSON.stringify(body), {
+    status,
+    // like GitHub: every response tells when the fine-grained token expires
+    headers: { "Content-Type": "application/json", "github-authentication-token-expiration": TOKEN_EXPIRY },
+  });
 
 const CH = {
   UCpricing00000000000000a: { title: "Pricing Lab", customUrl: "@pricinglab", desc: "Pricing psychology and ecommerce offers" },
@@ -111,8 +116,8 @@ export function setup(initialChannels: unknown[] = [{ name: "Hook", handle: "@ho
   };
 }
 
-export async function call(f: Fake, method: string, path: string, opts: { body?: unknown; session?: string; origin?: string; rid?: string } = {}) {
-  const headers: Record<string, string> = { Origin: opts.origin ?? ORIGIN };
+export async function call(f: Fake, method: string, path: string, opts: { body?: unknown; session?: string; origin?: string; rid?: string; ip?: string } = {}) {
+  const headers: Record<string, string> = { Origin: opts.origin ?? ORIGIN, "CF-Connecting-IP": opts.ip ?? "1.2.3.4" };
   if (opts.session) headers.Authorization = `Bearer ${opts.session}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (opts.rid) headers["X-Request-Id"] = opts.rid;

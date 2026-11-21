@@ -88,6 +88,15 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **App dialogs** replace the browser's `confirm`/`prompt` (Delete channel, Clear history, Log out, copy-link fallback).
 - Taps during the slide animation are ignored; "Get newer" can't start two fetches.
 
+### Reliability & security (engineering Phase 2)
+- **Health box** (Menu ☰ → About): sync server reachable, last sync, changes waiting to upload, **GitHub token expiry** (orange under 30 days, with how to renew), app errors in the last 7 days. A once-a-day reminder toast appears when the token has <14 days left. The Worker reads the expiry date from GitHub's own response header — no extra calls.
+- **Crash reporting** (`src/errors.ts`): unexpected errors show a friendly message with *Reload* and are sent to the Worker (max 10 per session; server keeps the newest 50, limited to 20/min). Nothing personal is sent — just the message, place and app version.
+- **Login limit**: 5 wrong passwords from one connection → that connection is locked for 15 minutes (the message tells you how many tries are left). A correct login clears the count.
+- **Security headers**: the site has a strict Content-Security-Policy (only our code, YouTube and the sync server can load) and sends no referrer; the Worker sends `nosniff`, `no-referrer`, `X-Frame-Options: DENY`.
+- **Saved-data versioning**: local data has a version and is upgraded/repaired on start (broken fields get defaults; your settings are kept). If the synced file was written by a **newer** app version, an older copy refuses to overwrite it and asks you to update.
+- **Upload queue cap**: at most 5,000 waiting changes offline; if exceeded, the least important ones go first (seen marks → learning signals → API log), saves/hides are kept.
+- **Dependencies**: Dependabot opens weekly update PRs (app + Worker) and monthly ones for GitHub Actions; each PR runs all tests and `npm audit` before anything can be published.
+
 ### Automated tests (engineering Phase 3) — `tests/`
 | Kind | Tool | What it covers | Run |
 |---|---|---|---|
@@ -349,6 +358,9 @@ npx wrangler deploy                      # prints the Worker address (https://re
 | `git push` rejected (non-fast-forward) on the PC | The app committed `channels.json` — run `git pull`, then push. |
 | Action failed | Usually missing `YOUTUBE_API_KEY` secret or Pages not set to *GitHub Actions*. Check the run log in the Actions tab. |
 | Sync: "GitHub token is invalid or expired" | Make a new token (§4) → `npx wrangler secret put GITHUB_TOKEN`. |
+| Login: "Too many wrong passwords… try again in 15 minutes" | Wait 15 minutes (or use a different network). |
+| About → Health: token "expires in N days" (orange/red) | Make a new token (§4) → `npx wrangler secret put GITHUB_TOKEN` in `worker/`. |
+| "Your data was saved by a newer version of the app" | Close and reopen the app (or About → Check for app update); sync continues after the update. |
 | Sync: "You were logged out" | Password or session secret changed, or 180 days passed — log in again. |
 | Sync: "Sync isn't set up for this copy" | The site was built without `SYNC_URL` (repo variable) — set it and re-run the Action. |
 | A Short is skipped with "creator blocked embedding" | Normal: that creator disabled embedding; it's remembered and skipped. |

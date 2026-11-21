@@ -5,6 +5,8 @@ on:
     - cron: "17 */4 * * *" # every 4 hours
   push:
     branches: [main]
+  pull_request: # e.g. Dependabot library updates — tested, never deployed
+    branches: [main]
   workflow_dispatch: # "Run workflow" button in the Actions tab
 
 permissions:
@@ -13,7 +15,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  # library-update pull requests get their own lane so they never hold up publishing
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'pages' }}
   cancel-in-progress: false
 
 jobs:
@@ -21,7 +24,7 @@ jobs:
   # so a broken version never reaches your phone. Skipped for scheduled refreshes,
   # "Refresh now", and channel-list edits from the app (no code changed → nothing to test).
   test:
-    if: github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'Channels (from app)')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'Channels (from app)'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -31,6 +34,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Security audit (known vulnerabilities in libraries)
+        run: npm audit --audit-level=high
+        continue-on-error: true # warns in the log; Dependabot opens the fix
       - name: Type check
         run: npm run typecheck
       - name: Unit + server tests
@@ -50,7 +56,7 @@ jobs:
   build:
     needs: test
     # run after passing tests, or when tests were skipped (scheduled refresh / channel edits)
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    if: always() && github.event_name != 'pull_request' && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

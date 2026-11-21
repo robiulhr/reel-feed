@@ -112,6 +112,8 @@ async function handle(route: string, req: Request, env: Env, cors: Cors): Promis
         case "POST /search-shorts": return json(await searchShorts(req, env), 200, cors);
         case "POST /refresh": return json(await refresh(env), 200, cors);
         case "GET /status": return json(await runStatus(env), 200, cors);
+        case "GET /health": return json(await health(env), 200, cors);
+        case "POST /log": return json(await logError(req, env), 200, cors);
       }
       return json({ error: "Not found" }, 404, cors);
   }
@@ -135,7 +137,15 @@ function corsHeaders(origin: string, env: Env): Cors | null {
 function json(body: unknown, status = 200, headers: Cors = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...headers },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      // security headers: never sniff types, never leak the URL, never allow framing
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      ...headers,
+    },
   });
 }
 
@@ -165,13 +175,27 @@ async function hmac(env: Env, data: string) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(data)));
 }
 
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_SECONDS = 15 * 60;
+
 async function login(req: Request, env: Env, cors: Cors) {
+  // Login attempt limit: after 5 wrong passwords from one connection, block it for 15 minutes.
+  const ip = req.headers.get("CF-Connecting-IP") ?? "unknown";
+  const failKey = `login-fail:${ip}`;
+  const fails = Number((await env.QUOTA?.get(failKey)) ?? 0);
+  if (fails >= MAX_FAILED_LOGINS) {
+    return json({ error: "Too many wrong passwords. Wait 15 minutes, then try again." }, 429, cors);
+  }
   const body = (await req.json().catch(() => ({}))) as { password?: string };
   const ok = sameBytes(await sha256(String(body.password ?? "")), await sha256(env.APP_PASSWORD));
   if (!ok) {
+    await env.QUOTA?.put(failKey, String(fails + 1), { expirationTtl: LOCKOUT_SECONDS });
+    console.warn(`Wrong password (${fails + 1}/${MAX_FAILED_LOGINS}) from ${ip}`);
     await new Promise((r) => setTimeout(r, 800)); // slows down guessing
-    return json({ error: "Wrong password" }, 401, cors);
+    const left = MAX_FAILED_LOGINS - fails - 1;
+    return json({ error: left > 0 ? `Wrong password (${left} tr${left === 1 ? "y" : "ies"} left before a 15-minute pause)` : "Wrong password. Too many tries — wait 15 minutes." }, 401, cors);
   }
+  if (fails) await env.QUOTA?.delete(failKey);
   const payload = b64url(enc.encode(JSON.stringify({ exp: Date.now() + SESSION_DAYS * 86400_000 })));
   const sig = b64url(await hmac(env, payload));
   return json({ session: `${payload}.${sig}` }, 200, cors);
@@ -191,8 +215,9 @@ async function verifySession(header: string | null, env: Env) {
 }
 
 // ---------- GitHub ----------
-function gh(env: Env, path: string, init: RequestInit = {}) {
-  return fetch(`${env.GITHUB_API ?? "https://api.github.com"}${path}`, {
+let knownTokenExpiry = "";
+async function gh(env: Env, path: string, init: RequestInit = {}) {
+  const r = await fetch(`${env.GITHUB_API ?? "https://api.github.com"}${path}`, {
     ...init,
     headers: {
       Accept: "application/vnd.github+json",
@@ -202,6 +227,48 @@ function gh(env: Env, path: string, init: RequestInit = {}) {
       ...(init.body ? { "Content-Type": "application/json" } : {}),
     },
   });
+  // GitHub tells us when a fine-grained token expires — remember it so the app can warn in time.
+  const exp = r.headers.get("github-authentication-token-expiration");
+  if (exp && exp !== knownTokenExpiry) {
+    knownTokenExpiry = exp;
+    await env.QUOTA?.put("token-exp", exp);
+  }
+  return r;
+}
+
+// ---------- /health, /log ----------
+async function health(env: Env) {
+  let tokenExpires = (await env.QUOTA?.get("token-exp")) ?? null;
+  if (!tokenExpires) {
+    await gh(env, `/repos/${env.DATA_REPO}`); // any call returns the expiry header
+    tokenExpires = (await env.QUOTA?.get("token-exp")) ?? null;
+  }
+  const errors = ((await env.QUOTA?.get("errlog", "json")) ?? []) as ErrorReport[];
+  return { ok: true, tokenExpires, errorsLast7d: errors.filter((e) => Date.now() - e.at < 7 * 86400_000).length, now: Date.now() };
+}
+
+interface ErrorReport { at: number; msg: string; where: string; ver: string; ua: string; stack?: string }
+const MAX_REPORTS_PER_MINUTE = 20;
+
+/** The app reports crashes here; they're printed for `wrangler tail` and the last 50 are kept in KV. */
+async function logError(req: Request, env: Env) {
+  const minute = `lograte:${Math.floor(Date.now() / 60_000)}`;
+  const n = Number((await env.QUOTA?.get(minute)) ?? 0);
+  if (n >= MAX_REPORTS_PER_MINUTE) return { ok: false, reason: "rate limited" };
+  await env.QUOTA?.put(minute, String(n + 1), { expirationTtl: 120 });
+  const b = (await req.json().catch(() => ({}))) as Partial<ErrorReport>;
+  const report: ErrorReport = {
+    at: Date.now(),
+    msg: String(b.msg ?? "").slice(0, 300),
+    where: String(b.where ?? "").slice(0, 200),
+    ver: String(b.ver ?? "").slice(0, 40),
+    ua: String(req.headers.get("User-Agent") ?? "").slice(0, 160),
+    stack: b.stack ? String(b.stack).slice(0, 1500) : undefined,
+  };
+  console.error("App error:", report.msg, "|", report.where, "|", report.ver);
+  const log = ((await env.QUOTA?.get("errlog", "json")) ?? []) as ErrorReport[];
+  await env.QUOTA?.put("errlog", JSON.stringify([report, ...log].slice(0, 50)));
+  return { ok: true };
 }
 
 function b64encode(text: string) {

@@ -1,0 +1,23 @@
+# Dependabot: GitHub checks the libraries this app uses every week and opens a pull request when an
+# update (especially a security fix) is available. The automated tests run on each pull request.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      dev-tools:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+  - package-ecosystem: npm
+    directory: "/worker"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups:
+      worker-tools:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: monthly }

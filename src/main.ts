@@ -10,6 +10,10 @@ import { openSimilar } from "./similar";
 import { historyShorts, renderHistory } from "./history";
 import { checkForUpdate, isSlowNetwork, loadInitial, onNetworkChange } from "./data";
 import { busy, confirmDialog, infoDialog, once, toast, toastError } from "./ui";
+import { installErrorCatcher } from "./errors";
+import { renderHealth, warnIfTokenExpiring } from "./health";
+
+installErrorCatcher(); // first thing: anything that breaks from here on is caught and reported
 import type { AppApi, ExternalChannelInfo } from "./app";
 import type { Dataset, Short, Tab, Win } from "./types";
 
@@ -1079,6 +1083,9 @@ function renderAbout(body: HTMLElement) {
       if (!reg) location.reload();
     })),
   );
+  const healthBox = document.createElement("div");
+  body.append(healthBox);
+  renderHealth(healthBox);
 
   // data saver
   const ds1 = document.createElement("div");
@@ -1251,8 +1258,10 @@ async function boot() {
   );
   if (!first) {
     showEmpty(navigator.onLine
-      ? "Couldn't load Shorts — the connection is very weak.<br><br><button class=\"btn primary\" onclick=\"location.reload()\">Try again</button>"
-      : "You're offline and nothing is saved on this device yet.<br>Connect once and the app will work offline afterwards.");
+      ? "Couldn't load Shorts — the connection is very weak.<br><br>"
+      : "You're offline and nothing is saved on this device yet.<br>Connect once and the app will work offline afterwards.<br><br>");
+    // no inline onclick (blocked by the security policy) — a real listener instead
+    el.empty.append(button("Try again", () => location.reload(), "btn primary"));
     return;
   }
   setData(first.ds, false);
@@ -1261,6 +1270,7 @@ async function boot() {
   console.info(`First video in ${Math.round(performance.now() - t0)} ms (from ${first.source})`);
 
   if (!state.tipsSeen) el.tips.hidden = false;
+  window.setTimeout(warnIfTokenExpiring, 5000); // early warning before the GitHub token expires
   applyNetwork();
 
   // Continue where you left off

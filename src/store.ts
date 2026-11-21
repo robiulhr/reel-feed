@@ -34,6 +34,7 @@ export interface DevicePrefs {
   rate: number; // playback speed
   autoFull: boolean; // go full screen on the first tap (phones, in the browser)
   volume: number; // 0–100
+  sv: number; // version of this saved data on the device (see migrateLocal)
 }
 
 export type State = Shared & DevicePrefs;
@@ -65,7 +66,7 @@ const defaults = (): State => ({
   ...emptyShared(),
   muted: true, tab: "foryou", win: "all", cat: "all",
   lastActive: 0, prevVisit: 0,
-  histPaused: false, tipsSeen: false, dataSaver: "auto", rate: 1, autoFull: true, volume: 100,
+  histPaused: false, tipsSeen: false, dataSaver: "auto", rate: 1, autoFull: true, volume: 100, sv: LOCAL_VERSION,
 });
 
 function read<T>(key: string, fallback: T): T {
@@ -76,9 +77,40 @@ function read<T>(key: string, fallback: T): T {
   return fallback;
 }
 
-export const state: State = { ...defaults(), ...read<Partial<State>>(STORAGE_KEY, {}) };
+/**
+ * Versions of the saved data. Bump a version and add a step to the migration when the shape changes,
+ * so data saved by an older version of the app is upgraded instead of breaking.
+ *   LOCAL_VERSION — this device (localStorage).  FILE_VERSION — the synced user-state.json.
+ */
+export const LOCAL_VERSION = 2;
+export const FILE_VERSION = 1;
+
+export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
+  const s = { ...defaults(), ...raw } as State;
+  // v1 → v2: data written before versioning existed; make sure every list/map exists and has the right type
+  if (!raw.sv || raw.sv < 2) {
+    for (const k of ["saved", "hidden", "bad", "apiLog", "hist"] as const) if (!Array.isArray(s[k])) (s as any)[k] = [];
+    for (const k of ["seen", "affCh", "affCat"] as const) if (!s[k] || typeof s[k] !== "object") (s as any)[k] = {};
+  }
+  s.sv = LOCAL_VERSION;
+  return s;
+}
+
+export const state: State = migrateLocal(read<Partial<State> & Record<string, unknown>>(STORAGE_KEY, {}));
 /** Changes not yet uploaded to GitHub. Kept locally so nothing is lost offline. */
-export const pending: Op[] = read<Op[]>(PENDING_KEY, []);
+export const pending: Op[] = (() => { const p = read<unknown>(PENDING_KEY, []); return Array.isArray(p) ? (p as Op[]) : []; })();
+const MAX_PENDING = 5000;
+
+/** Keeps the upload queue bounded after long offline periods: drops the least important changes first. */
+export function capPending(list: Op[], max = MAX_PENDING) {
+  if (list.length <= max) return;
+  for (const kind of ["seen", "learn", "api"] as const) {
+    for (let i = 0; i < list.length && list.length > max; ) {
+      if (list[i].t === kind) list.splice(i, 1); else i++;
+    }
+  }
+  if (list.length > max) list.splice(0, list.length - max);
+}
 
 let timer: number | undefined;
 let dirty = false;
@@ -180,6 +212,7 @@ export function onChange(fn: Listener) { listeners.push(fn); }
 export function act(op: Op) {
   applyOp(state, op);
   pending.push(op);
+  capPending(pending);
   persist();
   for (const fn of listeners) fn();
 }
@@ -199,7 +232,7 @@ export function learn(ch: { h: string; cat: string }, delta: number) {
 
 // ---------- file format for the GitHub copy ----------
 export interface StateFile {
-  v: 1;
+  v: number;
   updatedAt: string;
   saved: string[];
   hidden: string[];
@@ -215,14 +248,21 @@ export function toFile(s: Shared): StateFile {
   trimSeen(s);
   const seen = Object.keys(s.seen).sort((a, b) => s.seen[a] - s.seen[b]);
   return {
-    v: 1, updatedAt: new Date().toISOString(),
+    v: FILE_VERSION, updatedAt: new Date().toISOString(),
     saved: s.saved, hidden: s.hidden, seen, bad: s.bad, affCh: s.affCh, affCat: s.affCat, apiLog: s.apiLog, hist: s.hist,
   };
+}
+
+/** Thrown when the synced file was written by a newer version of the app than this one. */
+export class NewerDataError extends Error {
+  constructor() { super("Your data was saved by a newer version of the app. Close and reopen the app to update it, then sync continues."); }
 }
 
 export function fromFile(f: Partial<StateFile> | null): Shared {
   const s = emptyShared();
   if (!f) return s;
+  // Never overwrite data this version doesn't understand (an old phone mustn't clobber newer data).
+  if (typeof f.v === "number" && f.v > FILE_VERSION) throw new NewerDataError();
   s.saved = f.saved ?? [];
   s.hidden = f.hidden ?? [];
   s.bad = f.bad ?? [];
