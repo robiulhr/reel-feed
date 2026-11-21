@@ -9,6 +9,7 @@ import { openChannel } from "./explore";
 import { openSimilar } from "./similar";
 import { historyShorts, renderHistory } from "./history";
 import { checkForUpdate, isSlowNetwork, loadInitial, onNetworkChange } from "./data";
+import { busy, confirmDialog, infoDialog, once, toast, toastError } from "./ui";
 import type { AppApi, ExternalChannelInfo } from "./app";
 import type { Dataset, Short, Tab, Win } from "./types";
 
@@ -105,19 +106,6 @@ function setThumb(img: HTMLImageElement, id: string, big: boolean) {
 }
 const thumb = (img: HTMLImageElement, id: string) => setThumb(img, id, false);
 
-let toastTimer: number | undefined;
-function toast(msg: string, action?: { label: string; run: () => void }, ms?: number) {
-  clearTimeout(toastTimer);
-  el.toast.replaceChildren(document.createTextNode(msg));
-  if (action) {
-    const b = document.createElement("button");
-    b.textContent = action.label;
-    b.onclick = () => { action.run(); el.toast.hidden = true; };
-    el.toast.append(b);
-  }
-  el.toast.hidden = false;
-  toastTimer = window.setTimeout(() => (el.toast.hidden = true), ms ?? (action ? 6000 : 2600));
-}
 
 let bannerAction: (() => void) | null = null;
 function banner(msg: string | null, onTap?: () => void) {
@@ -537,6 +525,7 @@ el.tap.addEventListener("touchcancel", () => { drag.on = false; endHold(); snapB
 let lastClick = 0, lastZone = "", clickTimer: number | undefined;
 el.tap.addEventListener("click", (e) => {
   if (swiped) { swiped = false; return; }
+  if (animating) return; // a tap during the slide animation belongs to neither video
   const r = el.tap.getBoundingClientRect();
   const rel = (e.clientX - r.left) / r.width;
   const zone = rel < 0.33 ? "left" : rel > 0.67 ? "right" : "mid";
@@ -728,7 +717,8 @@ async function refreshFeed() {
 el.refreshBtn.onclick = refreshFeed;
 
 let watchTimer: number | undefined;
-async function fetchFromYouTube() {
+const fetchFromYouTube = once(fetchFromYouTubeNow); // tapping "Get newer" twice starts one fetch
+async function fetchFromYouTubeNow() {
   try {
     await sync.call("/refresh", { method: "POST" });
     toast("Getting new Shorts from YouTube — about 3 minutes. A banner will appear when they're ready.", undefined, 6000);
@@ -741,7 +731,7 @@ async function fetchFromYouTube() {
       if (r === "new") clearInterval(watchTimer);
     }, 45_000);
   } catch (e) {
-    toast(e instanceof Error ? e.message : "Couldn't start the refresh");
+    toastError(e instanceof Error ? e.message : "Couldn't start the refresh", () => fetchFromYouTube());
   }
 }
 
@@ -988,11 +978,12 @@ function para(text: string, cls = "") {
   if (cls) p.className = cls;
   return p;
 }
-function button(label: string, onClick: () => void, cls = "btn") {
+function button(label: string, onClick: (b: HTMLButtonElement) => unknown, cls = "btn") {
   const b = document.createElement("button");
   b.className = cls;
+  b.type = "button";
   b.textContent = label;
-  b.onclick = onClick;
+  b.onclick = () => onClick(b);
   return b;
 }
 
@@ -1081,12 +1072,12 @@ function renderAbout(body: HTMLElement) {
   const builtAt = new Date(__BUILD__);
   body.append(
     para(`App version: ${builtAt.toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`, "ver"),
-    button("Check for app update", async () => {
+    button("Check for app update", (b) => busy(b, "Checking…", async () => {
       const reg = await navigator.serviceWorker?.getRegistration();
       await reg?.update().catch(() => {});
       toast(reg?.installing || reg?.waiting ? "Updating — the app will reload" : "Checked ✓ — if the version above doesn't change, close the app fully and open it again");
       if (!reg) location.reload();
-    }),
+    })),
   );
 
   // data saver
@@ -1136,9 +1127,14 @@ function renderSyncPanel(body: HTMLElement) {
     if (st.lastError) body.append(para(`Problem: ${st.lastError}`, "error"));
     body.append(
       para("Every sync is a commit in your private GitHub repo, so GitHub keeps every earlier version as a backup."),
-      button("Sync now", async () => { await sync.syncNow(); renderPanel(); }),
-      button("Log out this device", () => {
-        if (confirm("Log out this device? Your data stays in GitHub.")) { sync.disconnect(); resetChannels(); renderPanel(); }
+      button("Sync now", (b) => busy(b, "Syncing…", async () => { await sync.syncNow(); renderPanel(); })),
+      button("Log out this device", async () => {
+        const ok = await confirmDialog({
+          title: "Log out this device?",
+          body: "Your saves, history and learning stay safe in GitHub. You can log in again any time.",
+          confirm: "Log out", danger: true,
+        });
+        if (ok) { sync.disconnect(); resetChannels(); renderPanel(); }
       }, "btn danger"),
     );
     return;
@@ -1154,21 +1150,15 @@ function renderSyncPanel(body: HTMLElement) {
   const go = button("Log in", () => {}, "btn primary");
   go.type = "submit";
   form.append(go, err);
-  form.onsubmit = async (e) => {
+  form.onsubmit = (e) => {
     e.preventDefault();
     const data = new FormData(form);
-    go.disabled = true;
-    go.textContent = "Logging in…";
     err.textContent = "";
-    const msg = await sync.connect(String(data.get("password") ?? ""));
-    if (msg) {
-      err.textContent = msg;
-      go.disabled = false;
-      go.textContent = "Log in";
-    } else {
-      toast("Logged in — your data is synced");
-      renderPanel();
-    }
+    busy(go, "Logging in…", async () => {
+      const msg = await sync.connect(String(data.get("password") ?? ""));
+      if (msg) err.textContent = msg;
+      else { toast("Logged in — your data is synced"); renderPanel(); }
+    });
   };
   body.append(form);
 }
@@ -1208,7 +1198,11 @@ async function shareCurrent() {
     await navigator.clipboard.writeText(url);
     toast("Link copied");
   } catch {
-    window.prompt("Copy this link:", url);
+    // Clipboard blocked: show the link in a dialog, already selected, ready to copy.
+    const input = Object.assign(document.createElement("input"), { value: url, readOnly: true });
+    input.onfocus = () => input.select();
+    infoDialog("Copy this link", input);
+    setTimeout(() => input.select(), 50);
   }
 }
 

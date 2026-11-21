@@ -78,6 +78,16 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - Keys: `←/→` (or `h/l`) 10 s, `↑/↓` (or `j/k`) previous/next, `c` channel, `f` full screen.
 - Skipped seconds don't count as "watched" for learning or history.
 
+### Robustness (engineering Phase 1) — `src/ui.ts`, `src/sync.ts`, Worker `withRequestId`
+- **Buttons lock while working** (`busy()`): Add, Remove, Restore, Delete, Refresh now, Search, Log in, Sync now, Check for app update… show "…"/"Adding…" and ignore extra taps.
+- **Channel changes are queued**: they show instantly; changes within 0.4 s are **combined into one save** (= one GitHub commit, one refresh); saves go one at a time; a change that no longer makes sense (e.g. deleting something already deleted) is dropped instead of failing the save. On failure everything is put back on screen, with **Try again**.
+- **Duplicate protection on the server**: every change carries an `X-Request-Id`; the Worker remembers each ID for 10 min (KV `rid:*`) and returns the saved answer for a repeat (`X-Repeat: 1`). Two identical requests at the same moment → applied once (the second waits for the first). Tested.
+- **Time limits + retries** on every sync-server call (15–25 s; reads retried up to 2×, changes 1× — safe thanks to the request ID). Plain messages: "too slow", "offline", "couldn't reach GitHub or YouTube — nothing was changed".
+- **Newest request wins**: an older lookup/search answer that arrives late is ignored; repeating the same lookup while it runs is ignored.
+- **Message queue**: messages no longer overwrite each other; errors are red, stay longer, have ✕ and often **Try again**.
+- **App dialogs** replace the browser's `confirm`/`prompt` (Delete channel, Clear history, Log out, copy-link fallback).
+- Taps during the slide animation are ignored; "Get newer" can't start two fetches.
+
 ### Sound
 - **Tap 🔊** = mute/unmute; unmuting shows a **volume slider** for 3 s. **Press and hold 🔊** = volume slider any time.
 - Volume (with Mute) is also at the top of the **⋯** menu, next to Speed. Icon shows the level 🔇 🔈 🔉 🔊; volume is remembered per device. Keys: `+` / `−` volume, `m` mute.

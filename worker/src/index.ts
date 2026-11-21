@@ -54,6 +54,52 @@ export default {
       if (!(await verifySession(req.headers.get("Authorization"), env))) {
         return json({ error: "Please log in again" }, 401, cors);
       }
+      return await withRequestId(req, env, cors, () => handle(route, req, env, cors));
+    } catch (e) {
+      // Visible in `npx wrangler tail` and the Cloudflare dashboard logs
+      console.error(`${route} failed:`, e instanceof Error ? e.message : e);
+      if (e instanceof HttpError) return json({ error: e.message }, e.status, cors);
+      // Unexpected (e.g. GitHub/YouTube briefly unreachable): plain-language message, details in the log.
+      return json({ error: "Couldn't reach GitHub or YouTube just now — nothing was changed. Try again in a moment." }, 503, cors);
+    }
+  },
+};
+
+/**
+ * Duplicate protection: the app sends an X-Request-Id with every change and reuses it when it
+ * retries. If we've already handled that ID (double tap, retry after a timeout), we return the
+ * saved answer instead of doing the work again — so a change can never be applied twice.
+ */
+async function withRequestId(req: Request, env: Env, cors: Cors, run: () => Promise<Response>): Promise<Response> {
+  const rid = req.headers.get("X-Request-Id") ?? "";
+  if (req.method === "GET" || !env.QUOTA || !/^[\w-]{8,80}$/.test(rid)) return run();
+  const key = `rid:${rid}`;
+  let seen = (await env.QUOTA.get(key, "json")) as { status: number; body: string } | null;
+  // The first copy is still running: wait for its answer (up to ~10 s) instead of running it again.
+  for (let i = 0; seen?.status === 0 && i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    seen = (await env.QUOTA.get(key, "json")) as typeof seen;
+  }
+  if (seen) {
+    if (seen.status === 0) return json({ error: "Still working on this request — check again in a moment" }, 409, cors);
+    return new Response(seen.body, { status: seen.status, headers: { "Content-Type": "application/json", "X-Repeat": "1", ...cors } });
+  }
+  await env.QUOTA.put(key, JSON.stringify({ status: 0, body: "" }), { expirationTtl: 600 }); // in progress
+  let res: Response;
+  try {
+    res = await run();
+  } catch (e) {
+    await env.QUOTA.delete(key); // failed — allow a real retry
+    throw e;
+  }
+  if (res.status >= 500) { await env.QUOTA.delete(key); return res; }
+  const body = await res.clone().text();
+  if (body.length < 100_000) await env.QUOTA.put(key, JSON.stringify({ status: res.status, body }), { expirationTtl: 600 });
+  return res;
+}
+
+async function handle(route: string, req: Request, env: Env, cors: Cors): Promise<Response> {
+  {
       switch (route) {
         case "GET /state": return json(await readJsonFile(env, env.DATA_REPO, STATE_FILE), 200, cors);
         case "PUT /state": return await putState(req, env, cors);
@@ -68,14 +114,8 @@ export default {
         case "GET /status": return json(await runStatus(env), 200, cors);
       }
       return json({ error: "Not found" }, 404, cors);
-    } catch (e) {
-      // Visible in `npx wrangler tail` and the Cloudflare dashboard logs
-      console.error(`${route} failed:`, e instanceof Error ? e.message : e);
-      if (e instanceof HttpError) return json({ error: e.message }, e.status, cors);
-      return json({ error: e instanceof Error ? e.message : "Server error" }, 500, cors);
-    }
-  },
-};
+  }
+}
 
 // ---------- CORS ----------
 const DEV_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/;
@@ -86,7 +126,7 @@ function corsHeaders(origin: string, env: Env): Cors | null {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Request-Id",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };

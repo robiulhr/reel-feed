@@ -4,6 +4,7 @@
  */
 import type { AppApi } from "./app";
 import { act, persist, state, type HistItem } from "./store";
+import { confirmDialog } from "./ui";
 import type { Short } from "./types";
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
@@ -55,9 +56,14 @@ export function renderHistory(body: HTMLElement, app: AppApi, byId: Map<string, 
   const pause = el("button", "btn sm", state.histPaused ? "▶ Resume history" : "⏸ Pause history");
   pause.onclick = () => { state.histPaused = !state.histPaused; persist(); rerender(); };
   const clear = el("button", "btn sm danger", "Clear all");
-  clear.onclick = () => {
+  clear.onclick = async () => {
     if (!state.hist.length) return;
-    if (confirm("Clear your whole watch history on all devices?")) { act({ t: "histClear" }); rerender(); }
+    const ok = await confirmDialog({
+      title: "Clear your whole watch history?",
+      body: "This clears it on all your devices. (Your saved Shorts and what the feed learned stay.)",
+      confirm: "Clear history", danger: true,
+    });
+    if (ok) { act({ t: "histClear" }); rerender(); }
   };
   head.append(search, pause, clear);
   body.append(head);

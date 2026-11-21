@@ -402,6 +402,24 @@ p { margin: 0; }
 .sim-chan-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .sim-chan-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- Toast extras + dialogs ---------- */
+.toast.error { background: #3a1520; border: 1px solid rgba(255, 59, 92, 0.5); }
+.toast .toast-x { color: var(--muted); font-weight: 400; padding: 0 2px; }
+.dlg-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; padding: 16px; }
+.dlg {
+  width: min(400px, 100%); background: var(--panel); border-radius: 14px; padding: 16px;
+  display: flex; flex-direction: column; gap: 10px; max-height: 90dvh; overflow-y: auto;
+}
+.dlg-title { font-weight: 800; font-size: 16px; line-height: 1.3; }
+.dlg-body { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.5; white-space: pre-line; }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dlg-actions .btn { margin: 0; padding: 10px 14px; }
+.btn.danger-solid { background: var(--accent); color: #fff; font-weight: 700; }
+.dlg input[readonly] {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; color: var(--text); font: inherit;
+}
+button[aria-busy="true"] { opacity: 0.65; cursor: progress; }
+
 /* ---------- Cost card (quota guard) ---------- */
 .cost-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; padding: 16px; }
 .cost-card {

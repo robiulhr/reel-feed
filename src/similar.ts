@@ -138,6 +138,7 @@ interface SearchResult {
 }
 interface SearchResponse { q: string; results: SearchResult[]; units: number; cached: boolean; fetchedAt: number; quota?: { used: number; budget: number } }
 
+let searching = false;
 const searches = new Map<string, SearchResponse>(); // by source Short id (this session)
 const queries = new Map<string, string>();
 
@@ -210,7 +211,12 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
     body.append(resultsBox);
 
     const runSearch = async (q: string) => {
+      if (searching) return; // double tap — one search is already on its way
       if (!sync.isConnected()) { app.toast("Log in first (Menu → Sync)"); return; }
+      searching = true;
+      try { await doSearch(q); } finally { searching = false; }
+    };
+    const doSearch = async (q: string) => {
       const quota = await getQuota();
       const past = quota ? similarPastSearch(q, quota.recent) : null;
       const free: { label: string; run: () => void }[] = [];

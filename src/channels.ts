@@ -10,6 +10,7 @@ import { CATS } from "./rank";
 import { act, state } from "./store";
 import * as sync from "./sync";
 import { COST, confirmCost, noteSpend, spendToast } from "./quota";
+import { busy, confirmDialog, latest, toastError } from "./ui";
 import type { Channel, Dataset } from "./types";
 
 export interface ChannelsCtx {
@@ -79,7 +80,7 @@ let entries: Entry[] | null = null; // from GitHub (source of truth); null = not
 let loading = false;
 let loadError = "";
 const view = { q: "", cat: "all", status: "listed", sort: "name" };
-const add = { open: false, q: "", busy: false, msg: "", results: [] as LookupResult[], needsSearch: false };
+const add = { open: false, q: "", busy: false, pendingKey: "", msg: "", results: [] as LookupResult[], needsSearch: false };
 const lookupCache = new Map<string, { results: LookupResult[]; needsSearch: boolean }>();
 let runText = "";
 const prevStatus = new Map<string, Channel["st"]>();
@@ -96,10 +97,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") 
   if (text) e.textContent = text;
   return e;
 };
-const btn = (label: string, onClick: () => void, cls = "btn sm") => {
+const btn = (label: string, onClick: (b: HTMLButtonElement) => void, cls = "btn sm") => {
   const b = el("button", cls, label);
   b.type = "button";
-  b.onclick = onClick;
+  b.onclick = () => onClick(b);
   return b;
 };
 const ytUrl = (h: string) => (h.startsWith("@") ? `https://www.youtube.com/${h}` : `https://www.youtube.com/channel/${h}`);
@@ -181,51 +182,118 @@ function applyFeed(op: Op) {
 /** Why the last change failed (shown next to the button that was pressed, not only as a toast). */
 export let lastChangeError = "";
 
-async function change(ops: Op[], success: string, undo?: { label: string; run: () => void }) {
-  const fail = (msg: string) => { lastChangeError = msg; ctx.toast(msg); return false; };
+/**
+ * Channel changes go through a queue:
+ *  - they show instantly (list + feed),
+ *  - changes made within ~0.4 s of each other are combined into ONE save (= one GitHub commit,
+ *    one refresh) — e.g. flicking through categories, or Remove on several channels,
+ *  - saves are sent strictly one after another (never two at the same time),
+ *  - a change that no longer makes sense (deleting something already gone, adding something already
+ *    listed) is dropped instead of failing the whole save.
+ */
+interface Job {
+  ops: Op[]; success: string; undo?: { label: string; run: () => void };
+  entriesBefore: Entry[]; dsBefore: { st: Channel["st"]; cat: Channel["cat"] }[];
+  resolve: (ok: boolean) => void;
+}
+let jobs: Job[] = [];
+let flushTimer: number | undefined;
+let sending: Promise<void> = Promise.resolve();
+const BATCH_MS = 400;
+
+function stillValid(op: Op): boolean {
+  const e = entries?.find((x) => "h" in op && lc(x.handle) === lc(op.h));
+  switch (op.t) {
+    case "add": return !entries?.some((x) => (lc(x.handle) === lc(op.channel.handle) || (op.channel.id && x.id === op.channel.id)) && x.status !== "removed");
+    case "remove": return !!e && e.status !== "removed";
+    case "restore": return !!e && e.status === "removed";
+    case "delete": return !!e && e.status === "removed";
+    case "cat": return !!e && e.cat !== op.cat;
+  }
+}
+
+async function change(ops: Op[], success: string, undo?: { label: string; run: () => void }): Promise<boolean> {
+  const fail = (msg: string) => { lastChangeError = msg; toastError(msg); return false; };
   if (!sync.isConnected()) return fail("Log in first (Menu → Sync) to add or edit channels");
   if (!entries) await loadEntries();
   if (!entries) return fail(loadError || "Couldn't load the channel list — check your connection");
-  const before = structuredClone(entries);
-  const dsBefore = ctx.ds.channels.map((c) => ({ st: c.st, cat: c.cat }));
+  ops = ops.filter(stillValid);
+  if (!ops.length) return true; // already done (double tap)
+  const job: Job = {
+    ops, success, undo, resolve: () => {},
+    entriesBefore: structuredClone(entries),
+    dsBefore: ctx.ds.channels.map((c) => ({ st: c.st, cat: c.cat })),
+  };
   for (const op of ops) { applyLocal(entries, op); applyFeed(op); }
   renderHead();
   renderList();
+  const done = new Promise<boolean>((resolve) => (job.resolve = resolve));
+  jobs.push(job);
+  clearTimeout(flushTimer);
+  flushTimer = window.setTimeout(flush, BATCH_MS);
+  return done;
+}
+
+function flush() {
+  const batch = jobs;
+  jobs = [];
+  if (batch.length) sending = sending.then(() => send(batch));
+}
+
+/** Combine the batch's changes: later category changes replace earlier ones for the same channel. */
+function combine(batch: Job[]): Op[] {
+  const ops = batch.flatMap((j) => j.ops);
+  const lastCat = new Map<string, number>();
+  ops.forEach((op, i) => { if (op.t === "cat") lastCat.set(lc(op.h), i); });
+  return ops.filter((op, i) => op.t !== "cat" || lastCat.get(lc(op.h)) === i);
+}
+
+async function send(batch: Job[]) {
+  const ops = combine(batch);
   try {
     const r = await sync.call<{ data: Entry[] }>("/channels", { method: "POST", body: JSON.stringify({ ops }) });
     entries = r.data;
+    for (const j of jobs) for (const op of j.ops) applyLocal(entries, op); // keep later, not-yet-sent changes visible
     lastChangeError = "";
-    ctx.toast(success, undo);
+    if (batch.length === 1) ctx.toast(batch[0].success, batch[0].undo);
+    else ctx.toast(`Saved ${batch.length} changes ✓ — one refresh starts now`);
     runText = "Refresh starting — new data in about 3 minutes";
-    renderHead();
-    renderList();
-    return true;
+    batch.forEach((j) => j.resolve(true));
   } catch (e) {
-    // undo the instant changes (list + feed)
-    entries = before;
-    dsBefore.forEach((b, i) => { const c = ctx.ds.channels[i]; if (c) { c.st = b.st; c.cat = b.cat; } });
+    // Undo this batch's instant changes (list + feed), then show why, with a Try again button.
+    entries = batch[0].entriesBefore;
+    for (const j of jobs) for (const op of j.ops) applyLocal(entries, op);
+    batch[0].dsBefore.forEach((b, i) => { const c = ctx.ds.channels[i]; if (c) { c.st = b.st; c.cat = b.cat; } });
     ctx.onFeedChange();
+    const msg = e instanceof Error ? e.message : "Couldn't save the change";
+    lastChangeError = msg;
+    toastError(msg, () => { for (const j of batch) change(j.ops, j.success, j.undo); });
+    batch.forEach((j) => j.resolve(false));
+  } finally {
     renderHead();
     renderList();
-    return fail(e instanceof Error ? e.message : "Couldn't save the change");
   }
 }
 
 // ---------- actions ----------
 function removeChannel(e: Entry, d?: Channel) {
   const n = d?.cnt ?? 0;
-  change(
+  return change(
     [{ t: "remove", h: e.handle }],
     `Removed ${e.name}${n ? ` — ${n} Shorts left your feed` : ""}. Restore any time under "Removed".`,
     { label: "Undo", run: () => restoreChannel(e) },
   );
 }
 function restoreChannel(e: Entry) {
-  change([{ t: "restore", h: e.handle }], `Restored ${e.name}`);
+  return change([{ t: "restore", h: e.handle }], `Restored ${e.name}`);
 }
-function deleteChannel(e: Entry) {
-  if (!confirm(`Delete ${e.name} permanently?\n\nIt disappears from the Removed list and can't be restored from the app (GitHub history still has it).`)) return;
-  change([{ t: "delete", h: e.handle }], `Deleted ${e.name} permanently`);
+async function deleteChannel(e: Entry) {
+  const ok = await confirmDialog({
+    title: `Delete ${e.name} permanently?`,
+    body: "It disappears from the Removed list and can't be restored from the app (GitHub history still has it).",
+    confirm: "Delete", danger: true,
+  });
+  if (ok) await change([{ t: "delete", h: e.handle }], `Deleted ${e.name} permanently`);
 }
 function setCat(e: Entry, cat: string) {
   change([{ t: "cat", h: e.handle, cat }], `${e.name} → ${CATS.find((c) => c.id === cat)?.label ?? cat}`);
@@ -242,7 +310,7 @@ async function refreshNow() {
     ctx.toast("Refresh started");
     setTimeout(loadRunStatus, 8000);
   } catch (e) {
-    ctx.toast(e instanceof Error ? e.message : "Couldn't start the refresh");
+    toastError(e instanceof Error ? e.message : "Couldn't start the refresh", () => refreshNow());
   }
   renderHead();
 }
@@ -269,7 +337,10 @@ async function doLookup(search: boolean) {
     });
     if (!ok) return;
   }
+  if (add.busy && add.pendingKey === key) return; // same lookup already running (double tap)
+  const tok = lookupReq.next();
   add.busy = true;
+  add.pendingKey = key;
   add.msg = search ? "Searching YouTube…" : "Looking up…";
   add.results = [];
   renderAdd();
@@ -277,23 +348,26 @@ async function doLookup(search: boolean) {
     const r = await sync.call<{ results: LookupResult[]; units: number; needsSearch: boolean; quota?: { used: number; budget: number } }>("/lookup", {
       method: "POST", body: JSON.stringify({ q, search }),
     });
-    if (r.units) {
-      noteSpend(r.units, `${search ? "Channel search" : "Look up"} "${q.slice(0, 60)}"`, r.quota);
-      if (search) ctx.toast(spendToast(r.units, r.quota, false));
-    }
+    if (r.units) noteSpend(r.units, `${search ? "Channel search" : "Look up"} "${q.slice(0, 60)}"`, r.quota);
+    lookupCache.set(key, { results: r.results, needsSearch: r.needsSearch || (!search && !r.results.length) });
+    if (!lookupReq.isLatest(tok)) return; // you started a newer lookup — don't show this old answer
+    if (r.units && search) ctx.toast(spendToast(r.units, r.quota, false));
     add.results = r.results;
     add.needsSearch = r.needsSearch || (!search && !r.results.length);
     add.msg = r.results.length
       ? `Found ${r.results.length} · used ${r.units} API unit${r.units === 1 ? "" : "s"}`
       : r.needsSearch ? "" : "No channel found with that handle or link.";
-    lookupCache.set(key, { results: r.results, needsSearch: add.needsSearch });
   } catch (e) {
-    add.msg = e instanceof Error ? e.message : "Lookup failed";
+    if (lookupReq.isLatest(tok)) add.msg = e instanceof Error ? e.message : "Lookup failed";
   } finally {
-    add.busy = false;
-    renderAdd();
+    if (lookupReq.isLatest(tok)) {
+      add.busy = false;
+      add.pendingKey = "";
+      renderAdd();
+    }
   }
 }
+const lookupReq = latest();
 
 // ---------- rendering ----------
 export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
@@ -362,7 +436,7 @@ function renderHead() {
   const actions = el("div", "ch-head-actions");
   actions.append(
     btn(add.open ? "Close" : "+ Add channel", () => { add.open = !add.open; renderHead(); renderAdd(); }, "btn sm primary"),
-    btn("↻ Refresh now", refreshNow),
+    btn("↻ Refresh now", (b) => busy(b, "Starting…", refreshNow)),
   );
   top.append(actions);
   headEl.append(top);
@@ -397,7 +471,7 @@ function renderAdd() {
     "Handles and links cost 2–3 API units. A name search costs ~100 (of 10,000 per day), so it only runs when you ask."));
   if (add.msg) addEl.append(el("p", "ch-note", add.msg));
   if (add.needsSearch && !add.busy) {
-    addEl.append(btn(`Search YouTube for "${add.q.trim()}" (~100 units)`, () => doLookup(true)));
+    addEl.append(btn(`Search YouTube for "${add.q.trim()}" (~100 units)`, (b) => busy(b, "Searching…", () => doLookup(true))));
   }
   setTimeout(() => { if (document.activeElement === document.body) input.focus(); });
 
@@ -428,18 +502,15 @@ function renderAdd() {
     cat.setAttribute("aria-label", "Category");
     for (const x of CAT_OPTIONS) cat.append(new Option(x.label, x.id));
     cat.value = r.suggestedCat;
-    const addBtn = btn(existing && existing.status === "removed" ? "Restore" : "Add", async () => {
-      addBtn.disabled = true;
+    const addBtn = btn(existing && existing.status === "removed" ? "Restore" : "Add", (b) => busy(b, "Adding…", async () => {
+      errNote.textContent = "";
       const ok = await change(
         [{ t: "add", channel: { name: r.name, handle: r.handle, id: r.id, cat: cat.value } }],
         `Added ${r.name} — its Shorts appear after the refresh (~3 min)`,
       );
       if (ok) { add.results = add.results.filter((x) => x.id !== r.id); renderAdd(); }
-      else {
-        addBtn.disabled = false;
-        errNote.textContent = `Not added: ${lastChangeError}`;
-      }
-    }, "btn sm primary");
+      else errNote.textContent = `Not added: ${lastChangeError}`;
+    }), "btn sm primary");
     if (existing && existing.status !== "removed") addBtn.disabled = true;
     const preview = btn(r.shorts ? "Preview Shorts" : "View channel", () =>
       ctx.explore({ id: r.id, name: r.name, handle: r.handle, thumb: r.thumb, subs: r.subs, suggestedCat: cat.value }), "btn sm");
@@ -513,7 +584,7 @@ function renderList() {
 
     const actions = el("div", "ch-actions");
     if (st === "removed") {
-      actions.append(btn("Restore", () => restoreChannel(e), "btn sm"), btn("Delete", () => deleteChannel(e), "btn sm danger"));
+      actions.append(btn("Restore", (b) => busy(b, "…", () => restoreChannel(e)), "btn sm"), btn("Delete", (b) => busy(b, "…", () => deleteChannel(e)), "btn sm danger"));
     } else {
       const cat = el("select") as HTMLSelectElement;
       cat.setAttribute("aria-label", "Category");
@@ -524,7 +595,7 @@ function renderList() {
       actions.append(
         cat,
         btn(isHidden ? "Unhide" : "Hide", () => toggleHide(e.handle, isHidden), "btn sm"),
-        btn("Remove", () => removeChannel(e, ch), "btn sm danger"),
+        btn("Remove", (b) => busy(b, "…", () => removeChannel(e, ch)), "btn sm danger"),
       );
     }
     if (!canEdit) actions.querySelectorAll("button").forEach((b) => { if (b.textContent !== "Hide" && b.textContent !== "Unhide") b.disabled = true; });

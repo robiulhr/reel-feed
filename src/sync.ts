@@ -47,21 +47,53 @@ export async function call<T = any>(path: string, init: RequestInit = {}): Promi
   return r.json() as Promise<T>;
 }
 
+const TIMEOUT_MS = 15_000;
+const SLOW_PATHS = ["/lookup", "/search-shorts", "/channel-shorts", "/channels"]; // YouTube/GitHub round-trips
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * One request to the sync server, made robust:
+ *  - time limit (no endless "Loading…"),
+ *  - automatic retries on network errors / server hiccups (GETs up to 2×, changes 1×),
+ *  - a request ID that stays the same across retries, so the server can recognise a repeat
+ *    and never apply the same change twice (double taps, flaky networks).
+ */
 async function api(path: string, init: RequestInit = {}) {
-  const r = await fetch(`${SYNC_URL}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      ...(cfg ? { Authorization: `Bearer ${cfg.session}` } : {}),
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-    },
-  });
-  if (r.status === 401 && path !== "/login") {
-    cfg = null;
-    saveCfg(null);
-    throw new AuthError("You were logged out (password changed or session expired). Log in again.");
+  const method = (init.method ?? "GET").toUpperCase();
+  const isChange = method !== "GET";
+  const rid = isChange ? (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`) : "";
+  const timeout = SLOW_PATHS.some((p) => path.startsWith(p)) ? 25_000 : TIMEOUT_MS;
+  const tries = isChange ? 2 : 3;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      const r = await fetch(`${SYNC_URL}${path}`, {
+        ...init,
+        cache: "no-store",
+        signal: AbortSignal.timeout(timeout),
+        headers: {
+          ...(cfg ? { Authorization: `Bearer ${cfg.session}` } : {}),
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+          ...(rid ? { "X-Request-Id": rid } : {}),
+        },
+      });
+      if (r.status === 401 && path !== "/login") {
+        cfg = null;
+        saveCfg(null);
+        throw new AuthError("You were logged out (password changed or session expired). Log in again.");
+      }
+      if ([502, 503, 504].includes(r.status) && attempt < tries - 1) { await sleep(800 * (attempt + 1)); continue; }
+      return r;
+    } catch (e) {
+      if (e instanceof AuthError) throw e;
+      lastErr = e;
+      if (attempt < tries - 1) await sleep(800 * (attempt + 1));
+    }
   }
-  return r;
+  const name = (lastErr as Error)?.name;
+  throw new Error(name === "TimeoutError" || name === "AbortError"
+    ? "The connection is too slow — the server didn't answer in time"
+    : navigator.onLine ? "Couldn't reach the sync server" : "You're offline");
 }
 
 async function errorOf(r: Response) {
