@@ -4,7 +4,7 @@
  * Grid sorted Newest / Popular / Hidden gems; tap a Short to swipe through just this channel.
  */
 import type { AppApi, ExternalChannelInfo } from "./app";
-import { addFromInfo, listStatus, removeByHandle, restoreByHandle, setCategory } from "./channels";
+import { addFromInfo, lastChangeError, listStatus, removeByHandle, restoreByHandle, setCategory } from "./channels";
 import { COST, confirmCost, noteSpend, spendToast } from "./quota";
 import { CATS } from "./rank";
 import { act, state } from "./store";
@@ -122,6 +122,7 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
 
     // ---- actions
     const actions = el("div", "cp-actions");
+    let addError: HTMLElement | null = null;
     if (status === "listed") {
       const cat = el("select") as HTMLSelectElement;
       cat.setAttribute("aria-label", "Category");
@@ -140,14 +141,20 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       cat.setAttribute("aria-label", "Category");
       for (const c of CATS.filter((c) => c.id !== "all")) cat.append(new Option(c.label, c.id));
       cat.value = info.suggestedCat ?? preview?.channel.suggestedCat ?? "stories";
-      actions.append(
-        el("span", "ch-note", "Category"), cat,
-        btn("+ Add to my list", async () => {
-          if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cat: cat.value })) reopen();
-        }, "btn sm primary"),
-      );
+      const err = el("p", "ch-note warn", "");
+      const addBtn = btn("+ Add to my list", async () => {
+        addBtn.disabled = true;
+        addBtn.textContent = "Adding…";
+        if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cat: cat.value })) { reopen(); return; }
+        addBtn.disabled = false;
+        addBtn.textContent = "+ Add to my list";
+        err.textContent = `Not added: ${lastChangeError}`;
+      }, "btn sm primary");
+      actions.append(el("span", "ch-note", "Category"), cat, addBtn);
+      addError = err;
     }
     body.append(actions);
+    if (addError) body.append(addError);
 
     // ---- Shorts
     let items: Short[] = [];

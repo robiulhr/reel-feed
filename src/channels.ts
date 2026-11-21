@@ -178,28 +178,36 @@ function applyFeed(op: Op) {
   ctx.onFeedChange();
 }
 
+/** Why the last change failed (shown next to the button that was pressed, not only as a toast). */
+export let lastChangeError = "";
+
 async function change(ops: Op[], success: string, undo?: { label: string; run: () => void }) {
-  if (!sync.isConnected()) { ctx.toast("Log in first (Menu → Sync) to edit channels"); return false; }
+  const fail = (msg: string) => { lastChangeError = msg; ctx.toast(msg); return false; };
+  if (!sync.isConnected()) return fail("Log in first (Menu → Sync) to add or edit channels");
   if (!entries) await loadEntries();
-  if (!entries) { ctx.toast(loadError || "Couldn't load the channel list"); return false; }
+  if (!entries) return fail(loadError || "Couldn't load the channel list — check your connection");
   const before = structuredClone(entries);
+  const dsBefore = ctx.ds.channels.map((c) => ({ st: c.st, cat: c.cat }));
   for (const op of ops) { applyLocal(entries, op); applyFeed(op); }
   renderHead();
   renderList();
   try {
     const r = await sync.call<{ data: Entry[] }>("/channels", { method: "POST", body: JSON.stringify({ ops }) });
     entries = r.data;
+    lastChangeError = "";
     ctx.toast(success, undo);
     runText = "Refresh starting — new data in about 3 minutes";
     renderHead();
     renderList();
     return true;
   } catch (e) {
+    // undo the instant changes (list + feed)
     entries = before;
-    ctx.toast(e instanceof Error ? e.message : "Couldn't save the change");
+    dsBefore.forEach((b, i) => { const c = ctx.ds.channels[i]; if (c) { c.st = b.st; c.cat = b.cat; } });
+    ctx.onFeedChange();
     renderHead();
     renderList();
-    return false;
+    return fail(e instanceof Error ? e.message : "Couldn't save the change");
   }
 }
 
@@ -427,13 +435,17 @@ function renderAdd() {
         `Added ${r.name} — its Shorts appear after the refresh (~3 min)`,
       );
       if (ok) { add.results = add.results.filter((x) => x.id !== r.id); renderAdd(); }
-      else addBtn.disabled = false;
+      else {
+        addBtn.disabled = false;
+        errNote.textContent = `Not added: ${lastChangeError}`;
+      }
     }, "btn sm primary");
     if (existing && existing.status !== "removed") addBtn.disabled = true;
     const preview = btn(r.shorts ? "Preview Shorts" : "View channel", () =>
       ctx.explore({ id: r.id, name: r.name, handle: r.handle, thumb: r.thumb, subs: r.subs, suggestedCat: cat.value }), "btn sm");
     row.append(el("span", "ch-note", "Category"), cat, addBtn, preview);
-    main.append(row);
+    const errNote = el("p", "ch-note warn", "");
+    main.append(row, errNote);
     card.append(img, main);
     addEl.append(card);
   }

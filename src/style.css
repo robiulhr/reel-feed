@@ -158,7 +158,8 @@ p { margin: 0; }
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; left: 50%; bottom: calc(var(--bottom-h) + 16px); transform: translateX(-50%); z-index: 20;
+  /* above everything (menu, pages, cost card) so messages are never hidden */
+  position: fixed; left: 50%; bottom: calc(var(--bottom-h) + 16px); transform: translateX(-50%); z-index: 90;
   background: var(--panel-2); padding: 10px 14px; border-radius: 10px; font-size: 14px;
   display: flex; gap: 12px; align-items: center; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
   max-width: calc(100vw - 32px);

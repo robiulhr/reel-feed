@@ -69,6 +69,8 @@ export default {
       }
       return json({ error: "Not found" }, 404, cors);
     } catch (e) {
+      // Visible in `npx wrangler tail` and the Cloudflare dashboard logs
+      console.error(`${route} failed:`, e instanceof Error ? e.message : e);
       if (e instanceof HttpError) return json({ error: e.message }, e.status, cors);
       return json({ error: e instanceof Error ? e.message : "Server error" }, 500, cors);
     }
@@ -249,8 +251,11 @@ function applyChannelOp(list: ChannelEntry[], op: ChannelOp): string {
   switch (op.t) {
     case "add": {
       const { name, handle, id, cat } = op.channel ?? ({} as any);
-      if (!/^(@[\w.\-·]{2,100}|UC[\w-]{22})$/.test(String(handle))) throw new HttpError(400, "Invalid channel handle");
-      if (!name || String(name).length > 120) throw new HttpError(400, "Invalid channel name");
+      // YouTube handles may use any script (e.g. Bangla) and sometimes come URL-encoded
+      if (!/^(@[\p{L}\p{M}\p{N}._\-·%]{2,150}|UC[\w-]{22})$/u.test(String(handle))) {
+        throw new HttpError(400, `Can't add: unexpected channel handle "${String(handle).slice(0, 60)}"`);
+      }
+      if (!name || String(name).length > 200) throw new HttpError(400, "Can't add: missing or too long channel name");
       if (id && !/^UC[\w-]{22}$/.test(id)) throw new HttpError(400, "Invalid channel ID");
       checkCat(cat);
       const existing = list.find((x) => sameHandle(x.handle, handle) || (id && x.id === id));
