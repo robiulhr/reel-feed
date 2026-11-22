@@ -92,6 +92,17 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator("#spinner")).toBeHidden(); // buffering finished: no spinner left over the video
     await page.locator("#tap").click({ position: { x: 150, y: 300 } });
     await expect.poll(() => page.evaluate(() => (window as any).__fb.players.at(-1).playing)).toBe(false);
+    // sound on while paused, then play: it starts muted and the sound comes on once it plays
+    await page.locator("#muteBtn").click();
+    await page.locator("#tap").click({ position: { x: 150, y: 300 } });
+    const fbp = () =>
+      page.evaluate(() => {
+        const p = (window as any).__fb.players.at(-1);
+        return { playing: p.playing, muted: p.muted };
+      });
+    await expect.poll(fbp).toEqual({ playing: true, muted: false });
+    await page.locator("#tap").click({ position: { x: 150, y: 300 } });
+    await expect.poll(() => page.evaluate(() => (window as any).__fb.players.at(-1).playing)).toBe(false);
     await expect(page.locator("#meta")).toContainText("f Facebook");
 
     // ⋯ has Facebook's own options

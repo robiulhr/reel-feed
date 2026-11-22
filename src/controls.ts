@@ -11,7 +11,7 @@ import { checkForUpdate } from "./data";
 import { infoDialog, once, toast, toastError } from "./ui";
 import { ago, fmtTime } from "./dom";
 import { els, flashIcon } from "./view";
-import { playback, pool } from "./player";
+import { playback, playerHooks, pool } from "./player";
 import { applyData, feed, latestVersion, offerData, renderMeta, renderSave, resetFeed } from "./feed";
 
 export function togglePlay() {
@@ -131,6 +131,14 @@ export function renderMute() {
   for (const t of document.querySelectorAll<HTMLElement>(".vol-pct")) t.textContent = state.muted ? "Muted" : `${state.volume}%`;
   for (const b of document.querySelectorAll<HTMLElement>(".vol-mute")) b.textContent = state.muted ? "🔇 Unmute" : "🔊 Mute";
 }
+// The browser only allows sound after a tap on the page: show the video as muted, one tap turns sound on.
+playerHooks.onSoundBlocked = () => {
+  if (state.muted) return;
+  state.muted = true;
+  renderMute();
+  toast("Your browser started it without sound — tap 🔇 for sound");
+};
+
 export function toggleMute() {
   state.muted = !state.muted;
   if (state.muted) pool.mute();

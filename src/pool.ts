@@ -35,6 +35,8 @@ export interface PoolEvents {
   onBuffering(): void;
   onEnded(): void;
   onError(code: number): void;
+  /** The browser wouldn't play with sound (no tap yet): it plays muted instead. */
+  onSoundBlocked?(): void;
 }
 
 interface Slot {

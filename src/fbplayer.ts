@@ -64,9 +64,8 @@ export class FbPlayer {
     this.muted = muted;
     this.el.classList.add("on");
     if (url === this.url && this.player) {
-      this.applySound();
       this.player.seek(0);
-      this.player.play();
+      this.play();
       return;
     }
     const n = ++this.n;
@@ -121,24 +120,47 @@ export class FbPlayer {
       this.player = p;
       p.getIframe?.()?.setAttribute?.("title", "Facebook video player");
       const on = (name: string, fn: () => void) => this.subs.push(p.subscribe(name, () => this.active && n === this.n && fn()));
-      // it said it would play but never started: tell the app (it offers Facebook) instead of spinning forever
+      // Not started yet: try once more (muted — browsers always allow that); still nothing → tell the app
+      // (it offers Facebook) instead of spinning forever
+      const retry = window.setTimeout(() => {
+        if (!this.active || n !== this.n || this.started) return;
+        p.mute();
+        p.play();
+      }, 5000);
       const stall = window.setTimeout(() => {
         if (this.active && n === this.n && !this.started) this.ev.onError(-4);
       }, 12000);
-      this.subs.push({ release: () => clearTimeout(stall) });
+      this.subs.push({
+        release: () => {
+          clearTimeout(retry);
+          clearTimeout(stall);
+        },
+      });
       on("startedPlaying", () => {
         this.started = true;
         this.ev.onPlaying();
+        // it (re)started muted; now the sound, if you have it on
+        if (this.soundPending && !this.muted) this.soundOn();
+        this.soundPending = false;
       });
-      on("paused", () => this.ev.onPaused());
+      on("paused", () => {
+        // the browser stopped it because of the sound (no tap on the page yet): play on, muted
+        if (!this.muted && performance.now() - this.soundAt < 2500 && performance.now() - this.pausedAt > 1000) {
+          this.muted = true;
+          p.mute();
+          p.play();
+          this.ev.onSoundBlocked?.();
+          return;
+        }
+        this.ev.onPaused();
+      });
       on("startedBuffering", () => this.ev.onBuffering());
       // Facebook says when buffering ends (YouTube says "playing" again): take the spinner away
       on("finishedBuffering", () => this.started && this.ev.onPlaying());
       on("finishedPlaying", () => this.ev.onEnded());
       on("error", () => this.ev.onError(-2));
       if (!this.active) return;
-      this.applySound();
-      p.play();
+      this.play();
     });
     FB.XFBML.parse(wrap);
   }
@@ -157,20 +179,37 @@ export class FbPlayer {
     this.el.replaceChildren();
   }
 
-  private applySound() {
+  private soundAt = 0; // when the sound was last turned on (a pause right after = the browser said no)
+  private pausedAt = 0; // when the app last paused it itself
+
+  private soundOn() {
     const p = this.player;
     if (!p) return;
-    if (this.muted) p.mute();
-    else {
-      p.unmute();
-      p.setVolume?.(this.volume / 100);
-    }
+    this.soundAt = performance.now();
+    p.unmute();
+    p.setVolume?.(this.volume / 100);
   }
 
+  private applySound() {
+    if (this.muted) this.player?.mute();
+    else this.soundOn();
+  }
+
+  private soundPending = false;
+
+  /** Start (or go on) muted — browsers don't always let a frame start with sound — and turn the
+   *  sound back on once it's playing. */
   play() {
-    this.player?.play();
+    const p = this.player;
+    if (!p) return;
+    if (!this.muted) {
+      this.soundPending = true;
+      p.mute();
+    }
+    p.play();
   }
   pause() {
+    this.pausedAt = performance.now();
     this.player?.pause();
   }
   mute() {

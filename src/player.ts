@@ -31,7 +31,7 @@ export function poolSize() {
 }
 
 /** Filled in by the feed: what to do when a video can't play (skip it) and when it starts. */
-export const playerHooks = { onUnplayable: (_code: number) => {}, onPlaying: () => {} };
+export const playerHooks = { onUnplayable: (_code: number) => {}, onPlaying: () => {}, onSoundBlocked: () => {} };
 
 export function stopClock() {
   const w = playback.watch;
@@ -68,6 +68,9 @@ export const pool = new PlayerPool(
     },
     onError(code) {
       playerHooks.onUnplayable(code);
+    },
+    onSoundBlocked() {
+      playerHooks.onSoundBlocked();
     },
   },
   poolSize(),
