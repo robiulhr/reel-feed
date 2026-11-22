@@ -22,6 +22,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.includes("/data/")) return; // always fresh from the network (the app caches it itself)
+  if (url.pathname.startsWith("/api/")) return; // sync calls: never cached
 
   if (req.mode === "navigate") {
     e.respondWith((async () => {

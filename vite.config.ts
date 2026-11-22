@@ -8,7 +8,8 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
  * Only added to the production build (the dev server needs inline scripts for hot reload).
  */
 function securityPolicy(syncUrl: string): Plugin {
-  const sync = syncUrl ? new URL(syncUrl).origin : "";
+  // "/api" (same address as the app, on Cloudflare) needs nothing extra
+  const sync = syncUrl.startsWith("http") ? new URL(syncUrl).origin : "";
   const csp = [
     "default-src 'self'",
     "script-src 'self' https://www.youtube.com https://s.ytimg.com",

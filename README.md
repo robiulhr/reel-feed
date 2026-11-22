@@ -10,7 +10,7 @@ A personal, YouTube-Shorts-style feed that shows **only Shorts from a hand-picke
 
 | Thing | Where |
 |---|---|
-| Live site | `https://robiulhr.github.io/reel-feed/` |
+| Live site | `https://reel-feed.robiulhr2201.workers.dev/` (Cloudflare) — the old `https://robiulhr.github.io/reel-feed/` still works during the move |
 | Code repo (public) | `https://github.com/robiulhr/reel-feed` |
 | Personal data repo (**private**) | `https://github.com/robiulhr/reel-feed-data` → `user-state.json` |
 | Sync server | Cloudflare Worker `reel-feed-sync` → `https://reel-feed-sync.robiulhr2201.workers.dev` (code in `worker/`) |
@@ -20,10 +20,11 @@ A personal, YouTube-Shorts-style feed that shows **only Shorts from a hand-picke
 
 ```
             every 4h, on channel edits, or "Refresh now"
-GitHub Actions ───────────► YouTube (RSS + Data API) ──► shorts.json ──► build ──► GitHub Pages (public site)
+GitHub Actions ───────────► YouTube (RSS + Data API) ──► shorts.json ──► build ──► Cloudflare Worker "reel-feed" (public site)
+                                                                               └──► GitHub Pages (old address, until retired)
   (uses secret YOUTUBE_API_KEY)
 
-Phone / laptop ── password login ──► Cloudflare Worker ──┬──► private repo: user-state.json (saves, history, learning)
+Phone / laptop ── password login ──► /api on the site ──► Cloudflare Worker ──┬──► private repo: user-state.json (saves, history, learning)
                   (180-day session,   (holds GitHub token, ├──► code repo: channels.json (Channels panel edits → triggers refresh)
                    not the password)   password, YouTube   ├──► YouTube Data API (channel lookups when adding)
                                        key as secrets)     └──► GitHub Actions (Refresh now / status)
@@ -253,7 +254,7 @@ Change the grouping in `GROUPS` / `group:` in `src/categories.ts` (never reorder
 - Offline: operations wait in the browser and sync later.
 - The first login on a device merges that device's existing local data into the shared file.
 - **Every sync is a commit** in `reel-feed-data` → full version history = backup. To restore an older state: in the app, Menu → Backups → *Show versions* → Restore (last 30 days). Older than that: open the repo on GitHub → `user-state.json` → History → copy an old version back.
-- Worker protections: only `https://robiulhr.github.io` (and local dev addresses) may call it; wrong passwords are slowed down; changing `APP_PASSWORD` or `SESSION_SECRET` logs out every device.
+- Worker protections: only the app's own sites (`ALLOWED_ORIGINS` in `worker/wrangler.toml`) and local dev addresses may call it; wrong passwords are slowed down; changing `APP_PASSWORD` or `SESSION_SECRET` logs out every device.
 - The Worker refuses to sync without a session; the site itself works without sync (data then stays in that browser only).
 
 ---
@@ -375,6 +376,13 @@ npx wrangler deploy                      # prints the Worker address (https://re
 3. Only if the token covers more than one Cloudflare account: add a repo **variable** `CLOUDFLARE_ACCOUNT_ID` (dashboard → Workers & Pages → Account ID on the right).
 
 The Worker's secrets (`GITHUB_TOKEN`, `APP_PASSWORD`, …) stay in Cloudflare and survive every deploy; secrets are still set by hand with `wrangler secret put`.
+
+**The site itself on Cloudflare** (`worker/app.wrangler.toml` + `worker/src/app.ts`, Worker `reel-feed`):
+- *Fetch Shorts & deploy* builds the app with `VITE_SYNC_URL=/api` and runs `wrangler deploy --config app.wrangler.toml` (same `CLOUDFLARE_API_TOKEN`). It also still publishes to GitHub Pages during the move.
+- Files in `dist/` are served directly (free, no code runs). Any other path returns the app (`index.html`), ready for page links.
+- `/api/*` is passed to `reel-feed-sync` through a service binding — same address as the app, so no cross-site requests. Same-site GETs carry no `Origin`, so `app.ts` adds the site's own one.
+- Browsers keep data per address: on the new address log in to Sync once per device; "On this device" backups stay with the old address.
+- Local test of both Workers together: build with `VITE_SYNC_URL=/api`, then in `worker/`: `npx wrangler dev -c app.wrangler.toml -c wrangler.toml`.
 
 **Forgot the app password?** Nothing is lost (data is in GitHub). Reset it: Cloudflare dashboard → Workers & Pages → `reel-feed-sync` → Settings → Variables and Secrets → edit `APP_PASSWORD`, or `npx wrangler secret put APP_PASSWORD`. All devices log out; log in again. Devices already logged in keep working until you reset.
 
