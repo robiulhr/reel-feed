@@ -14,6 +14,8 @@ import { COST, confirmCost, noteSpend, spendToast } from "./quota";
 import { busy, confirmDialog, latest, toastError } from "./ui";
 import type { Channel, Dataset } from "./types";
 import { el, btn } from "./dom";
+import { listSummary, pickLists } from "./lists";
+import { BASE } from "./router";
 
 export interface ChannelsCtx {
   ds: Dataset;
@@ -784,10 +786,16 @@ function renderList() {
 
     const main = el("div", "ch-main");
     const title = el("div", "ch-title");
-    const a = el("a", "", ch?.n || e.name) as HTMLAnchorElement;
-    a.href = ytUrl(e.handle);
-    a.target = "_blank";
-    a.rel = "noopener";
+    const name = ch?.n || e.name;
+    // the name opens the channel in the app (its Shorts, lists…); "↗ YouTube" opens it on YouTube
+    const openHere = () => ctx.explore({ id: ch?.id ?? e.id ?? "", name, handle: e.handle, thumb: ch?.thumb ?? "", subs: ch?.subs ?? 0 });
+    const a = el("a", "", name) as HTMLAnchorElement;
+    a.href = `${BASE}channel/${encodeURIComponent(e.handle)}`;
+    a.onclick = (ev) => {
+      if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+      ev.preventDefault();
+      openHere();
+    };
     title.append(a, el("span", `pill st-${st}`, STATUS_LABEL[st]));
     if (isHidden && st !== "removed") title.append(el("span", "pill st-hidden", "Hidden"));
     const bits = [e.handle];
@@ -801,6 +809,17 @@ function renderList() {
     if (mix) main.append(el("div", "ch-sub ch-mix", mix));
 
     const actions = el("div", "ch-actions");
+    const yt = el("a", "btn sm", "↗ YouTube") as HTMLAnchorElement;
+    yt.href = ytUrl(e.handle);
+    yt.target = "_blank";
+    yt.rel = "noopener";
+    yt.setAttribute("aria-label", `Open ${name} on YouTube`);
+    const open = btn("▶ Open", openHere, "btn sm");
+    open.setAttribute("aria-label", `Open ${name} in the app`);
+    const lists = btn(`📋 ${listSummary(e.handle)}`, async () => (await pickLists(e.handle, name)) && renderList(), "btn sm");
+    lists.setAttribute("aria-label", `Lists for ${name}: ${listSummary(e.handle, "none")}. Change`);
+    const nav = el("div", "ch-nav");
+    nav.append(open, yt, lists);
     if (st === "removed") {
       actions.append(
         btn("Restore", (b) => busy(b, "…", () => restoreChannel(e)), "btn sm"),
@@ -829,6 +848,7 @@ function renderList() {
       });
       window.setTimeout(renderList, coolUntil - Date.now() + 20);
     }
+    main.append(nav);
     item.append(img, main, actions);
     listEl.append(item);
   }

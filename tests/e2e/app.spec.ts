@@ -169,6 +169,39 @@ test.describe("channels (with the fake sync server)", () => {
     expect(sync.channels.some((c) => c.handle === "@pricinglab")).toBe(true);
   });
 
+  test("a channel in the list: open it in the app (Back returns), on YouTube, or add it to a list", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="channels"]').click();
+    const row = page.locator(".ch-item").first();
+    const name = (await row.locator(".ch-title a").textContent())!.trim();
+    await expect(row.getByRole("link", { name: `Open ${name} on YouTube` })).toHaveAttribute("href", /^https:\/\/www\.youtube\.com\//);
+    await row.getByRole("button", { name: `Open ${name} in the app` }).click();
+    await expect(page).toHaveURL(/\/channel\//);
+    await expect(page.locator("#pageTitle")).toHaveText(name);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/channels$/);
+    // the name opens it in the app too
+    await page.locator(".ch-item").first().locator(".ch-title a").click();
+    await expect(page.locator("#pageTitle")).toHaveText(name);
+    await page.goBack();
+    // lists
+    await page
+      .locator(".ch-item")
+      .first()
+      .getByRole("button", { name: new RegExp(`^Lists for ${name}`) })
+      .click();
+    const dlg = page.getByRole("dialog", { name: `Lists for ${name}` });
+    await dlg.getByRole("button", { name: "🎯 Competitors" }).click();
+    await dlg.getByRole("button", { name: "Save" }).click();
+    await expect(
+      page
+        .locator(".ch-item")
+        .first()
+        .getByRole("button", { name: new RegExp(`^Lists for ${name}`) }),
+    ).toHaveText("📋 🎯 Competitors");
+  });
+
   test("Remove: triple tap on the full list → one save, and never touches the next channel", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
