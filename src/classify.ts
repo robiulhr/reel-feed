@@ -169,7 +169,7 @@ const LEX: Record<CatId, string[]> = {
     "politic", "election", "geopolit", "~health", "~doctor", "~cancer", "~diet", "~food", "mystery", "~world",
     "space", "universe", "animal", "ocean", "~country", "~countries", "biggest", "smallest", "most dangerous",
     "human body", "~brain", "geography", "planet", "earth", "invention", "ancient", "=war", "~weird", "strange",
-    "~secret", "~truth", "physics", "chemistry", "biology", "dinosaur", "nasa", "জানেন কি", "জানেন", "তথ্য",
+    "~secret", "~truth", "physics", "chemistry", "biology", "dinosaur", "nasa", "telescope", "satellite", "engineering", "explainer", "antarctic", "=isro", "জানেন কি", "জানেন", "তথ্য",
     "বিজ্ঞান", "রহস্য", "পৃথিবী", "মহাবিশ্ব", "অবাক", "আশ্চর্য", "~দেশ", "প্রাণী", "~ইতিহাস", "অদ্ভুত", "~রাজনীতি",
     "~নির্বাচন", "~স্বাস্থ্য", "~ক্যান্সার", "~খাবার", "~যুদ্ধ", "~ফিলিস্তিন", "~গাজা",
   ],
@@ -184,7 +184,7 @@ const LEX: Record<CatId, string[]> = {
     "muhammad", "namaz", "salah", "=dua", "ramadan", "jannah", "jahannam", "=iman", "=deen", "sheikh", "mufti",
     "mizanur", "azhari", "=nabi", "rasul", "akhirah", "sabr", "tawbah", "hijab", "~muslim", "mosque", "masjid",
     "ওয়াজ", "ওয়াজ", "বয়ান", "বয়ান", "হাদিস", "নবী", "রাসূল", "আল্লাহ", "ইসলাম", "নামাজ", "দোয়া", "দোয়া",
-    "জান্নাত", "জাহান্নাম", "ঈমান", "রমজান", "খুতবা", "আজহারী", "মিজানুর", "শায়খ", "শায়খ", "মুফতি", "হুজুর",
+    "জান্নাত", "জাহান্নাম", "ঈমান", "রমজান", "খুতবা", "আজহারী", "আজহারি", "আহমাদুল্লাহ", "মিজানুর", "শায়খ", "শায়খ", "মুফতি", "হুজুর",
     "আখিরাত", "মসজিদ", "মুসলিম", "পর্দা", "তওবা", "الله", "حديث",
   ],
   nasheed: [
