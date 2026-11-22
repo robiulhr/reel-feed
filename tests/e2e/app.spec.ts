@@ -216,6 +216,22 @@ test.describe("categories", () => {
     await expect(sales).toHaveAttribute("aria-pressed", "false");
   });
 
+  test("Filters sheet: time, language and topics apply together and show in the bar", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#filtBtn").click();
+    const sheet = page.getByRole("dialog", { name: "Filters" });
+    await sheet.getByRole("button", { name: "30 days" }).click();
+    await sheet.getByRole("button", { name: /^Sales & Customers/ }).click();
+    const show = sheet.locator(".btn.primary");
+    await expect(show).toHaveText(/^Show [0-9]+ Shorts$/);
+    await show.click();
+    await expect(page.locator("#filtBtn")).toHaveAttribute("aria-label", "Filters, 2 on");
+    await expect(page.locator('#chips button[data-clear="win"]')).toBeVisible();
+    await expect(page.locator('#chips button[data-cat="sales"]')).toHaveAttribute("aria-pressed", "true");
+    await page.locator('#chips button[data-clear="win"]').click(); // ✕ removes the time range
+    await expect(page.locator("#filtBtn")).toHaveAttribute("aria-label", "Filters, 1 on");
+  });
+
   test("⋯ → Wrong category? saves your pick and shows it", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#moreBtn").click();

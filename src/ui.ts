@@ -102,13 +102,17 @@ interface DialogOptions {
   cancel?: string;
   danger?: boolean;
   extra?: HTMLElement;
+  /** "sheet" = slides up from the bottom on phones (for longer pickers) */
+  variant?: "sheet";
+  /** Called once shown, with the confirm button (e.g. to keep its label up to date). */
+  onOpen?: (confirm: HTMLButtonElement | null) => void;
 }
 
 /** Resolves true if confirmed. Esc / tapping outside = cancel. */
 export function confirmDialog(o: DialogOptions): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
-    overlay.className = "dlg-overlay";
+    overlay.className = o.variant ? `dlg-overlay ${o.variant}` : "dlg-overlay";
     const box = document.createElement("div");
     box.className = "dlg";
     const h = Object.assign(document.createElement("div"), { className: "dlg-title", textContent: o.title });
@@ -152,6 +156,7 @@ export function confirmDialog(o: DialogOptions): Promise<boolean> {
     no.onclick = () => done(false);
     if (yes) yes.onclick = () => done(true);
     document.body.append(overlay);
+    o.onOpen?.(yes);
     (yes ?? no).focus();
   });
 }

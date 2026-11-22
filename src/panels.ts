@@ -3,8 +3,9 @@
  * API usage, About), full pages (channel explorer, More like this), the ⋯ sheet and the first-time tips.
  * Plus the top bar: feed tabs, time range, categories, and ‹ › buttons for rows that don't fit.
  */
-import { CATEGORIES, type CatId, catLabel, GROUPS, groupOf } from "./categories";
+import { catLabel } from "./categories";
 import { pickCategories } from "./catpicker";
+import { bindFilterBar, renderFilterBar } from "./filters";
 import { videoCats } from "./rank";
 import { act, persist, state } from "./store";
 import { renderChannelsPanel } from "./channels";
@@ -34,7 +35,7 @@ import { setRate } from "./controls";
 import { maybeAutoFull } from "./fullscreen";
 import { renderAbout, renderSyncPanel } from "./settings";
 import { toast } from "./ui";
-import type { Short, Tab, Win } from "./types";
+import type { Short, Tab } from "./types";
 
 // ---------- overlays ----------
 const pageModal = modal(els.page, { label: "Page", onRequestClose: () => closePage(), focus: () => els.pageClose });
@@ -230,41 +231,6 @@ async function fixCategory(s: Short) {
 }
 
 // ---------- top bar: tabs, time range, language, categories ----------
-/** Categories with at least this many Shorts get a chip (fewer would be an almost empty feed). */
-const MIN_CHIP = 8;
-let chipsFor = -1;
-
-/** Builds the category chips from the library: All, then each group's categories that have Shorts. */
-function buildChips() {
-  const counts = new Map<string, number>();
-  for (const s of feed.ds.videos) {
-    const c = videoCats(s, state)[0];
-    if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
-  }
-  chipsFor = feed.ds.generatedAt;
-  const keep = new Set<string>(state.cats); // a picked chip never disappears
-  const all = el("button", "", "All");
-  all.type = "button";
-  all.dataset.cat = "";
-  const out: HTMLElement[] = [all];
-  for (const g of GROUPS) {
-    const cats = CATEGORIES.filter((c) => c.group === g.id && ((counts.get(c.id) ?? 0) >= MIN_CHIP || keep.has(c.id)));
-    if (!cats.length) continue;
-    const sep = el("span", "chip-sep", g.label);
-    sep.setAttribute("aria-hidden", "true");
-    out.push(sep);
-    for (const c of cats) {
-      const b = el("button", "", c.short);
-      b.type = "button";
-      b.dataset.cat = c.id;
-      b.title = `${c.label} · ${counts.get(c.id) ?? 0} Shorts`;
-      b.setAttribute("aria-label", c.label);
-      out.push(b);
-    }
-  }
-  els.chips.replaceChildren(...out);
-}
-
 export function renderControls() {
   const mark = (b: HTMLButtonElement, on: boolean) => {
     b.classList.toggle("on", on);
@@ -273,40 +239,12 @@ export function renderControls() {
   els.tabs.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
     mark(b, b.dataset.tab === state.tab);
   });
-  els.win.value = state.win;
-  els.lang.value = state.lang;
-  if (chipsFor !== feed.ds.generatedAt || state.cats.some((c) => !els.chips.querySelector(`[data-cat="${c}"]`))) buildChips();
-  els.chips.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
-    const c = b.dataset.cat ?? "";
-    mark(b, c ? state.cats.includes(c as CatId) : !state.cats.length);
-  });
+  renderFilterBar();
 }
 
 function bindTopBar() {
-  els.chips.setAttribute("role", "group");
-  els.chips.setAttribute("aria-label", "Categories (pick one or more)");
+  bindFilterBar();
   els.tabs.setAttribute("aria-label", "Feed");
-  els.chips.addEventListener("click", (e) => {
-    const b = (e.target as HTMLElement).closest("button");
-    if (!b || b.dataset.cat === undefined) return;
-    const cat = b.dataset.cat as CatId | "";
-    if (!cat) {
-      if (!state.cats.length) return;
-      state.cats = [];
-    } else if (state.cats.includes(cat)) state.cats = state.cats.filter((c) => c !== cat);
-    // Islamic and business chips don't mix: picking one kind starts a fresh selection
-    else if (state.cats.length && (groupOf(cat) === "islam") !== (groupOf(state.cats[0]) === "islam")) state.cats = [cat];
-    else state.cats = [...state.cats, cat];
-    persist();
-    renderControls();
-    resetFeed();
-  });
-  els.lang.addEventListener("change", () => {
-    state.lang = els.lang.value as typeof state.lang;
-    persist();
-    resetFeed();
-    els.lang.blur();
-  });
   els.tabs.addEventListener("click", (e) => {
     const tab = (e.target as HTMLElement).closest("button")?.dataset.tab as Tab | undefined;
     if (!tab || tab === state.tab) return;
@@ -314,13 +252,6 @@ function bindTopBar() {
     persist();
     renderControls();
     resetFeed();
-  });
-  els.win.addEventListener("change", () => {
-    state.win = els.win.value as Win;
-    persist();
-    renderControls();
-    resetFeed();
-    els.win.blur();
   });
 }
 

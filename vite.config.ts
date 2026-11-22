@@ -36,8 +36,9 @@ function securityPolicy(syncUrl: string): Plugin {
  * Performance budget: the build FAILS if the app's code grows past these sizes (gzip, what phones
  * actually download), so it stays fast on weak networks. Raise a limit only on purpose.
  * Sizes when the budget was set (Phase 4): JS 29 kB, CSS 5.7 kB.
+ * Raised JS 40 → 45 with the category system (Filters sheet, pickers, Sorting): 40.5 kB with sync on.
  */
-export const BUDGET_KB = { js: 40, css: 10 };
+export const BUDGET_KB = { js: 45, css: 10 };
 
 function sizeBudget(): Plugin {
   return {

@@ -2023,9 +2023,22 @@ button[aria-busy="true"] {
 }
 .catpick-chips,
 .cp-chips {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+  padding-right: 20px;
+}
+.cp-chips::-webkit-scrollbar {
+  display: none;
+}
+.cp-chips .chip {
+  flex: none;
+  white-space: nowrap;
 }
 /* "main" / "2" / "3" badge on picked chips, so the order is visible */
 .catpick .chip.on::after {
@@ -2040,11 +2053,13 @@ button[aria-busy="true"] {
 }
 .cp-filters {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
   gap: 8px;
   align-items: center;
 }
 .cp-filters select {
+  flex: none;
   background: var(--chip);
   border: 0;
   border-radius: 999px;
@@ -2071,4 +2086,176 @@ button[aria-busy="true"] {
   display: flex;
   gap: 6px;
   margin-top: 6px;
+}
+
+/* ---------- feed filters: ⚙ Filters button + bottom sheet ---------- */
+.filt-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--chip);
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.filt-btn.on {
+  outline: 1.5px solid var(--text);
+  outline-offset: -1.5px;
+}
+.filt-n:empty {
+  display: none;
+}
+.filt-n {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--chip-on);
+  color: var(--chip-on-text);
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-grid;
+  place-items: center;
+}
+.chips button[data-more] {
+  background: none;
+  outline: 1px dashed var(--line);
+  outline-offset: -1px;
+  color: var(--muted);
+}
+
+.dlg-overlay.sheet {
+  place-items: end center;
+  padding: 0;
+}
+.dlg-overlay.sheet .dlg {
+  width: min(560px, 100%);
+  border-radius: 18px 18px 0 0;
+  max-height: 88dvh;
+  padding: 16px 16px calc(12px + env(safe-area-inset-bottom));
+}
+.dlg-overlay.sheet .dlg-actions {
+  position: sticky;
+  bottom: calc(-12px - env(safe-area-inset-bottom));
+  background: var(--panel);
+  margin: 0 -16px calc(-12px - env(safe-area-inset-bottom));
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+.dlg-overlay.sheet .dlg-actions .btn.primary {
+  flex: 1;
+}
+.filt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.filt > .filt-link {
+  position: absolute;
+  top: -34px;
+  right: 0;
+}
+.filt-link {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px;
+}
+.filt-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.filt-head {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.filt-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.filt-hint {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.filt-seg {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  background: var(--chip);
+  border-radius: 12px;
+  padding: 3px;
+}
+.filt-seg button {
+  background: none;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 2px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filt-seg button.on {
+  background: var(--chip-on);
+  color: var(--chip-on-text);
+  font-weight: 700;
+}
+.filt-group {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.filt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.filt-topic {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: var(--chip);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+}
+.filt-topic .ft-name {
+  min-width: 0;
+  line-height: 1.25;
+}
+.filt-topic .ft-n {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.filt-topic.on {
+  background: var(--chip-on);
+  color: var(--chip-on-text);
+  font-weight: 700;
+}
+.filt-topic.on .ft-n {
+  color: inherit;
+  opacity: 0.75;
+}
+.filt-topic:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

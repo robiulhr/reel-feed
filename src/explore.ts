@@ -5,7 +5,7 @@
  * tap a Short to swipe through just this channel.
  */
 import type { AppApi, ExternalChannelInfo } from "./app";
-import { type CatId, catLabel, detectLang, normCats } from "./categories";
+import { type CatId, catInfo, catLabel, detectLang, normCats } from "./categories";
 import { catSummary, pickCategories } from "./catpicker";
 import { addFromInfo, editChannelCats, lastChangeError, listStatus, mixText, removeByHandle, restoreByHandle } from "./channels";
 import { COST, confirmCost, noteSpend, spendToast } from "./quota";
@@ -161,7 +161,7 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
     let addError: HTMLElement | null = null;
     if (status === "listed") {
       const cats = ch?.cats ?? [];
-      const cat = btn(catSummary(cats), async () => {
+      const cat = btn(`🏷 ${catSummary(cats)}`, async () => {
         if (await editChannelCats(info.handle, info.name, cats)) reopen();
       });
       cat.setAttribute("aria-label", `Categories: ${cats.map(catLabel).join(", ") || "none"}. Change`);
@@ -195,11 +195,11 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       if (!addPick.has(key) || (!addPick.get(key)!.length && preview))
         addPick.set(key, normCats(info.suggestedCats ?? preview?.channel.suggestedCats, preview?.channel.suggestedCat));
       const picked = () => addPick.get(key) ?? [];
-      const cat = btn(catSummary(picked(), "Pick categories"), async () => {
+      const cat = btn(`🏷 ${catSummary(picked(), "Pick categories")}`, async () => {
         const cats = await pickCategories({ title: `Categories for ${info.name}`, current: picked() });
         if (cats) {
           addPick.set(key, cats);
-          cat.textContent = catSummary(cats);
+          cat.textContent = `🏷 ${catSummary(cats)}`;
         }
       });
       cat.setAttribute("aria-label", `Categories: ${catSummary(picked())}. Change`);
@@ -287,11 +287,15 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
     const catsHere = [...counts].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]);
     if (pageFilter.cat && !counts.has(pageFilter.cat)) pageFilter.cat = "";
     const filters = el("div", "cp-filters");
+    let chipRow: HTMLElement | null = null;
     if (catsHere.length > 1) {
       const chips = el("div", "cp-chips");
       chips.setAttribute("role", "group");
       chips.setAttribute("aria-label", "Category");
-      for (const [id, label] of [["", "All"], ...catsHere.map(([c, n]) => [c, `${catLabel(c)} ${n}`])] as [CatId | "", string][]) {
+      for (const [id, label] of [["", "All"], ...catsHere.map(([c, n]) => [c, `${catInfo(c)?.short ?? c} · ${n}`])] as [
+        CatId | "",
+        string,
+      ][]) {
         const b = btn(
           label,
           () => {
@@ -303,7 +307,7 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
         b.setAttribute("aria-pressed", String(pageFilter.cat === id));
         chips.append(b);
       }
-      filters.append(chips);
+      chipRow = chips;
     }
     const period = el("select") as HTMLSelectElement;
     period.setAttribute("aria-label", "Time range");
@@ -314,6 +318,7 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       reopen(sort);
     };
     filters.append(period);
+    if (chipRow) filters.append(chipRow);
     body.append(filters);
     const now = Date.now() / 1000;
     const shown = items.filter(

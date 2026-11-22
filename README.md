@@ -40,7 +40,7 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
   - **Breakouts**: biggest hits relative to each channel's normal views.
   - **Most viewed**: highest view count first — the best Shorts of any category, language and time range.
   - **Newest**: pure upload order.
-- **Filters**: time range (`All time` default, 30 days, 7 days, Today) + **language** (🌐 All, বাংলা, English, हिन्दी/اردو) + **category chips** (§5a). Pick several chips to see Shorts in any of them; **All** clears the pick.
+- **Filters**: tap **⚙ Filters** for one sheet with time range (All time, 30 days, 7 days, Today), language (All, বাংলা, English, हिन्दी/اردو) and every topic grouped with its number of Shorts — the button shows **Show N Shorts** before you apply. The bar beside it keeps the quick ones: **All**, your active time/language (tap **✕** to remove), your picked topics, the 6 biggest topics and **More topics…**. Pick several topics to see Shorts in any of them (§5a).
 - **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), **⋯** → More like this (§6d), Explore this channel (§6c), **🏷 Wrong category?**, Hide this channel, Open on YouTube. Tapping the **channel name** also opens the channel explorer.
 - **Menu ☰**: **Channels** (control panel, §6a), **Sorting** (Shorts whose category is only a guess, §5a), Saved list, Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), About (stats, reset learning, clear history).
 - **NEW badge**: Shorts uploaded since your last visit (a gap of 30+ minutes counts as a new visit).
@@ -302,7 +302,7 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - Open it by tapping the **channel name/avatar** under a Short, **⋯ → Explore this channel**, a channel in **More like this**, or **Preview Shorts** in Channels → Add.
 - **Header**: avatar, name, handle, subscribers, Shorts count, latest upload, status (*In your list* / *Removed* / *Not in your list*, plus *Hidden*).
 - **Actions**: in your list → categories, Hide/Unhide, Remove · removed → Restore · not in your list → categories (suggested) + **Add to my list**.
-- **Grid** with **Newest · Most viewed · Breakouts** (views ÷ the channel's median, shown as ×N), **category chips** (what this channel posts) and a **period** (All time / This year / 30 days / 7 days) — e.g. *Most viewed · Sales · This year* — and **▶ Play all**.
+- **Grid** with **Newest · Most viewed · Breakouts** (views ÷ the channel's median, shown as ×N), a **period** and one sideways row of **topic chips** (what this channel posts, with counts) (All time / This year / 30 days / 7 days) — e.g. *Most viewed · Sales · This year* — and **▶ Play all**.
 - Tap a Short → **swipe through only this channel**; the top bar shows "← Channel · 3 of 152"; **←** (or Esc) returns to the channel page, and closing it returns to your main feed where you left it.
 - Channels in your list are **free** (best 150 + all recent Shorts already loaded). Others load on request (~10 units, cached 24 h).
 - Watching here **teaches For You** like the main feed.

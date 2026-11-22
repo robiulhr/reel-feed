@@ -9,6 +9,25 @@ export const isGuessed = (s: Short, st: Pick<Shared, "catFix">) => !st.catFix[s.
 
 const WIN_DAYS: Record<string, number> = { all: Infinity, "30": 30, "7": 7, "1": 1 };
 
+type FilterState = Pick<State, "win" | "lang" | "cats" | "hidden" | "bad" | "catFix">;
+/** The feed's filters (time range, language, categories, hidden channels) as a test for one Short. */
+export function feedFilter(ds: Dataset, st: FilterState): (s: Short) => boolean {
+  const maxAge = (WIN_DAYS[st.win] ?? Infinity) * 86400;
+  const now = Date.now() / 1000;
+  const hidden = new Set(st.hidden);
+  const bad = new Set(st.bad);
+  const picked = new Set<string>(st.cats);
+  return (s) => {
+    const ch = ds.channels[s.ch];
+    if (!ch || ch.st === "removed" || hidden.has(ch.h) || bad.has(s.id)) return false;
+    if (now - s.p > maxAge) return false;
+    if (st.lang !== "all" && s.lg !== st.lang) return false;
+    const cats = videoCats(s, st);
+    if (picked.size) return cats.some((c) => picked.has(c));
+    return !(cats[0] && groupOf(cats[0]) === PERSONAL_GROUP); // Islamic Shorts have their own chips
+  };
+}
+
 /**
  * Picks the next batch of Shorts.
  * For You blends: outlier (views vs the channel's usual), engagement, trending speed,
@@ -21,21 +40,8 @@ export function buildQueue(
   n: number,
 ): { items: Short[]; recycled: boolean } {
   const now = Date.now() / 1000;
-  const maxAge = (WIN_DAYS[st.win] ?? Infinity) * 86400;
-  const hidden = new Set(st.hidden);
-  const bad = new Set(st.bad);
-
-  const allowed = (s: Short, ignoreSeen: boolean) => {
-    const ch = ds.channels[s.ch];
-    if (ch.st === "removed" || hidden.has(ch.h) || bad.has(s.id) || opts.exclude.has(s.id)) return false;
-    if (now - s.p > maxAge) return false;
-    if (st.lang !== "all" && s.lg !== st.lang) return false;
-    const cats = videoCats(s, st);
-    if (picked.size) {
-      if (!cats.some((c) => picked.has(c))) return false;
-    } else if (cats[0] && groupOf(cats[0]) === PERSONAL_GROUP) return false; // Islamic Shorts have their own chips
-    return ignoreSeen || !st.seen[s.id];
-  };
+  const passes = feedFilter(ds, st);
+  const allowed = (s: Short, ignoreSeen: boolean) => !opts.exclude.has(s.id) && passes(s) && (ignoreSeen || !st.seen[s.id]);
   const picked = new Set<string>(st.cats);
   /** In a category feed: Shorts mainly about it first, guessed ones last. */
   const fit = (s: Short) => {
