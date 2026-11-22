@@ -147,7 +147,7 @@ Shown once (Swipe up/down, swipe left, double-tap, ⋯, ↻). About → *Show th
 | Data | Stored in | Sent to YouTube? |
 |---|---|---|
 | Shorts list + stats | `public/data/shorts.json` (generated, not committed) | – (read from YouTube) |
-| Fetch cache (known IDs, stats) | `data/cache.json` (generated; cached between Action runs) | – |
+| Fetch cache (known IDs, stats) | `data/cache.json` (generated; cached between Action runs). Keeps each channel's best 400 Shorts + the last 60 days; older, weaker ones are dropped (ids remembered, never refetched), so it and the weekly stats refresh stay bounded | – |
 | Channel list (incl. removed channels) | `channels.json` in the code repo — edited from the Channels panel via the Worker | – |
 | Saves, hidden channels, watched history, learning | Browser + **private repo `user-state.json`** via the Worker | ❌ never |
 | Sound on/off, current tab, filters | That device's browser only (intentionally per device) | ❌ |

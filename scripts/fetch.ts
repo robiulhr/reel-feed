@@ -11,6 +11,9 @@
  *  - View/like counts are refreshed by age: Shorts < 7 days old every run, < 60 days once a day,
  *    older ones once a week (1 unit per 50 Shorts).
  *  - Removed channels are not fetched at all. Permanently deleted channels are purged from the cache.
+ *  - The cache keeps each channel's best 400 Shorts + everything recent. Older, weaker ones are
+ *    dropped (only their ids are remembered, so they're never fetched again) — the cache and the weekly
+ *    stats refresh don't grow forever.
  *
  * The API key is read from .env (or the YOUTUBE_API_KEY env var) and is never printed.
  */
@@ -34,6 +37,8 @@ const DEEP = process.argv.includes("--deep");
 const MAX_PAGES = DEEP ? 20 : 4; // 50 Shorts per page
 const KEEP_PER_CHANNEL = 150; // best older Shorts kept per channel
 const KEEP_RECENT_DAYS = 60; // every Short newer than this is kept
+const CACHE_PER_CHANNEL = 400; // older Shorts beyond a channel's best 400 are dropped from the cache
+const MAX_GONE = 5000; // dropped ids remembered per channel
 const CONCURRENCY = 8;
 const DAY = 86400;
 const FORCE_PLAYLIST_CHECK = 7 * DAY; // safety net in case RSS misses something
@@ -57,6 +62,7 @@ interface CachedChannel {
   thumb: string;
   subs: number;
   known: string[];
+  gone?: string[]; // dropped from the cache (old and weak) — still "known", so never fetched again
   noShorts?: boolean;
   rss?: string[];
   checkedAt?: number;
@@ -277,7 +283,8 @@ function statsInterval(ageSec: number) {
   return 7 * DAY; // weekly
 }
 
-const r3 = (n: number) => Math.round(n * 1000) / 1000;
+/** Scores in the website file: 2 decimals is plenty (ranking adds 0.05+ random spread) and keeps the file smaller. */
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 let cacheRef: Cache | null = null;
 let runStartedAt = 0;
@@ -390,7 +397,7 @@ async function main() {
     if (!needPlaylist) return;
 
     counts.playlistChecks++;
-    const known = new Set(ch.known);
+    const known = new Set([...ch.known, ...(ch.gone ?? [])]);
     const fresh: string[] = [];
     let pageToken: string | undefined;
     let pages = 0;
@@ -500,6 +507,7 @@ async function main() {
     g: boolean; // categories guessed (nothing in the video's own text)
   }[] = [];
   const sortStats = { confident: 0, ai: 0, guessed: 0, none: 0 };
+  let pruned = 0;
   const aiCats: Record<string, string> = existsSync(AI_FILE) ? (JSON.parse(readFileSync(AI_FILE, "utf8")).cats ?? {}) : {};
   const noShorts: string[] = [];
 
@@ -556,6 +564,16 @@ async function main() {
         .map((s) => s.id),
     );
     const kept = scored.filter((s) => best.has(s.id) || s.ageDays <= KEEP_RECENT_DAYS);
+    // Cache pruning: beyond the channel's best CACHE_PER_CHANNEL, old Shorts leave the cache
+    const ranked = [...scored].sort((a, b) => b.o + b.tr - (a.o + a.tr));
+    const drop = ranked.slice(CACHE_PER_CHANNEL).filter((s) => s.ageDays > KEEP_RECENT_DAYS && !best.has(s.id));
+    if (drop.length) {
+      const ids = new Set(drop.map((s) => s.id));
+      for (const id of ids) delete cache.videos[id];
+      ch.known = ch.known.filter((id) => !ids.has(id));
+      ch.gone = [...ids, ...(ch.gone ?? [])].slice(0, MAX_GONE);
+      pruned += ids.size;
+    }
 
     // Categories: the channel's repeated boilerplate is ignored, then each video is scored on its own words
     const texts = vids.map(([, v]) => ({ title: v.t, desc: v.d, tags: v.tg, topics: v.tp, ytCat: v.yc }));
@@ -609,6 +627,11 @@ async function main() {
     }
   }
 
+  if (pruned) {
+    saveCache();
+    console.log(`Cache: dropped ${pruned} old, weak Shorts (beyond each channel's best ${CACHE_PER_CHANNEL})`);
+  }
+
   const oP = percentiles(rows.map((r) => r.o));
   const eP = percentiles(rows.map((r) => r.e));
   const tP = percentiles(rows.map((r) => r.tr));
@@ -622,10 +645,10 @@ async function main() {
     r.v.v,
     r.v.l,
     r.v.c,
-    r3(oP[i]),
-    r3(eP[i]),
-    r3(tP[i]),
-    r3(r.r),
+    r2(oP[i]),
+    r2(eP[i]),
+    r2(tP[i]),
+    r2(r.r),
     r.k,
     r.lg,
     r.g ? 1 : 0,
