@@ -58,6 +58,7 @@ Phone / laptop ── password login ──► /api on the site ──► Cloudf
   - **Back** (Android back swipe, browser ←) closes the top thing: a dialog or sheet, then a list you're swiping through (the page it came from comes back), then a page, then the menu. ✕ / Esc / tapping outside do exactly the same. Switching menu tabs and swiping through Shorts add no Back steps; the address just follows along, so a **refresh keeps your place**.
   - Opened straight on a deeper address (a link, a refresh on `/saved`): the feed is put underneath, so Back goes to the feed, not out of the app.
   - **Share** (↗) sends `…/v/VIDEO_ID` — opens that Short in the app for anyone, then the feed carries on (`playLinked`). ⋯ → *Open on YouTube* still opens YouTube.
+  - **Link previews**: WhatsApp, Facebook/Messenger, Telegram, X, Slack, Discord, LinkedIn… show that Short's **thumbnail, title and channel** (`worker/src/app.ts`: for those apps only, it asks YouTube's free oEmbed — no key, no quota — and writes the `og:`/`twitter:` tags into the page). People opening the link get the normal app straight away. Other pages show the app's general preview.
   - Files are loaded from absolute paths (`base: "/"`); the GitHub Pages copy is built with `BASE_PATH=/reel-feed/` and a `404.html` copy of the app so its deep links work too.
 - **Works offline / installable**: `public/sw.js` keeps the app files on the device; `manifest.webmanifest` makes it installable (browser menu → *Add to Home screen* / *Install app*). Offline you still get History, Saved, lists; videos need a connection.
 - **Data saver** (About → Data saver: Auto / On / Off): on slow connections (2G/3G, *Save data*, < 1.2 Mbps) uses small thumbnails (~15 KB instead of ~150 KB) and preloads less (1 extra player, none on 2G).
@@ -385,7 +386,7 @@ The Worker's secrets (`GITHUB_TOKEN`, `APP_PASSWORD`, …) stay in Cloudflare an
 
 **The site itself on Cloudflare** (`worker/app.wrangler.toml` + `worker/src/app.ts`, Worker `reel-feed`):
 - *Fetch Shorts & deploy* builds the app with `VITE_SYNC_URL=/api` and runs `wrangler deploy --config app.wrangler.toml` (same `CLOUDFLARE_API_TOKEN`). It also still publishes to GitHub Pages during the move.
-- Files in `dist/` are served directly (free, no code runs). Any other path returns the app (`index.html`), ready for page links.
+- Files in `dist/` are served directly (free, no code runs). Any other path returns the app (`index.html`), ready for page links. Code only runs for `/api/*` and `/v/*` (share-link previews).
 - `/api/*` is passed to `reel-feed-sync` through a service binding — same address as the app, so no cross-site requests. Same-site GETs carry no `Origin`, so `app.ts` adds the site's own one.
 - Browsers keep data per address: on the new address log in to Sync once per device; "On this device" backups stay with the old address.
 - Local test of both Workers together: build with `VITE_SYNC_URL=/api`, then in `worker/`: `npx wrangler dev -c app.wrangler.toml -c wrangler.toml`.
