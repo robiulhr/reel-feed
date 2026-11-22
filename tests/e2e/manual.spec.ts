@@ -200,7 +200,23 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator("#pageTitle")).toHaveText("Boost Marketing");
     await expect(page.getByRole("button", { name: "↗ Open page on Facebook" })).toBeVisible();
     await expect(page.locator("#pageBody .scard")).toHaveCount(1);
-    await page.locator("#pageBody .scard").click();
+
+    // another video from this page: the page is filled in already, and it joins the same page
+    await page.route("**/api/fb/meta**", (r) =>
+      r.fulfill({ json: { ...META, id: "2222222222222", url: "https://www.facebook.com/reel/2222222222222/", title: "Second one" } }),
+    );
+    await page.getByRole("button", { name: "＋ Add a video from this page" }).click();
+    await expect(dlg.getByLabel("Page name")).toHaveValue("Boost Marketing");
+    await dlg.getByLabel("Facebook video link").fill("https://www.facebook.com/reel/2222222222222/");
+    await dlg.getByLabel("Facebook video link").press("Enter");
+    await expect(dlg.getByLabel("Title")).toHaveValue("Second one");
+    await expect(dlg.getByLabel("Page name")).toHaveValue("Boost Marketing");
+    const sales2 = dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ });
+    if ((await sales2.getAttribute("aria-pressed")) !== "true") await sales2.click();
+    await dlg.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dlg).toBeHidden();
+    await expect(page.locator("#pageBody .scard")).toHaveCount(2);
+    await page.locator("#pageBody .scard").filter({ hasNotText: "Second one" }).click();
     await expect(page.locator(".fb-slot.on iframe")).toHaveAttribute("data-href", META.url);
   });
 });

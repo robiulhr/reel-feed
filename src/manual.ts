@@ -98,12 +98,14 @@ function field(label: string, input: HTMLElement, hint = "") {
 }
 
 /** Add a Facebook video (or edit one you added). Resolves true when saved. */
-export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string } = {}): Promise<boolean> {
+export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page?: FbPage } = {}): Promise<boolean> {
   const ed = o.edit;
   let meta: Pick<FbMeta, "id" | "url" | "views" | "reactions" | "caption"> | null = ed
     ? { id: ed.id, url: ed.url, views: ed.v, reactions: ed.l, caption: "" }
     : null;
-  const oldPage = ed ? state.fbPages.find((p) => p.key === ed.by) : undefined;
+  // "Add a video from this page": the page is filled in already (unless the link turns out to be someone else's)
+  const fromPage = ed ? undefined : o.page;
+  const oldPage = ed ? state.fbPages.find((p) => p.key === ed.by) : fromPage;
   let catsTouched = !!ed;
   let saveBtn: HTMLButtonElement | null = null;
 
@@ -275,7 +277,17 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string } = {
       ].filter(Boolean);
       status.textContent = `Found${bits.length ? `: ${bits.join(" · ")}` : " the video"}.${r.embeddable ? "" : " Facebook says it can't be played in other apps — it will open on Facebook."}`;
       if (!title.value) title.value = r.title;
-      if (r.page && !pageName.value) {
+      const otherPage =
+        !!fromPage &&
+        !!r.page &&
+        pageName.value === fromPage.name &&
+        r.page.name.trim().toLowerCase() !== fromPage.name.trim().toLowerCase() &&
+        !(r.page.path && fromPage.url.toLowerCase().replace(/\/$/, "").endsWith(r.page.path.toLowerCase()));
+      if (otherPage) {
+        pageUrl.value = "";
+        linkCh.value = "";
+      }
+      if (r.page && (!pageName.value || otherPage)) {
         pageName.value = r.page.name;
         autoName = r.page.name;
         fillPage();
@@ -603,7 +615,7 @@ function openFbPage(chIndex: number) {
           actions.append(btn("↗ Open page on Facebook", () => openOnFacebook(pageHref(page)), "btn sm primary"));
           actions.append(btn(`📋 ${listsLabel(ch.h)}`, async () => (await pickLists(ch.h, ch.n)) && draw()));
         }
-        actions.append(btn("＋ Add a video from this page", async () => (await fbVideoDialog()) && draw()));
+        actions.append(btn("＋ Add a video from this page", async () => (await fbVideoDialog({ page })) && draw()));
         body.append(head, actions);
         if (items.length)
           body.append(
