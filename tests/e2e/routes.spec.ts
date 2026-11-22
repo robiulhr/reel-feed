@@ -52,7 +52,7 @@ test.describe("page addresses and Back", () => {
     await closeTips(page);
     await page.locator("#chName").click();
     await expect(page.locator("#page")).toBeVisible();
-    await expect.poll(() => path(page)).toMatch(/^\/channel\/@/);
+    await expect.poll(() => path(page)).toMatch(/^\/channel\/[\w.-]+$/);
     // opening the same address directly works too
     const chPath = path(page);
     await page.goBack();

@@ -28,7 +28,7 @@ export function showRoute(r: Route, e: { list?: boolean }) {
   if (shownPagePath() === toPath(r)) return; // already showing
   if (r.k === "channel") {
     const h = r.h.toLowerCase();
-    const i = feed.ds.channels.findIndex((c) => c.h.toLowerCase() === h || c.id === r.h);
+    const i = feed.ds.channels.findIndex((c) => c.h.toLowerCase().replace(/^@/, "") === h || c.id === r.h);
     if (i >= 0) return openChannel(app, { chIndex: i });
     toast("That channel isn't in the list");
   } else {

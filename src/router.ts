@@ -2,7 +2,7 @@
  * Page addresses + the Back button.
  *
  *   /                      the feed            /v/VIDEO_ID         the feed, on that Short (share links)
- *   /saved, /history, …    a Menu page         /channel/@handle    a channel's page
+ *   /saved, /history, …    a Menu page         /channel/handle     a channel's page (handle without @)
  *   /similar/VIDEO_ID      "More like this"
  *
  * Every screen that opens over the feed adds a step to the browser's history, so Back (Android's
@@ -43,7 +43,7 @@ export function parse(pathname: string, base = BASE): Route {
     }
   });
   if (a === "v" && VIDEO_ID.test(b)) return { k: "feed", v: b };
-  if (a === "channel" && b) return { k: "channel", h: b };
+  if (a === "channel" && b.replace(/^@/, "")) return { k: "channel", h: b.replace(/^@/, "") }; // old links had the @
   if (a === "similar" && VIDEO_ID.test(b)) return { k: "similar", id: b };
   if (PANEL_BY_PATH[a]) return { k: "panel", tab: PANEL_BY_PATH[a] };
   return { k: "feed" };
@@ -53,7 +53,8 @@ export function toPath(r: Route, base = BASE): string {
   const enc = encodeURIComponent;
   if (r.k === "feed") return r.v ? `${base}v/${enc(r.v)}` : base;
   if (r.k === "panel") return `${base}${PANEL_PATHS[r.tab] ?? "history"}`;
-  if (r.k === "channel") return `${base}channel/${enc(r.h).replace(/^%40/, "@")}`;
+  // no "@": Cloudflare redirects /channel/@x to /channel/%40x — an extra round trip and an ugly link
+  if (r.k === "channel") return `${base}channel/${enc(r.h.replace(/^@/, ""))}`;
   return `${base}similar/${enc(r.id)}`;
 }
 

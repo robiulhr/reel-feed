@@ -7,7 +7,7 @@ describe("page addresses", () => {
     ["/v/dQw4w9WgXcQ", { k: "feed", v: "dQw4w9WgXcQ" }],
     ["/saved", { k: "panel", tab: "saved" }],
     ["/usage", { k: "panel", tab: "api" }],
-    ["/channel/@AdsLab", { k: "channel", h: "@AdsLab" }],
+    ["/channel/AdsLab", { k: "channel", h: "AdsLab" }],
     ["/similar/dQw4w9WgXcQ", { k: "similar", id: "dQw4w9WgXcQ" }],
   ];
   it.each(cases)("%s ↔ route", (p, r) => {
@@ -17,7 +17,7 @@ describe("page addresses", () => {
 
   it("works under a folder (GitHub Pages)", () => {
     expect(parse("/reel-feed/saved", "/reel-feed/")).toEqual({ k: "panel", tab: "saved" });
-    expect(toPath({ k: "channel", h: "@x" }, "/reel-feed/")).toBe("/reel-feed/channel/@x");
+    expect(toPath({ k: "channel", h: "@x" }, "/reel-feed/")).toBe("/reel-feed/channel/x");
     expect(toPath({ k: "feed" }, "/reel-feed/")).toBe("/reel-feed/");
   });
 
@@ -25,8 +25,12 @@ describe("page addresses", () => {
     for (const p of ["/nope", "/v/", "/v/<script>", "/similar/x", "/api", "/%E0%A4%A"]) expect(parse(p, "/")).toEqual({ k: "feed" });
   });
 
-  it("odd channel names are escaped", () => {
-    expect(toPath({ k: "channel", h: "@a b/c" }, "/")).toBe("/channel/@a%20b%2Fc");
-    expect(parse("/channel/@a%20b%2Fc", "/")).toEqual({ k: "channel", h: "@a b/c" });
+  it("channel links: no @ (old @ and %40 links still work), odd names escaped", () => {
+    expect(toPath({ k: "channel", h: "@AdsLab" }, "/")).toBe("/channel/AdsLab");
+    expect(parse("/channel/@AdsLab", "/")).toEqual({ k: "channel", h: "AdsLab" });
+    expect(parse("/channel/%40AdsLab", "/")).toEqual({ k: "channel", h: "AdsLab" });
+    expect(toPath({ k: "channel", h: "@a b/c" }, "/")).toBe("/channel/a%20b%2Fc");
+    expect(parse("/channel/a%20b%2Fc", "/")).toEqual({ k: "channel", h: "a b/c" });
+    expect(parse("/channel/@", "/")).toEqual({ k: "feed" });
   });
 });
