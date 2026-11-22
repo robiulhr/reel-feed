@@ -126,6 +126,30 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator("#panelBody")).toContainText("No saved Shorts yet");
   });
 
+  test("a list with only a video you added: its chip and Filters play it", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#moreBtn").click();
+    await page.getByRole("button", { name: "＋ Add a Facebook video" }).click();
+    const dlg = page.locator(".dlg");
+    await dlg.getByLabel("Facebook video link").fill("https://www.facebook.com/reel/1141407915517139/");
+    await dlg.getByLabel("Facebook video link").press("Enter");
+    await expect(dlg).toContainText("Found: Boost Marketing");
+    const sales = dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ });
+    if ((await sales.getAttribute("aria-pressed")) !== "true") await sales.click();
+    await dlg.getByRole("button", { name: "🎯 Competitors" }).click();
+    await dlg.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dlg).toBeHidden();
+    await expect(page.getByRole("button", { name: "Competitors feed" })).toBeVisible();
+    // the Filters sheet can pick it too
+    await page.locator("#filtBtn").click();
+    const sheet = page.getByRole("dialog", { name: "Filters" });
+    await sheet.getByRole("button", { name: "🎯 Competitors · 1" }).click();
+    const show = sheet.locator(".btn.primary");
+    await expect(show).toHaveText(/^Show 1 Shorts?$/);
+    await show.click();
+    await expect(page.locator(".fb-slot.on iframe")).toHaveAttribute("data-href", META.url);
+  });
+
   test("a Facebook page has its own screen with its videos and a link to Facebook", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#moreBtn").click();
