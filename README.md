@@ -336,6 +336,7 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **In the feeds:** the videos are Shorts with the id `fb` + Facebook's number, mixed into every feed that matches their categories or lists. They play in Facebook's player (its JavaScript SDK, loaded the first time one plays), driven by the app's own tap, swipe, sound and progress controls. Each one has **↗ Open video on Facebook** and **↗ Open page on Facebook**. If a video can't play, a toast offers to open it on Facebook.
 - **Added is separate from Saved.** Added lists everything you added, with search, a page filter, list and category chips, and ♡ Save, ✎ Edit, ↗ and Delete. ♡ works like on any Short. Saved has a **Source** row (YouTube / Facebook). Deleting a video also takes it out of Saved, and you can Undo.
 - **Thumbnails** come through `/api/fb/thumb/ID`, which redirects to Facebook's current image. Facebook's image links expire, so they're never stored.
+- **Pages:** pasting a page's link calls `/api/fb/page?url=LINK`, which returns its name, address, follower count and about text, and fills them in. Its picture comes through `/api/fb/pagepic?path=/address`, a redirect like the thumbnails. Opening ✎ Edit on a video with no page looks the page up again.
 - **Sync:** `manual` and `fbPages` in user-state.json, file version 4. Older apps refuse to write the file, so they can't drop the videos you added.
 - **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
 

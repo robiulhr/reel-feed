@@ -98,10 +98,14 @@ export function next() {
     show(ctx.items[ctx.i]);
     return;
   }
+  if (feed.idx >= feed.history.length - 1) {
+    if (feed.queue.length < 5) refill();
+    // nothing after this one (a small list, a narrow filter): stay on it instead of a blank screen
+    if (!feed.queue.length && feed.cur) return void toast("That's everything in this feed for now — try another list or category");
+  }
   finishCurrent();
   if (feed.idx < feed.history.length - 1) feed.idx++;
   else {
-    if (feed.queue.length < 5) refill();
     const s = feed.queue.shift();
     if (!s) return showEmpty("Nothing matches these filters yet.<br>Try <b>All time</b> or another category.");
     feed.history.push(s);
@@ -200,11 +204,14 @@ playerHooks.onUnplayable = (code) => {
   if (!feed.cur) return;
   const fb = feed.cur.fb;
   if (fb) {
-    // an added Facebook video: keep it (it may be private now, or only for logged-in people) — offer Facebook
-    feed.cur = null;
+    // an added Facebook video: stay on it (it may be private now, or only for logged-in people) and
+    // offer Facebook — swiping still works; skipping by itself could leave a one-video list on nothing
     showSpinner(false);
-    toast("Can't play this one here", { label: "Open on Facebook", run: () => window.open(fb.url, "_blank", "noopener") }, 6000);
-    next();
+    toast(
+      code === -4 ? "Facebook's player didn't start — tap the video, or" : "Can't play this one here",
+      { label: "Open on Facebook", run: () => window.open(fb.url, "_blank", "noopener") },
+      8000,
+    );
     return;
   }
   act({ t: "bad", id: feed.cur.id });

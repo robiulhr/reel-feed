@@ -47,6 +47,7 @@ export class FbPlayer {
   private subs: { release?: () => void }[] = [];
   private volume = 100;
   private muted = true;
+  private started = false;
   active = false;
 
   constructor(
@@ -71,6 +72,7 @@ export class FbPlayer {
     const n = ++this.n;
     this.release();
     this.url = url;
+    this.started = false;
     let FB: any;
     try {
       FB = await loadFbSdk();
@@ -99,14 +101,35 @@ export class FbPlayer {
       waiting.delete(id);
       if (n === this.n && this.active && !this.player) this.ev.onError(-3);
     }, 15000);
+    // Facebook's frame comes without permission to play by itself: phones then won't start it (or stop
+    // it when the sound goes on) unless you tap inside it. Give it that permission before it loads.
+    const watch = new MutationObserver(() => {
+      const f = wrap.querySelector("iframe");
+      if (!f) return;
+      watch.disconnect();
+      if (!/\bautoplay\b/.test(f.getAttribute("allow") ?? "")) {
+        f.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+        if (f.src) f.src = f.src; // load again with the permission
+      }
+    });
+    watch.observe(wrap, { childList: true, subtree: true });
     waiting.set(id, (p) => {
       clearTimeout(timer);
       waiting.delete(id);
+      watch.disconnect();
       if (n !== this.n) return;
       this.player = p;
       p.getIframe?.()?.setAttribute?.("title", "Facebook video player");
       const on = (name: string, fn: () => void) => this.subs.push(p.subscribe(name, () => this.active && n === this.n && fn()));
-      on("startedPlaying", () => this.ev.onPlaying());
+      // it said it would play but never started: tell the app (it offers Facebook) instead of spinning forever
+      const stall = window.setTimeout(() => {
+        if (this.active && n === this.n && !this.started) this.ev.onError(-4);
+      }, 12000);
+      this.subs.push({ release: () => clearTimeout(stall) });
+      on("startedPlaying", () => {
+        this.started = true;
+        this.ev.onPlaying();
+      });
       on("paused", () => this.ev.onPaused());
       on("startedBuffering", () => this.ev.onBuffering());
       on("finishedPlaying", () => this.ev.onEnded());

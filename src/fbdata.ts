@@ -10,6 +10,13 @@ import type { Channel, Dataset, Short } from "./types";
 /** Thumbnail of an added Facebook video (fetched fresh by the app's server: Facebook's image links expire). */
 export const fbThumbUrl = (shortId: string) => `${BASE}api/fb/thumb/${shortId.slice(2)}`;
 
+/** A Facebook page's current picture, from its address (fetched fresh by the app's server). "" = no address. */
+export function fbPagePicUrl(url: string): string {
+  const m = /^https:\/\/(?:www\.|web\.|m\.)?facebook\.com(\/[^#]*)$/i.exec(url.trim());
+  const path = m?.[1].replace(/\/$/, "");
+  return path && path.length > 1 ? `${BASE}api/fb/pagepic?path=${encodeURIComponent(path)}` : "";
+}
+
 /** A Facebook page's address (or a search for its name when it isn't known). */
 export const pageHref = (p: Pick<FbPage, "url" | "name">) =>
   p.url || `https://www.facebook.com/search/pages/?q=${encodeURIComponent(p.name)}`;

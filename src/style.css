@@ -2533,3 +2533,30 @@ button[aria-busy="true"] {
 .fbadd .catpick-chips {
   flex-wrap: wrap;
 }
+.fb-avatar {
+  position: relative;
+  overflow: hidden;
+}
+.fb-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fb-pagecard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+}
+.fb-pagecard:empty {
+  display: none;
+}
+.fb-pagepic {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 18px;
+}

@@ -4,6 +4,8 @@
  *   GET /api/fb/meta?url=LINK   → { id, url, title, caption, views, reactions, page: { name, path }, embeddable }
  *   GET /api/fb/thumb/VIDEO_ID  → a redirect to the video's current thumbnail (Facebook's image links
  *                                  expire after a few weeks, so the app never stores them)
+ *   GET /api/fb/page?url=LINK   → { name, path, followers, about } of a Facebook page or profile
+ *   GET /api/fb/pagepic?path=/x → a redirect to that page's current profile picture
  *
  * Everything comes from Facebook's public pages — no key, no login: the link's redirect gives the
  * video, the video's page gives caption + thumbnail (its preview tags), the public embed page gives
@@ -80,7 +82,9 @@ export const guessCats = (title: string, caption: string) => pickCats(textScores
 export function readVideoPage(html: string) {
   const ogTitle = meta(html, "og:title");
   const caption = meta(html, "og:description");
-  const stats = /^([\d.,]+[KMB]?) views? · ([\d.,]+[KMB]?) reactions? \| /i.exec(ogTitle);
+  // "21K views · 249 reactions | …" or "2.2K reactions · 112 shares | …"
+  const stats = /^(?:[\d.,]+[KMB]? [a-z]+(?: · | \| ))+/i.exec(ogTitle);
+  const stat = (word: RegExp) => count(new RegExp(`([\\d.,]+[KMB]?) ${word.source}`, "i").exec(stats?.[0] ?? "")?.[1] ?? "");
   let rest = stats ? ogTitle.slice(stats[0].length) : ogTitle;
   // short captions come back as "caption | Page name"
   const tail = caption && rest.startsWith(caption.trim()) ? rest.slice(caption.trim().length) : "";
@@ -90,16 +94,81 @@ export function readVideoPage(html: string) {
     caption: caption || rest,
     image: meta(html, "og:image"),
     url: meta(html, "og:url"),
-    views: stats ? count(stats[1]) : 0,
-    reactions: stats ? count(stats[2]) : 0,
+    views: stat(/views?\b/),
+    reactions: stat(/reactions?\b/),
     pageFromTitle,
   };
 }
 
 /** The page name + its address from Facebook's embed page ("MD Zahid Hasan", "/md.zahid.hasan.390411"). */
 export function readEmbedPage(html: string): { name: string; path: string } | null {
-  const m = /<a title="([^"]{1,120})" target="_blank" href="\/(?:watch\/)?([^/"?]+)\/?\?ref=embed_video"/.exec(html);
-  return m ? { name: decode(m[1]), path: `/${decode(m[2])}` } : null;
+  const m =
+    /<a title="([^"]{1,120})" target="_blank" href="(?:https:\/\/(?:www|web)\.facebook\.com)?\/(?:watch\/)?([^/"?]+)\/?\?ref=embed_video"/.exec(
+      html,
+    );
+  return m ? { name: decode(m[1]).trim(), path: `/${decode(m[2])}` } : null;
+}
+
+/** The page's address from the video's own address ("/omarfarukOfficial54/videos/…"). */
+export function pagePathOf(videoUrl: string): string {
+  try {
+    const p = /^\/([^/]+)\/videos\//.exec(new URL(videoUrl).pathname)?.[1];
+    return p && !["watch", "reel", "people", "profile.php"].includes(p) ? `/${decodeURIComponent(p)}` : "";
+  } catch {
+    return "";
+  }
+}
+
+export interface FbPageMeta {
+  name: string;
+  path: string; // "/omarfarukOfficial54", "/people/Boost-Marketing/61595841376442"
+  followers: number;
+  about: string;
+}
+
+/** What a page's own address says: "Omar Faruk  | Dhaka", "… 18,022 followers · …", its picture. */
+export function readPagePage(html: string): FbPageMeta & { image: string } {
+  const desc = meta(html, "og:description");
+  let path = "";
+  try {
+    path = decodeURIComponent(new URL(meta(html, "og:url")).pathname).replace(/\/$/, "");
+  } catch {}
+  return {
+    name: meta(html, "og:title")
+      .replace(/\s*\|[^|]*$/, "")
+      .trim(),
+    path,
+    followers: count(/([\d.,]+[KMB]?) followers/i.exec(desc)?.[1] ?? ""),
+    about: desc.replace(/^.*?talking about this\.\s*/i, "").slice(0, 300),
+    image: meta(html, "og:image"),
+  };
+}
+
+/** A page's own Facebook address, with its redirects followed (facebook.com only). */
+export async function readPage(link: string): Promise<(FbPageMeta & { image: string }) | { error: string }> {
+  let u: URL;
+  try {
+    const l = link.trim();
+    u = new URL(l.startsWith("/") ? `https://www.facebook.com${l}` : l);
+  } catch {
+    return { error: "That isn't a link" };
+  }
+  if (u.protocol === "http:") u.protocol = "https:";
+  for (let i = 0; i < 5; i++) {
+    if (u.protocol !== "https:" || !isFbHost(u.hostname)) return { error: "Only Facebook page links" };
+    const r = await get(u.href).catch(() => null);
+    if (!r) return { error: "Facebook didn't answer — try again" };
+    const loc = r.headers.get("Location");
+    if (r.status >= 300 && r.status < 400 && loc) {
+      u = new URL(loc, u);
+      continue;
+    }
+    if (!r.ok) return { error: "Couldn't open that page — is it public?" };
+    const p = readPagePage(await r.text());
+    if (!p.name || /^(Facebook|Log in|Log into Facebook)$/i.test(p.name)) return { error: "Couldn't read that page — is it public?" };
+    return { ...p, path: p.path || u.pathname.replace(/\/$/, "") };
+  }
+  return { error: "Too many redirects" };
 }
 
 /** First line of the caption without hashtags, as a short title. */
@@ -168,7 +237,7 @@ export async function lookup(link: string): Promise<FbMeta | { error: string }> 
     caption: caption.slice(0, 2000),
     views: page?.views ?? 0,
     reactions: page?.reactions ?? 0,
-    page: embed ?? (page?.pageFromTitle ? { name: page.pageFromTitle, path: "" } : null),
+    page: embed ?? (page?.pageFromTitle ? { name: page.pageFromTitle, path: pagePathOf(page.url || url) } : null),
     embeddable: oembed !== false,
     cats: caption ? guessCats(title, caption) : [],
   };
@@ -185,6 +254,23 @@ export async function handleFb(req: Request, url: URL): Promise<Response> {
     if (!link || link.length > 600) return json({ error: "Paste a Facebook video link" }, 400);
     const r = await lookup(link);
     return "error" in r ? json(r, 422) : json(r, 200, 600);
+  }
+  if (url.pathname === "/api/fb/page") {
+    const link = url.searchParams.get("url") ?? "";
+    if (!link || link.length > 600) return json({ error: "Paste a Facebook page link" }, 400);
+    const r = await readPage(link);
+    if ("error" in r) return json(r, 422);
+    const { image: _image, ...out } = r;
+    return json(out, 200, 3600);
+  }
+  if (url.pathname === "/api/fb/pagepic") {
+    const path = url.searchParams.get("path") ?? "";
+    const okPath = /^\/[\w.%-]+(?:\/[\w.%-]+){0,2}$/.test(path) || /^\/profile\.php\?id=\d{5,25}$/.test(path);
+    const r = okPath ? await readPage(path) : null;
+    const img = r && !("error" in r) ? r.image : "";
+    if (!img || !/^https:\/\/[\w.-]+\.fbcdn\.net\//.test(img))
+      return new Response("No picture", { status: 404, headers: { "Cache-Control": "public, max-age=3600" } });
+    return new Response(null, { status: 302, headers: { Location: img, "Cache-Control": "public, max-age=21600" } });
   }
   const thumb = /^\/api\/fb\/thumb\/(\d{6,25})$/.exec(url.pathname)?.[1];
   if (thumb) {
