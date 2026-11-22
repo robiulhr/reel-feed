@@ -12,7 +12,39 @@ export interface Shared {
   apiLog: ApiUse[]; // YouTube API units spent by channel lookups (newest first)
   hist: HistItem[]; // watch history, newest first
   catFix: Record<string, CatId[]>; // your category fixes per Short (main first) — they always win
+  lists: ChList[]; // your channel lists (Competitors, Inspiration…), each with its own feed and Saved view
 }
+
+/** A list of channels you keep an eye on together, e.g. direct competitors. Channels can be in several. */
+export interface ChList {
+  id: string;
+  name: string;
+  icon: string;
+  ch: string[]; // channel handles ("@x"), in the order added
+}
+/** The lists everyone starts with (rename or delete them freely). */
+export const defaultLists = (): ChList[] => [
+  { id: "comp", name: "Competitors", icon: "🎯", ch: [] },
+  { id: "insp", name: "Inspiration", icon: "✨", ch: [] },
+  { id: "adsup", name: "Ads updates", icon: "📢", ch: [] },
+  { id: "aiup", name: "AI updates", icon: "🤖", ch: [] },
+];
+const MAX_LISTS = 20;
+const sameH = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+/** Cleans lists from any source (a file, an old backup). */
+export function normLists(x: unknown): ChList[] {
+  if (!Array.isArray(x)) return defaultLists();
+  const out: ChList[] = [];
+  for (const l of x) {
+    if (!l || typeof l.id !== "string" || !l.id || out.some((o) => o.id === l.id)) continue;
+    const ch: string[] = [];
+    for (const h of Array.isArray(l.ch) ? l.ch : []) if (typeof h === "string" && h && !ch.some((c) => sameH(c, h))) ch.push(h);
+    out.push({ id: l.id, name: String(l.name ?? "").slice(0, 40) || "List", icon: String(l.icon ?? "📋").slice(0, 8) || "📋", ch });
+  }
+  return out.slice(0, MAX_LISTS);
+}
+/** Is this channel in the list? */
+export const inChList = (l: ChList, h: string) => l.ch.some((c) => sameH(c, h));
 
 /** One watched Short. `x` keeps title/channel for Shorts that aren't in your library (searches, previews). */
 export interface HistItem {
@@ -37,6 +69,7 @@ export interface DevicePrefs {
   tab: Tab;
   win: Win;
   cats: CatId[]; // categories picked in the top bar (none = All)
+  list: string; // a channel list's feed (its id), "" = all channels
   lang: Lang | "all"; // language filter
   lastActive: number; // unix seconds
   prevVisit: number; // unix seconds — start of "NEW since last visit"
@@ -67,12 +100,17 @@ export type Op =
   | { t: "histDel"; id: string }
   | { t: "histClear" }
   | { t: "catFix"; id: string; cats: CatId[] } // empty cats = back to automatic
+  | { t: "listNew"; id: string; name: string; icon: string }
+  | { t: "listEdit"; id: string; name: string; icon: string }
+  | { t: "listDrop"; id: string } // delete the list (not its channels)
+  | { t: "listAdd"; id: string; h: string } // put a channel in a list
+  | { t: "listRemove"; id: string; h: string }
   | { t: "restore"; data: Snap; mode: "merge" | "replace" }; // undo an erase / restore a backup
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
 const PENDING_KEY = "ecomgy-reel-feed.pending";
 export const MAX_SEEN = 20000;
-export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog", "hist", "catFix"] as const;
+export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog", "hist", "catFix", "lists"] as const;
 
 export const emptyShared = (): Shared => ({
   saved: [],
@@ -84,6 +122,7 @@ export const emptyShared = (): Shared => ({
   apiLog: [],
   hist: [],
   catFix: {},
+  lists: defaultLists(),
 });
 
 const defaults = (): State => ({
@@ -92,6 +131,7 @@ const defaults = (): State => ({
   tab: "foryou",
   win: "all",
   cats: [],
+  list: "",
   lang: "all",
   lastActive: 0,
   prevVisit: 0,
@@ -120,7 +160,7 @@ function read<T>(key: string, fallback: T): T {
  *   LOCAL_VERSION — this device (localStorage).  FILE_VERSION — the synced user-state.json.
  */
 export const LOCAL_VERSION = 3;
-export const FILE_VERSION = 2;
+export const FILE_VERSION = 3; // 3: channel lists (older apps must not write the file and drop them)
 
 export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
   const s = { ...defaults(), ...raw } as State;
@@ -138,6 +178,8 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
     if (!s.catFix || typeof s.catFix !== "object") s.catFix = {};
   }
   s.cats = normCats(s.cats);
+  s.lists = normLists(raw.lists);
+  if (typeof s.list !== "string" || (s.list && !s.lists.some((l) => l.id === s.list))) s.list = "";
   if (!["all", "bn", "en", "hi"].includes(s.lang)) s.lang = "all";
   s.sv = LOCAL_VERSION;
   return s;
@@ -254,6 +296,28 @@ export function applyOp(s: Shared, op: Op) {
       else delete s.catFix[op.id];
       break;
     }
+    case "listNew":
+      if (!s.lists.some((l) => l.id === op.id) && s.lists.length < MAX_LISTS)
+        s.lists.push({ id: op.id, name: op.name, icon: op.icon, ch: [] });
+      break;
+    case "listEdit": {
+      const l = s.lists.find((x) => x.id === op.id);
+      if (l) Object.assign(l, { name: op.name, icon: op.icon });
+      break;
+    }
+    case "listDrop":
+      s.lists = s.lists.filter((l) => l.id !== op.id);
+      break;
+    case "listAdd": {
+      const l = s.lists.find((x) => x.id === op.id);
+      if (l && !inChList(l, op.h)) l.ch.push(op.h);
+      break;
+    }
+    case "listRemove": {
+      const l = s.lists.find((x) => x.id === op.id);
+      if (l) l.ch = l.ch.filter((c) => !sameH(c, op.h));
+      break;
+    }
     case "restore":
       applyRestore(s, op.data, op.mode);
       break;
@@ -280,7 +344,7 @@ export function snap(s: Shared, keys: readonly (keyof Snap)[] = SNAP_KEYS): Snap
   }
   return out;
 }
-export const SNAP_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "hist", "catFix"] as const;
+export const SNAP_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "hist", "catFix", "lists"] as const;
 
 /**
  * replace = put those parts back exactly as they were (a backup restore, learning undo).
@@ -311,6 +375,15 @@ export function applyRestore(s: Shared, d: Snap, mode: "merge" | "replace") {
   for (const [k, v] of Object.entries(d.affCh ?? {})) if (!(k in s.affCh)) s.affCh[k] = v;
   for (const [k, v] of Object.entries(d.affCat ?? {})) if (!(k in s.affCat)) s.affCat[k] = v;
   for (const [id, cats] of Object.entries(d.catFix ?? {})) if (!(id in s.catFix)) s.catFix[id] = cats;
+  if (d.lists) mergeLists(s, d.lists);
+}
+
+/** Adds back lists and channels that are missing (keeps everything already there). */
+function mergeLists(s: Shared, from: ChList[]) {
+  for (const l of normLists(from)) {
+    if (!s.lists.some((x) => x.id === l.id)) applyOp(s, { t: "listNew", id: l.id, name: l.name, icon: l.icon });
+    for (const h of l.ch) applyOp(s, { t: "listAdd", id: l.id, h });
+  }
 }
 
 type Listener = () => void;
@@ -356,6 +429,7 @@ export interface StateFile {
   apiLog?: ApiUse[];
   hist?: HistItem[];
   catFix?: Record<string, CatId[]>;
+  lists?: ChList[];
 }
 
 export function toFile(s: Shared): StateFile {
@@ -373,6 +447,7 @@ export function toFile(s: Shared): StateFile {
     apiLog: s.apiLog,
     hist: s.hist,
     catFix: s.catFix,
+    lists: s.lists,
   };
 }
 
@@ -399,6 +474,7 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
     const c = normCats(cats);
     if (c.length) s.catFix[id] = c;
   }
+  s.lists = normLists(f.lists);
   (f.seen ?? []).forEach((id, i) => {
     s.seen[id] = i + 1;
   }); // keeps order; real timestamps sort after these
@@ -416,6 +492,7 @@ export function mergeInto(base: Shared, local: Shared) {
   for (const h of local.hist ?? []) applyOp(base, { t: "watch", item: h });
   for (const [k, v] of Object.entries(local.affCat)) if (!(k in base.affCat)) base.affCat[k] = v;
   for (const [id, cats] of Object.entries(local.catFix ?? {})) if (!(id in base.catFix)) base.catFix[id] = cats;
+  mergeLists(base, local.lists ?? []);
 }
 
 export function sharedOf(s: State): Shared {
@@ -429,6 +506,7 @@ export function sharedOf(s: State): Shared {
     apiLog: s.apiLog ?? [],
     hist: s.hist ?? [],
     catFix: s.catFix ?? {},
+    lists: s.lists ?? defaultLists(),
   });
 }
 

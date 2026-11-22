@@ -36,6 +36,8 @@ import { maybeAutoFull } from "./fullscreen";
 import { renderAbout, renderBackups, renderSyncPanel } from "./settings";
 import { undoable } from "./backup";
 import { toast } from "./ui";
+import { LISTS_EVENT, listById, listLabel, pickLists } from "./lists";
+import { inChList } from "./store";
 import type { Short, Tab, Win } from "./types";
 import { dismiss, go, pushLayer, type Route, toPath } from "./router";
 
@@ -151,6 +153,7 @@ export function renderPanel() {
 
 /** Saved list filters (kept while the app is open). */
 const savedFilter = {
+  list: "", // a channel list's id ("" = all)
   group: "" as GroupId | "",
   cat: "" as CatId | "",
   lang: "all" as Lang | "all",
@@ -169,12 +172,16 @@ function renderSaved(body: HTMLElement) {
   const now = nowSec();
   const chName = (s: Short) => feed.ds.channels[s.ch]?.n ?? "";
   // everything except the category, so the chip counts show what each chip would give
-  const base = all.filter(
+  const chH = (s: Short) => feed.ds.channels[s.ch]?.h ?? "";
+  const unlisted = all.filter(
     (s) =>
       (f.lang === "all" || s.lg === f.lang) &&
       (f.win === "all" || now - s.p <= Number(f.win) * 86400) &&
       (!f.q || `${s.t} ${chName(s)}`.toLowerCase().includes(f.q.toLowerCase())),
   );
+  if (f.list && !listById(f.list)) f.list = "";
+  const curList = f.list ? listById(f.list) : undefined;
+  const base = curList ? unlisted.filter((s) => inChList(curList, chH(s))) : unlisted;
   const inGroup = (s: Short, g: GroupId) => videoCats(s, state).some((c) => groupOf(c) === g);
   const items = base.filter((s) => (f.cat ? videoCats(s, state).includes(f.cat) : !f.group || inGroup(s, f.group)));
   if (f.sort === "views") items.sort((x, y) => y.v - x.v);
@@ -267,7 +274,31 @@ function renderSaved(body: HTMLElement) {
         renderPanel();
       }),
     );
-  body.append(head, row, gRow);
+  // your channel lists: Competitors, Inspiration… each one its own Saved list
+  const listCounts = state.lists
+    .map((l) => [l, unlisted.filter((s) => inChList(l, chH(s))).length] as const)
+    .filter(([l, n]) => n || l === curList);
+  if (listCounts.length) {
+    const lRow = el("div", "cp-chips sv-chips sv-lists");
+    lRow.setAttribute("role", "group");
+    lRow.setAttribute("aria-label", "Channel list");
+    lRow.append(
+      chip(`All saved · ${unlisted.length}`, !f.list, () => {
+        f.list = "";
+        renderPanel();
+      }),
+    );
+    for (const [l, n] of listCounts)
+      lRow.append(
+        chip(`${listLabel(l)} · ${n}`, f.list === l.id, () => {
+          f.list = f.list === l.id ? "" : l.id;
+          f.group = "";
+          f.cat = "";
+          renderPanel();
+        }),
+      );
+    body.append(head, row, lRow, gRow);
+  } else body.append(head, row, gRow);
   if (f.group) {
     const topics = groupCats(f.group)
       .map((c) => [c, base.filter((s) => videoCats(s, state).includes(c)).length] as const)
@@ -398,6 +429,7 @@ function bindSheet() {
     if (a === "similar") openSimilar(app, cur);
     else if (a === "channel") exploreCurrent();
     else if (a === "fixcat") fixCategory(cur);
+    else if (a === "lists") listCurrentChannel(cur);
     else if (a === "hide") hideChannel();
     else if (a === "open") window.open(`https://www.youtube.com/shorts/${cur.id}`, "_blank", "noopener");
   });
@@ -412,6 +444,18 @@ function closeTips() {
 }
 export function showTipsIfNew() {
   if (!state.tipsSeen) tipsModal.open();
+}
+
+// ---------- channel lists ----------
+function listCurrentChannel(s: Short) {
+  const ch = feed.ds.channels[s.ch];
+  if (ch) void pickLists(ch.h, ch.n);
+}
+
+/** Lists changed: the chips show the new lists, and a list's feed shows its channels now. */
+function afterListsChange() {
+  renderFilterBar();
+  if (state.list) resetFeed();
 }
 
 // ---------- "Wrong category?" ----------
@@ -493,6 +537,7 @@ function scrollArrows(row: HTMLElement) {
 export function initPanels() {
   bindTopBar();
   bindSheet();
+  window.addEventListener(LISTS_EVENT, afterListsChange);
   scrollArrows(els.tabs);
   scrollArrows(els.chips);
   scrollArrows(els.ptabs);

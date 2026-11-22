@@ -145,6 +145,7 @@ export function confirmDialog(o: DialogOptions): Promise<boolean> {
       if (e.key !== "Enter" || !yes) return;
       const a = document.activeElement;
       if (a instanceof HTMLButtonElement && a !== yes) return;
+      if (a instanceof HTMLElement && a.dataset.ownEnter) return; // a field inside that uses Enter itself (e.g. "add")
       e.preventDefault();
       e.stopPropagation();
       done(true);

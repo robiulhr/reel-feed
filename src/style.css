@@ -2352,3 +2352,49 @@ button[aria-busy="true"] {
 .bk-h:first-child {
   margin-top: 0;
 }
+
+/* ---------- channel lists (Competitors, Inspiration…) ---------- */
+.lspick .catpick-chips,
+.lsman .catpick-chips {
+  flex-wrap: wrap;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
+  margin: 6px 0 4px;
+}
+.ls-new {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+}
+.ls-ico {
+  flex: none;
+  width: 40px;
+  padding: 6px 0;
+  font-size: 18px;
+}
+.lsman-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lsman-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 10px 8px;
+}
+.lsman-card.drop {
+  opacity: 0.5;
+}
+.lsman-card.drop .ch-search {
+  text-decoration: line-through;
+}
+.filt-seg.filt-lists {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.filt-seg.filt-lists button {
+  padding: 8px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

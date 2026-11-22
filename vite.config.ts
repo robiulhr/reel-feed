@@ -38,9 +38,10 @@ function securityPolicy(syncUrl: string): Plugin {
  * actually download), so it stays fast on weak networks. Raise a limit only on purpose.
  * Sizes when the budget was set (Phase 4): JS 29 kB, CSS 5.7 kB.
  * Raised JS 40 → 45 with the category system (Filters sheet, pickers, Sorting): 40.5 kB with sync on.
+ * Raised JS 45 → 48 with channel lists (Competitors/Inspiration feeds, Saved tabs, list editor): 45.4 kB.
  * Vite 8 (Rolldown) bundles ~4 kB bigger than Vite 6 for the same code: 41.3 kB with sync on (Nov 2026).
  */
-export const BUDGET_KB = { js: 45, css: 10 };
+export const BUDGET_KB = { js: 48, css: 10 };
 
 function sizeBudget(): Plugin {
   return {

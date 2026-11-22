@@ -14,6 +14,7 @@ import { act, state } from "./store";
 import * as sync from "./sync";
 import type { Channel, Short } from "./types";
 import { el, btn } from "./dom";
+import { listSummary, listsOf, pickLists } from "./lists";
 
 type Sort = "newest" | "popular" | "gems";
 interface MiniShort {
@@ -228,6 +229,18 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
         actions.append(cat, addBtn);
         addError = err;
       }
+      const lists = btn(`📋 ${listSummary(info.handle)}`, async () => {
+        if (await pickLists(info.handle, info.name)) reopen();
+      });
+      lists.setAttribute(
+        "aria-label",
+        `Lists: ${
+          listsOf(info.handle)
+            .map((l) => l.name)
+            .join(", ") || "none"
+        }. Change`,
+      );
+      actions.prepend(lists);
       body.append(actions);
       if (addError) body.append(addError);
 

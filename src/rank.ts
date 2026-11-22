@@ -9,17 +9,20 @@ export const isGuessed = (s: Short, st: Pick<Shared, "catFix">) => !st.catFix[s.
 
 const WIN_DAYS: Record<string, number> = { all: Infinity, "30": 30, "7": 7, "1": 1 };
 
-type FilterState = Pick<State, "win" | "lang" | "cats" | "hidden" | "bad" | "catFix">;
-/** The feed's filters (time range, language, categories, hidden channels) as a test for one Short. */
+type FilterState = Pick<State, "win" | "lang" | "cats" | "hidden" | "bad" | "catFix"> & Partial<Pick<State, "list" | "lists">>;
+/** The feed's filters (channel list, time range, language, categories, hidden channels) as a test for one Short. */
 export function feedFilter(ds: Dataset, st: FilterState): (s: Short) => boolean {
   const maxAge = (WIN_DAYS[st.win] ?? Infinity) * 86400;
   const now = Date.now() / 1000;
   const hidden = new Set(st.hidden);
   const bad = new Set(st.bad);
   const picked = new Set<string>(st.cats);
+  const list = st.list ? st.lists?.find((l) => l.id === st.list) : undefined;
+  const inList = list ? new Set(list.ch.map((h) => h.toLowerCase())) : undefined;
   return (s) => {
     const ch = ds.channels[s.ch];
     if (!ch || ch.st === "removed" || hidden.has(ch.h) || bad.has(s.id)) return false;
+    if (inList && !inList.has(ch.h.toLowerCase())) return false;
     if (now - s.p > maxAge) return false;
     if (st.lang !== "all" && s.lg !== st.lang) return false;
     const cats = videoCats(s, st);

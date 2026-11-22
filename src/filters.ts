@@ -10,7 +10,8 @@ import { app, feed, resetFeed } from "./feed";
 import { feedFilter, videoCats } from "./rank";
 import { persist, state } from "./store";
 import type { Win } from "./types";
-import { confirmDialog } from "./ui";
+import { confirmDialog, toast } from "./ui";
+import { listById, listLabel, manageLists } from "./lists";
 import { els } from "./view";
 
 export const WINS: [Win, string][] = [
@@ -28,7 +29,7 @@ export const LANG_OPTS: [Lang | "all", string][] = [
 /** How many category chips sit in the top bar (the rest are one tap away under More). */
 const QUICK = 5;
 
-type Draft = { win: Win; lang: Lang | "all"; cats: CatId[] };
+type Draft = { win: Win; lang: Lang | "all"; cats: CatId[]; list: string };
 const isIslamic = (c: CatId) => groupOf(c) === PERSONAL_GROUP;
 
 /** Islamic and other topics don't mix: picking one kind starts a fresh pick. */
@@ -50,8 +51,8 @@ export const groupState = (cats: CatId[], g: GroupId): "all" | "some" | "none" =
 };
 
 /** Shorts per topic and per main category (any of the Short's categories) for a time range + language. */
-function counts(d: Pick<Draft, "win" | "lang">) {
-  const pass = feedFilter(feed.ds, { ...state, win: d.win, lang: d.lang, cats: [...CATEGORIES.map((c) => c.id)] });
+function counts(d: Pick<Draft, "win" | "lang" | "list">) {
+  const pass = feedFilter(feed.ds, { ...state, win: d.win, lang: d.lang, list: d.list, cats: [...CATEGORIES.map((c) => c.id)] });
   const cat = new Map<CatId, number>();
   const group = new Map<GroupId, number>();
   for (const s of feed.ds.videos) {
@@ -71,6 +72,7 @@ function apply(d: Draft) {
   state.win = d.win;
   state.lang = d.lang;
   state.cats = d.cats;
+  state.list = d.list;
   persist();
   renderFilterBar();
   resetFeed();
@@ -82,13 +84,13 @@ let quickOrder: GroupId[] = [];
 
 /** [⚙ Filters •n] + All · active time/language (✕) · what you picked · biggest main categories · More */
 export function renderFilterBar() {
-  const active = (state.win !== "all" ? 1 : 0) + (state.lang !== "all" ? 1 : 0) + (state.cats.length ? 1 : 0);
+  const active = (state.win !== "all" ? 1 : 0) + (state.lang !== "all" ? 1 : 0) + (state.cats.length ? 1 : 0) + (state.list ? 1 : 0);
   els.filtBtn.querySelector(".filt-n")!.textContent = active ? String(active) : "";
   els.filtBtn.setAttribute("aria-label", active ? `Filters, ${active} on` : "Filters");
   els.filtBtn.classList.toggle("on", active > 0);
 
   // biggest main categories for this time range + language (order only changes with those, so chips don't jump)
-  const key = `${feed.ds.generatedAt}|${state.win}|${state.lang}`;
+  const key = `${feed.ds.generatedAt}|${state.win}|${state.lang}|${state.list}|${state.lists.map((l) => l.ch.length).join()}`;
   if (key !== countsKey) {
     countsKey = key;
     const n = counts(state).group;
@@ -105,6 +107,10 @@ export function renderFilterBar() {
     return b;
   };
   const out: HTMLElement[] = [chip("All", { cat: "" }, !state.cats.length, "All categories")];
+  // your channel lists (Competitors, Inspiration…): each is a feed of its own
+  const curList = state.list ? listById(state.list) : undefined;
+  if (curList) out.push(chip(`${listLabel(curList)} ✕`, { list: "" }, true, `${curList.name} feed. Back to all channels`));
+  for (const l of state.lists) if (l !== curList && l.ch.length) out.push(chip(listLabel(l), { list: l.id }, false, `${l.name} feed`));
   if (state.win !== "all") out.push(chip(`${winLabel(state.win)} ✕`, { clear: "win" }, true, `${winLabel(state.win)}. Remove`));
   if (state.lang !== "all") out.push(chip(`${langLabel(state.lang)} ✕`, { clear: "lang" }, true, `${langLabel(state.lang)}. Remove`));
   // what you picked: a whole main category shows as one chip, single topics as their own chips
@@ -135,6 +141,7 @@ export function bindFilterBar() {
     const b = (e.target as HTMLElement).closest("button");
     if (!b) return;
     if (b.dataset.more) return void openFilters(true);
+    if (b.dataset.list !== undefined) return apply({ ...state, list: b.dataset.list });
     if (b.dataset.clear === "win") return apply({ ...state, win: "all" });
     if (b.dataset.clear === "lang") return apply({ ...state, lang: "all" });
     if (b.dataset.group) return apply({ ...state, cats: toggleGroup(state.cats, b.dataset.group as GroupId) });
@@ -147,7 +154,7 @@ export function bindFilterBar() {
 
 // ---------- the Filters sheet ----------
 export async function openFilters(toTopics = false) {
-  const d: Draft = { win: state.win, lang: state.lang, cats: [...state.cats] };
+  const d: Draft = { win: state.win, lang: state.lang, cats: [...state.cats], list: state.list };
   const box = el("div", "filt");
   let confirmBtn: HTMLButtonElement | null = null;
 
@@ -182,6 +189,42 @@ export async function openFilters(toTopics = false) {
     () => d.lang,
     (v) => (d.lang = v),
   );
+
+  // ---- channel lists
+  const lists = el("div", "filt-sec");
+  const listHead = el("div", "filt-head filt-head-row");
+  const editLists = el("button", "filt-link", "Edit lists");
+  editLists.type = "button";
+  editLists.onclick = async () => {
+    await manageLists((h) => feed.ds.channels.find((c) => c.h.toLowerCase() === h.toLowerCase())?.n ?? h);
+    if (d.list && !listById(d.list)) d.list = "";
+    renderListBtns();
+    update();
+  };
+  listHead.append(el("span", "", "Channel lists"), editLists);
+  const listRow = el("div", "filt-seg filt-lists");
+  listRow.setAttribute("role", "group");
+  listRow.setAttribute("aria-label", "Channel lists");
+  lists.append(
+    listHead,
+    el("p", "filt-hint", "A feed of just the channels in a list. Add channels from a channel's page or the ⋯ menu."),
+    listRow,
+  );
+  function renderListBtns() {
+    listRow.replaceChildren();
+    for (const l of [{ id: "", name: "All channels", icon: "", ch: [] as string[] }, ...state.lists]) {
+      const b = el("button", "", l.id ? `${listLabel(l)} · ${l.ch.length}` : l.name);
+      b.type = "button";
+      b.dataset.v = l.id;
+      b.onclick = () => {
+        if (l.id && !l.ch.length) return void toast(`No channels in ${l.name} yet — add them from a channel's page or the ⋯ menu`);
+        d.list = l.id;
+        update();
+      };
+      listRow.append(b);
+    }
+  }
+  renderListBtns();
 
   const topics = el("div", "filt-sec");
   const topHead = el("div", "filt-head filt-head-row");
@@ -235,12 +278,17 @@ export async function openFilters(toTopics = false) {
   const reset = el("button", "filt-link", "Reset all");
   reset.type = "button";
   reset.onclick = () => {
-    Object.assign(d, { win: "all", lang: "all", cats: [] });
+    Object.assign(d, { win: "all", lang: "all", cats: [], list: "" });
     update();
   };
-  box.append(reset, time.wrap, lang.wrap, topics);
+  box.append(reset, lists, time.wrap, lang.wrap, topics);
 
   function update() {
+    listRow.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
+      const on = b.dataset.v === d.list;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
     for (const s of [time, lang])
       s.row.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
         const on = b.dataset.v === s.get();

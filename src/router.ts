@@ -90,6 +90,9 @@ export function go(r: Route, o: { list?: boolean; replace?: boolean } = {}) {
   const path = toPath(r);
   const e = entry();
   const same = path === location.pathname && !e.layer && !!e.list === !!o.list;
+  // a dialog just closed and its page re-renders (same address): its step is about to be taken out
+  // again (see pushLayer) — keep it a layer step, or Back would show the same page twice
+  if (isDeadLayer(e) && path === location.pathname && !o.list) return;
   if (applying || o.replace || same || isDeadLayer(e)) {
     // a closed sheet's step is reused, so Back never lands on "nothing"
     history.replaceState({ d: e.d, ...(o.list ? { list: true } : {}) }, "", path);

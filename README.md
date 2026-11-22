@@ -319,6 +319,13 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 
 ---
 
+## 6e. Channel lists — `src/lists.ts` (Competitors, Inspiration, Ads updates, AI updates…)
+- Put a channel in one or more lists: **⋯ → 📋 Add channel to a list**, or the **📋** button on its channel page. You can make a new list in the same dialog.
+- **Each list is its own feed.** The top bar shows a chip for each list that has channels (e.g. 🎯 Competitors). Tap ✕ on it to go back to all channels. The Filters sheet has a **Channel lists** section, and **Edit lists** there lets you rename lists, change icons, delete lists and take channels out.
+- **Saved has a tab per list** ("🎯 Competitors · 3"), so you can look at what you saved from competitors on its own.
+- These Shorts still show in every other feed as before; a list only adds a way to look at them separately.
+- Lists sync across devices: `lists` in user-state.json, file version 3. Older app versions refuse to write the file, so they can't drop the lists.
+
 ## 6c. Channel explorer — `src/explore.ts`
 
 - Open it by tapping the **channel name/avatar** under a Short, **⋯ → Explore this channel**, a channel in **More like this**, or **Preview Shorts** in Channels → Add.
