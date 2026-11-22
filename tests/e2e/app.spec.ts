@@ -204,16 +204,33 @@ test.describe("channels (with the fake sync server)", () => {
 });
 
 test.describe("categories", () => {
-  test("a category chip filters the feed; All clears it", async ({ app: page }) => {
+  test("a main-category chip filters the feed; All clears it", async ({ app: page }) => {
     await closeTips(page);
-    const sales = page.locator('#chips button[data-cat="sales"]');
-    await sales.click();
-    await expect(sales).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("#meta")).toContainText("Sales");
+    const selling = page.locator('#chips button[data-group="sell"]');
+    await selling.click();
+    await expect(page.locator('#chips button[data-group="sell"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#meta")).toContainText(/Sales|E-com/);
     await swipe(page, "up");
-    await expect(page.locator("#meta")).toContainText("Sales");
+    await expect(page.locator("#meta")).toContainText(/Sales|E-com/);
     await page.locator('#chips button[data-cat=""]').click();
-    await expect(sales).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator('#chips button[data-group="sell"]')).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("Filters sheet: a main category picks all its topics; a topic can be picked alone", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#filtBtn").click();
+    const sheet = page.getByRole("dialog", { name: "Filters" });
+    const selling = sheet.getByRole("button", { name: /^Selling,/ });
+    const ecom = sheet.getByRole("button", { name: /^E-commerce,/ });
+    const sales = sheet.getByRole("button", { name: /^Sales & Customers,/ });
+    await selling.click();
+    await expect(selling).toHaveAttribute("aria-pressed", "true");
+    await expect(ecom).toHaveAttribute("aria-pressed", "true");
+    await expect(sales).toHaveAttribute("aria-pressed", "true");
+    await ecom.click(); // one topic off → the main category is only partly on
+    await expect(selling).toHaveAttribute("aria-pressed", "mixed");
+    await sheet.locator(".btn.primary").click();
+    await expect(page.locator('#chips button[data-cat="sales"]')).toHaveAttribute("aria-pressed", "true");
   });
 
   test("Filters sheet: time, language and topics apply together and show in the bar", async ({ app: page }) => {
@@ -221,7 +238,7 @@ test.describe("categories", () => {
     await page.locator("#filtBtn").click();
     const sheet = page.getByRole("dialog", { name: "Filters" });
     await sheet.getByRole("button", { name: "30 days" }).click();
-    await sheet.getByRole("button", { name: /^Sales & Customers/ }).click();
+    await sheet.getByRole("button", { name: /^Sales & Customers,/ }).click();
     const show = sheet.locator(".btn.primary");
     await expect(show).toHaveText(/^Show [0-9]+ Shorts$/);
     await show.click();

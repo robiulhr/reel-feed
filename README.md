@@ -40,7 +40,7 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
   - **Breakouts**: biggest hits relative to each channel's normal views.
   - **Most viewed**: highest view count first — the best Shorts of any category, language and time range.
   - **Newest**: pure upload order.
-- **Filters**: tap **⚙ Filters** for one sheet with time range (All time, 30 days, 7 days, Today), language (All, বাংলা, English, हिन्दी/اردو) and every topic grouped with its number of Shorts — the button shows **Show N Shorts** before you apply. The bar beside it keeps the quick ones: **All**, your active time/language (tap **✕** to remove), your picked topics, the 6 biggest topics and **More topics…**. Pick several topics to see Shorts in any of them (§5a).
+- **Filters**: tap **⚙ Filters** for one sheet with time range (All time, 30 days, 7 days, Today), language (All, বাংলা, English, हिन्दी/اردو) and every topic grouped with its number of Shorts — the button shows **Show N Shorts** before you apply. The bar beside it keeps the quick ones: **All**, your active time/language (tap **✕** to remove), your picked topics, the biggest main categories and **More…**. Pick several topics to see Shorts in any of them (§5a).
 - **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), **⋯** → More like this (§6d), Explore this channel (§6c), **🏷 Wrong category?**, Hide this channel, Open on YouTube. Tapping the **channel name** also opens the channel explorer.
 - **Menu ☰**: **Channels** (control panel, §6a), **Sorting** (Shorts whose category is only a guess, §5a), Saved list, Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), About (stats, reset learning, clear history).
 - **NEW badge**: Shorts uploaded since your last visit (a gap of 30+ minutes counts as a new visit).
@@ -213,10 +213,17 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 
 ## 5a. Categories — `src/categories.ts` (app) + `src/classify.ts` (rules; fetch, Worker, tests only)
 
-**19 categories in 3 groups**
-- **Business & growth**: Meta & Google Ads · Marketing & Branding · E-commerce · Sales & Customers · Business Stories · Founders & Leaders · Money & Investing · Self-growth · Career & Skills · AI & Tech Tools · Content & Design
-- **Fun & brand-able**: Famous Brand Ads · Funny Brand Content · Office & Work Fun · Comedy · Facts & Knowledge
-- **Islamic**: Quran Tilawat · Waz & Islamic Talks · Nasheed & Gajal — left out of **All**; pick their chips to see them (mixing them with other chips starts a new pick).
+**8 main categories, 19 topics.** In Filters, tap a main category to pick all its topics (✓), or pick single topics (– = partly picked). In the top bar a fully picked main category shows as one chip.
+- 📣 **Marketing & Ads**: Meta & Google Ads · Marketing & Branding · Content & Design
+- 🛒 **Selling**: E-commerce · Sales & Customers
+- 🏢 **Business & Founders**: Business Stories · Founders & Leaders
+- 💰 **Money & Career**: Money & Investing · Career & Skills
+- 🚀 **Growth & AI**: Self-growth · AI & Tech Tools
+- 🎬 **Brands & Fun**: Famous Brand Ads · Funny Brand Content · Office & Work Fun · Comedy
+- 💡 **Facts & Knowledge**
+- 🕌 **Islamic**: Quran Tilawat · Waz & Islamic Talks · Nasheed & Gajal — left out of **All**; pick it to see them (mixing it with other categories starts a new pick).
+
+Change the grouping in  /  in  (never reorder  — the data file stores categories by position).
 
 **Every Short is sorted by its own words** (`scripts/fetch.ts`, no AI, no API key): keyword lists in English, Bangla (whole words) and Roman Bangla/Hindi score the title (×3), tags/hashtags (×2) and description (×1). Lines and tags a channel puts on most of its videos (links, "subscribe", course ads) are ignored.
 - **1–3 categories per Short**, main first. A second/third only with real evidence — so a near-miss still shows up in the right chip.

@@ -3,30 +3,36 @@
  * Small on purpose — this part ships to phones. The keyword rules that sort each Short live in
  * classify.ts (used only by the fetch script, the sync Worker and tests).
  */
+/** Main categories, in the order they're shown. Each topic below belongs to one. */
 export const GROUPS = [
-  { id: "biz", label: "Business & growth" },
-  { id: "fun", label: "Fun & brand-able" },
-  { id: "islam", label: "Islamic" },
+  { id: "mkt", label: "Marketing & Ads", icon: "📣" },
+  { id: "sell", label: "Selling", icon: "🛒" },
+  { id: "biz", label: "Business & Founders", icon: "🏢" },
+  { id: "money", label: "Money & Career", icon: "💰" },
+  { id: "grow", label: "Growth & AI", icon: "🚀" },
+  { id: "fun", label: "Brands & Fun", icon: "🎬" },
+  { id: "facts", label: "Facts & Knowledge", icon: "💡" },
+  { id: "islam", label: "Islamic", icon: "🕌" },
 ] as const;
 export type GroupId = (typeof GROUPS)[number]["id"];
 
 export const CATEGORIES = [
-  { id: "ads", label: "Meta & Google Ads", short: "Ads", group: "biz" },
-  { id: "marketing", label: "Marketing & Branding", short: "Marketing", group: "biz" },
-  { id: "ecom", label: "E-commerce", short: "E-com", group: "biz" },
-  { id: "sales", label: "Sales & Customers", short: "Sales", group: "biz" },
+  { id: "ads", label: "Meta & Google Ads", short: "Ads", group: "mkt" },
+  { id: "marketing", label: "Marketing & Branding", short: "Marketing", group: "mkt" },
+  { id: "ecom", label: "E-commerce", short: "E-com", group: "sell" },
+  { id: "sales", label: "Sales & Customers", short: "Sales", group: "sell" },
   { id: "stories", label: "Business Stories", short: "Stories", group: "biz" },
   { id: "founders", label: "Founders & Leaders", short: "Founders", group: "biz" },
-  { id: "money", label: "Money & Investing", short: "Money", group: "biz" },
-  { id: "growth", label: "Self-growth", short: "Growth", group: "biz" },
-  { id: "career", label: "Career & Skills", short: "Career", group: "biz" },
-  { id: "ai", label: "AI & Tech Tools", short: "AI", group: "biz" },
-  { id: "creative", label: "Content & Design", short: "Design", group: "biz" },
+  { id: "money", label: "Money & Investing", short: "Money", group: "money" },
+  { id: "growth", label: "Self-growth", short: "Growth", group: "grow" },
+  { id: "career", label: "Career & Skills", short: "Career", group: "money" },
+  { id: "ai", label: "AI & Tech Tools", short: "AI", group: "grow" },
+  { id: "creative", label: "Content & Design", short: "Design", group: "mkt" },
   { id: "brandads", label: "Famous Brand Ads", short: "Brand ads", group: "fun" },
   { id: "brandfun", label: "Funny Brand Content", short: "Brand fun", group: "fun" },
   { id: "workfun", label: "Office & Work Fun", short: "Office fun", group: "fun" },
   { id: "comedy", label: "Comedy", short: "Comedy", group: "fun" },
-  { id: "facts", label: "Facts & Knowledge", short: "Facts", group: "fun" },
+  { id: "facts", label: "Facts & Knowledge", short: "Facts", group: "facts" },
   { id: "quran", label: "Quran Tilawat", short: "Quran", group: "islam" },
   { id: "waz", label: "Waz & Islamic Talks", short: "Waz", group: "islam" },
   { id: "nasheed", label: "Nasheed & Gajal", short: "Nasheed", group: "islam" },
@@ -39,6 +45,9 @@ export const isCat = (x: unknown): x is CatId => typeof x === "string" && CAT_SE
 export const catInfo = (id: string) => CATEGORIES.find((c) => c.id === id);
 export const catLabel = (id: string) => catInfo(id)?.label ?? id;
 export const groupOf = (id: string): GroupId | undefined => catInfo(id)?.group;
+export const groupInfo = (id: string) => GROUPS.find((g) => g.id === id);
+/** The topics in a main category, in display order. */
+export const groupCats = (g: GroupId): CatId[] => CATEGORIES.filter((c) => c.group === g).map((c) => c.id);
 
 /** Categories kept out of the "All" feed by default (they have their own chips). */
 export const PERSONAL_GROUP: GroupId = "islam";

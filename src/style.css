@@ -2259,3 +2259,59 @@ button[aria-busy="true"] {
   opacity: 0.4;
   cursor: default;
 }
+.filt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.filt-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 6px;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.filt-main .fm-name {
+  flex: 1;
+  min-width: 0;
+}
+.filt-main .fm-n {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.filt-main .fm-tick {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1.5px solid var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.filt-main.on .fm-tick,
+.filt-main.some .fm-tick {
+  background: var(--chip-on);
+  color: var(--chip-on-text);
+  border-color: var(--chip-on);
+}
+.filt-main.on {
+  background: var(--chip);
+}
+.filt-main:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
