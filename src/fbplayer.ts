@@ -109,7 +109,7 @@ export class FbPlayer {
       watch.disconnect();
       if (!/\bautoplay\b/.test(f.getAttribute("allow") ?? "")) {
         f.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
-        if (f.src) f.src = f.src; // load again with the permission
+        if (f.src) f.setAttribute("src", f.src); // load again with the permission
       }
     });
     watch.observe(wrap, { childList: true, subtree: true });
