@@ -9,7 +9,11 @@
  * Link previews: when WhatsApp, Facebook, Telegram, … fetch a shared /v/VIDEO_ID link, the page they
  * get carries that Short's title, channel and thumbnail (from YouTube's free oEmbed — no key, no
  * quota). People opening the link get the normal app, without waiting for that.
+ *
+ * /api/fb/* is answered here (worker/src/fb.ts): looking up Facebook videos you add by link.
  */
+import { handleFb } from "./fb";
+
 export interface AppEnv {
   ASSETS: Fetcher;
   SYNC: Fetcher;
@@ -20,6 +24,7 @@ const VIDEO_PATH = /^\/v\/([\w-]{6,20})\/?$/;
 export default {
   async fetch(req: Request, env: AppEnv): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname.startsWith("/api/fb/")) return handleFb(req, url);
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return toSync(req, url, env);
     const video = VIDEO_PATH.exec(url.pathname)?.[1];
     if (video && req.method === "GET" && isPreviewBot(req.headers.get("User-Agent") ?? "")) return preview(video, url, env);

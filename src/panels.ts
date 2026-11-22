@@ -37,7 +37,9 @@ import { renderAbout, renderBackups, renderSyncPanel } from "./settings";
 import { undoable } from "./backup";
 import { toast } from "./ui";
 import { LISTS_EVENT, listById, listLabel, pickLists } from "./lists";
-import { inChList } from "./store";
+import { fbPageOf } from "./fbdata";
+import { deleteManual, fbVideoDialog, openOnFacebook, renderAdded } from "./manual";
+import { shortInList } from "./rank";
 import type { Short, Tab, Win } from "./types";
 import { dismiss, go, pushLayer, type Route, toPath } from "./router";
 
@@ -137,6 +139,7 @@ export function renderPanel() {
   if (panelTab === "channels") renderChannelsPanel(body, channelsCtx());
   else if (panelTab === "history") renderHistory(body, app, feed.byId, () => openPanel("history"));
   else if (panelTab === "saved") renderSaved(body);
+  else if (panelTab === "added") renderAdded(body, () => openPanel("added"));
   else if (panelTab === "hidden") renderHidden(body);
   else if (panelTab === "sorting") renderSorting(body, app, () => openPanel("sorting"));
   else if (panelTab === "api") renderUsagePanel(body, feed.ds, ago);
@@ -154,6 +157,7 @@ export function renderPanel() {
 /** Saved list filters (kept while the app is open). */
 const savedFilter = {
   list: "", // a channel list's id ("" = all)
+  src: "" as "" | "yt" | "fb", // where from: YouTube or Facebook videos you added ("" = both)
   group: "" as GroupId | "",
   cat: "" as CatId | "",
   lang: "all" as Lang | "all",
@@ -173,15 +177,17 @@ function renderSaved(body: HTMLElement) {
   const chName = (s: Short) => feed.ds.channels[s.ch]?.n ?? "";
   // everything except the category, so the chip counts show what each chip would give
   const chH = (s: Short) => feed.ds.channels[s.ch]?.h ?? "";
+  const fromHere = (s: Short) => !f.src || (f.src === "fb") === !!s.fb;
   const unlisted = all.filter(
     (s) =>
+      fromHere(s) &&
       (f.lang === "all" || s.lg === f.lang) &&
       (f.win === "all" || now - s.p <= Number(f.win) * 86400) &&
       (!f.q || `${s.t} ${chName(s)}`.toLowerCase().includes(f.q.toLowerCase())),
   );
   if (f.list && !listById(f.list)) f.list = "";
   const curList = f.list ? listById(f.list) : undefined;
-  const base = curList ? unlisted.filter((s) => inChList(curList, chH(s))) : unlisted;
+  const base = curList ? unlisted.filter((s) => shortInList(curList, s, chH(s))) : unlisted;
   const inGroup = (s: Short, g: GroupId) => videoCats(s, state).some((c) => groupOf(c) === g);
   const items = base.filter((s) => (f.cat ? videoCats(s, state).includes(f.cat) : !f.group || inGroup(s, f.group)));
   if (f.sort === "views") items.sort((x, y) => y.v - x.v);
@@ -276,7 +282,7 @@ function renderSaved(body: HTMLElement) {
     );
   // your channel lists: Competitors, Inspiration… each one its own Saved list
   const listCounts = state.lists
-    .map((l) => [l, unlisted.filter((s) => inChList(l, chH(s))).length] as const)
+    .map((l) => [l, unlisted.filter((s) => shortInList(l, s, chH(s))).length] as const)
     .filter(([l, n]) => n || l === curList);
   if (listCounts.length) {
     const lRow = el("div", "cp-chips sv-chips sv-lists");
@@ -299,6 +305,24 @@ function renderSaved(body: HTMLElement) {
       );
     body.append(head, row, lRow, gRow);
   } else body.append(head, row, gRow);
+  // YouTube Shorts and Facebook videos you added, apart
+  const fbSaved = all.filter((s) => s.fb).length;
+  if (fbSaved || f.src) {
+    const sRow = el("div", "cp-chips sv-chips sv-src");
+    sRow.setAttribute("role", "group");
+    sRow.setAttribute("aria-label", "Source");
+    const srcChip = (v: typeof f.src, label: string) =>
+      chip(label, f.src === v, () => {
+        f.src = v;
+        renderPanel();
+      });
+    sRow.append(
+      srcChip("", `All · ${all.length}`),
+      srcChip("yt", `▶ YouTube · ${all.length - fbSaved}`),
+      srcChip("fb", `f Facebook · ${fbSaved}`),
+    );
+    head.after(sRow);
+  }
   if (f.group) {
     const topics = groupCats(f.group)
       .map((c) => [c, base.filter((s) => videoCats(s, state).includes(c)).length] as const)
@@ -411,6 +435,7 @@ function bindSheet() {
   els.moreBtn.onclick = () => {
     if (feed.cur) {
       renderSpeedRow();
+      renderSheetFor(feed.cur);
       sheetModal.open();
     }
   };
@@ -428,11 +453,50 @@ function bindSheet() {
     if (!cur) return;
     if (a === "similar") openSimilar(app, cur);
     else if (a === "channel") exploreCurrent();
-    else if (a === "fixcat") fixCategory(cur);
-    else if (a === "lists") listCurrentChannel(cur);
+    else if (a === "fixcat") cur.fb ? void editAdded(cur) : fixCategory(cur);
+    else if (a === "fbadd") void fbVideoDialog();
+    else if (a === "fbpage") {
+      const p = fbPageOf(state, cur, feed.ds.channels[cur.ch]?.h ?? "");
+      if (p?.url) openOnFacebook(p.url);
+    } else if (a === "fbdel") {
+      const m = state.manual.find((x) => `fb${x.id}` === cur.id);
+      if (m) deleteManual(m, () => {});
+    } else if (a === "lists") listCurrentChannel(cur);
     else if (a === "hide") hideChannel();
-    else if (a === "open") window.open(`https://www.youtube.com/shorts/${cur.id}`, "_blank", "noopener");
+    else if (a === "open")
+      cur.fb ? openOnFacebook(cur.fb.url) : window.open(`https://www.youtube.com/shorts/${cur.id}`, "_blank", "noopener");
   });
+}
+
+/** The ⋯ sheet's buttons for the video on screen (a Facebook video you added has its own). */
+function renderSheetFor(s: Short) {
+  const b = (a: string) => els.moreSheet.querySelector<HTMLButtonElement>(`button[data-a="${a}"]`);
+  const fb = !!s.fb;
+  const page = fbPageOf(state, s, feed.ds.channels[s.ch]?.h ?? "");
+  const open = b("open");
+  if (open) open.textContent = fb ? "↗ Open video on Facebook" : "↗ Open on YouTube";
+  const fix = b("fixcat");
+  if (fix) fix.textContent = fb ? "✎ Edit this video (title, note, categories…)" : "🏷 Wrong category?";
+  const pageBtn = b("fbpage");
+  if (pageBtn) pageBtn.hidden = !page?.url;
+  const del = b("fbdel");
+  if (del) del.hidden = !fb;
+  const similar = b("similar");
+  if (similar) similar.hidden = fb; // "More like this" searches YouTube
+  const ch = b("channel");
+  if (ch) ch.textContent = feed.ds.channels[s.ch]?.st === "fb" ? "👤 This page's videos" : "👤 Explore this channel";
+  const lists = b("lists");
+  if (lists) lists.textContent = feed.ds.channels[s.ch]?.st === "fb" ? "📋 Add page to a list" : "📋 Add channel to a list";
+  // a video with no page set: nothing to list or hide
+  const noPage = feed.ds.channels[s.ch]?.h === "fb:";
+  if (lists) lists.hidden = noPage;
+  const hide = b("hide");
+  if (hide) hide.hidden = noPage;
+}
+
+async function editAdded(s: Short) {
+  const m = state.manual.find((x) => `fb${x.id}` === s.id);
+  if (m) await fbVideoDialog({ edit: m });
 }
 
 // ---------- tips ----------

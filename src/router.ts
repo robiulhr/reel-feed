@@ -20,6 +20,7 @@ const PANEL_PATHS: Record<string, string> = {
   channels: "channels",
   history: "history",
   saved: "saved",
+  added: "added",
   sorting: "sorting",
   hidden: "hidden",
   sync: "sync",
@@ -28,7 +29,7 @@ const PANEL_PATHS: Record<string, string> = {
   about: "about",
 };
 const PANEL_BY_PATH = Object.fromEntries(Object.entries(PANEL_PATHS).map(([tab, p]) => [p, tab]));
-const VIDEO_ID = /^[\w-]{6,20}$/;
+const VIDEO_ID = /^[\w-]{6,27}$/;
 
 /** Where the app lives ("/" on Cloudflare, "/reel-feed/" on GitHub Pages). */
 export const BASE = (import.meta.env?.BASE_URL as string | undefined) ?? "/";

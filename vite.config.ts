@@ -12,11 +12,12 @@ function securityPolicy(syncUrl: string): Plugin {
   const sync = syncUrl.startsWith("http") ? new URL(syncUrl).origin : "";
   const csp = [
     "default-src 'self'",
-    "script-src 'self' https://www.youtube.com https://s.ytimg.com",
-    "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
-    "img-src 'self' data: https://i.ytimg.com https://yt3.ggpht.com https://yt3.googleusercontent.com",
+    "script-src 'self' https://www.youtube.com https://s.ytimg.com https://connect.facebook.net",
+    // Facebook: the player for Facebook videos you added (its SDK, its frames, its thumbnails)
+    "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://www.facebook.com https://web.facebook.com https://staticxx.facebook.com",
+    "img-src 'self' data: https://i.ytimg.com https://yt3.ggpht.com https://yt3.googleusercontent.com https://*.fbcdn.net https://www.facebook.com",
     "style-src 'self' 'unsafe-inline'",
-    `connect-src 'self' ${sync}`.trim(),
+    `connect-src 'self' https://www.facebook.com https://graph.facebook.com ${sync}`.trim(),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -34,14 +35,44 @@ function securityPolicy(syncUrl: string): Plugin {
 }
 
 /**
+ * Dev server only: answers /api/fb/* (Facebook video lookups) with the same code the app's Worker
+ * runs (worker/src/fb.ts), so "Add a Facebook video" works with npm run dev too.
+ */
+function facebookLookupsInDev(): Plugin {
+  return {
+    name: "fb-lookups-dev",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith("/api/fb/")) return next();
+        try {
+          const { handleFb } = await server.ssrLoadModule("/worker/src/fb.ts");
+          const url = new URL(req.url, "http://localhost");
+          const r: Response = await handleFb(new Request(url), url);
+          res.statusCode = r.status;
+          r.headers.forEach((v, k) => {
+            res.setHeader(k, v);
+          });
+          res.end(Buffer.from(await r.arrayBuffer()));
+        } catch (e) {
+          next(e);
+        }
+      });
+    },
+  };
+}
+
+/**
  * Performance budget: the build FAILS if the app's code grows past these sizes (gzip, what phones
  * actually download), so it stays fast on weak networks. Raise a limit only on purpose.
  * Sizes when the budget was set (Phase 4): JS 29 kB, CSS 5.7 kB.
  * Raised JS 40 → 45 with the category system (Filters sheet, pickers, Sorting): 40.5 kB with sync on.
  * Raised JS 45 → 48 with channel lists (Competitors/Inspiration feeds, Saved tabs, list editor): 45.4 kB.
+ * Raised JS 48 → 54 with Facebook videos you add (Facebook player, Add dialog, Added page, page screen): 51.9 kB.
+ *   (Their category guess runs on the server — the word lists stay out of the app.)
  * Vite 8 (Rolldown) bundles ~4 kB bigger than Vite 6 for the same code: 41.3 kB with sync on (Nov 2026).
  */
-export const BUDGET_KB = { js: 48, css: 10 };
+export const BUDGET_KB = { js: 54, css: 10 };
 
 function sizeBudget(): Plugin {
   return {
@@ -75,6 +106,6 @@ export default defineConfig(({ mode }) => {
       // shown in Menu → About, so you can tell which version the app is running
       __BUILD__: JSON.stringify(new Date().toISOString()),
     },
-    plugins: [securityPolicy(syncUrl), sizeBudget()],
+    plugins: [securityPolicy(syncUrl), sizeBudget(), facebookLookupsInDev()],
   };
 });

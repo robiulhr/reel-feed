@@ -12,7 +12,7 @@ export interface Channel {
   subs: number;
   thumb: string;
   id: string; // YouTube channel ID ("UC…")
-  st: "active" | "noShorts" | "notFound" | "removed" | "external"; // external = seen via search/preview, not in your list
+  st: "active" | "noShorts" | "notFound" | "removed" | "external" | "fb"; // external = seen via search/preview, not in your list; fb = a Facebook page (videos you added)
   cnt: number; // Shorts of this channel in the library
   last: number; // newest Short (unix seconds), 0 if none
 }
@@ -32,6 +32,7 @@ export interface Short {
   k: CatId[]; // categories, main first (empty = couldn't tell)
   lg: Lang; // language
   g: boolean; // categories guessed from the channel (the video's own text said nothing)
+  fb?: { url: string; note: string; lists: string[]; by: string }; // a Facebook video you added (id "fb…"; p = when added, v/l = views/reactions then)
 }
 
 /** One Shorts refresh and the YouTube API units it spent (written by scripts/fetch.ts). */

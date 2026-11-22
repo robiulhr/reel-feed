@@ -135,13 +135,13 @@ function dsByHandle() {
 
 function fallbackEntries(): Entry[] {
   return ctx.ds.channels
-    .filter((c) => c.st !== "external")
+    .filter((c) => c.st !== "external" && c.st !== "fb")
     .map((c) => ({ name: c.n, handle: c.h, cats: c.cats, ...(c.st === "removed" ? { status: "removed" as const } : {}) }));
 }
 
 function rowStatus(e: Entry, d: Channel | undefined): RowStatus {
   if (e.status === "removed") return "removed";
-  if (!d || d.st === "removed" || d.st === "external") return "pending"; // just added — not in the feed data yet
+  if (!d || d.st === "removed" || d.st === "external" || d.st === "fb") return "pending"; // just added — not in the feed data yet
   return d.st;
 }
 

@@ -326,6 +326,19 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - These Shorts still show in every other feed as before; a list only adds a way to look at them separately.
 - Lists sync across devices: `lists` in user-state.json, file version 3. Older app versions refuse to write the file, so they can't drop the lists.
 
+## 6f. Facebook videos you add by link — `src/manual.ts`, `src/fbdata.ts`, `src/fbplayer.ts`, `worker/src/fb.ts`
+- **Add one:** **⋯ → ＋ Add a Facebook video**, or **Menu → Added → ＋ Add a Facebook video**. Paste the link (share/v, reel, videos, watch and fb.watch links all work).
+- **It fills itself in:** the app's Worker (`/api/fb/meta`) follows the link to the video, then reads Facebook's public pages. It gets the caption (used as the title), the views and reactions at that moment, the page name and the page's address, guesses the categories from the caption and hashtags, and checks the video can be embedded. Everything stays editable. The requests carry an honest user agent and only ever go to Facebook addresses. Any part that fails is left empty for you to fill in.
+- **Fields:** Title (shown on the video), Note (private; shown only on the Added page), Who made it (page name, page link, and optionally *Same as my YouTube channel*), Categories (required), Lists (optional, for this one video).
+- **Pages:**
+  - A page linked to one of your YouTube channels: its videos count as that channel's, so they join its lists and feeds, and the channel page gets **↗ Facebook page**.
+  - A page on its own: it gets its own screen (`/channel/fb:…`) and can be put on lists like a channel.
+- **In the feeds:** the videos are Shorts with the id `fb` + Facebook's number, mixed into every feed that matches their categories or lists. They play in Facebook's player (its JavaScript SDK, loaded the first time one plays), driven by the app's own tap, swipe, sound and progress controls. Each one has **↗ Open video on Facebook** and **↗ Open page on Facebook**. If a video can't play, a toast offers to open it on Facebook.
+- **Added is separate from Saved.** Added lists everything you added, with search, a page filter, list and category chips, and ♡ Save, ✎ Edit, ↗ and Delete. ♡ works like on any Short. Saved has a **Source** row (YouTube / Facebook). Deleting a video also takes it out of Saved, and you can Undo.
+- **Thumbnails** come through `/api/fb/thumb/ID`, which redirects to Facebook's current image. Facebook's image links expire, so they're never stored.
+- **Sync:** `manual` and `fbPages` in user-state.json, file version 4. Older apps refuse to write the file, so they can't drop the videos you added.
+- **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
+
 ## 6c. Channel explorer — `src/explore.ts`
 
 - Open it by tapping the **channel name/avatar** under a Short, **⋯ → Explore this channel**, a channel in **More like this**, or **Preview Shorts** in Channels → Add.

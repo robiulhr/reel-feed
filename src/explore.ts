@@ -15,6 +15,7 @@ import * as sync from "./sync";
 import type { Channel, Short } from "./types";
 import { el, btn } from "./dom";
 import { listSummary, listsOf, pickLists } from "./lists";
+import { pageHref } from "./fbdata";
 
 type Sort = "newest" | "popular" | "gems";
 interface MiniShort {
@@ -109,9 +110,16 @@ export function shortGrid(
   return grid;
 }
 
+/** A Facebook page's screen (manual.ts) — set there, so this module doesn't load it. */
+let openFbPage: (chIndex: number) => void = () => {};
+export const setFbPageOpener = (fn: (chIndex: number) => void) => {
+  openFbPage = fn;
+};
+
 export function openChannel(app: AppApi, target: { chIndex?: number; info?: ExternalChannelInfo }, sort: Sort = sortPref) {
   const ds = app.ds;
   let chIndex = target.chIndex;
+  if (chIndex !== undefined && ds.channels[chIndex]?.st === "fb") return openFbPage(chIndex);
   if (chIndex === undefined && target.info) {
     const i = ds.channels.findIndex((c) => c.id === target.info!.id || c.h.toLowerCase() === target.info!.handle.toLowerCase());
     chIndex = i >= 0 ? i : undefined;
@@ -241,6 +249,9 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
         }. Change`,
       );
       actions.prepend(lists);
+      // its Facebook page, when you linked one (videos you added from it show below with the Shorts)
+      const fbPage = state.fbPages.find((p) => p.ch && p.ch.toLowerCase() === info.handle.toLowerCase());
+      if (fbPage) actions.append(btn("↗ Facebook page", () => window.open(pageHref(fbPage), "_blank", "noopener")));
       body.append(actions);
       if (addError) body.append(addError);
 

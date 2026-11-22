@@ -16,6 +16,7 @@ import { closeOverlaysForPlayback, closePage, openPage, renderControls } from ".
 import type { AppApi, ExternalChannelInfo } from "./app";
 import { dismiss, go, inList, setFeed } from "./router";
 import type { Dataset, Short } from "./types";
+import { applyManual } from "./fbdata";
 
 export const feed = {
   ds: { generatedAt: 0, units: 0, usage: [], channels: [], videos: [] } as Dataset,
@@ -197,6 +198,15 @@ let slowTimer: number | undefined;
 playerHooks.onPlaying = () => clearTimeout(slowTimer);
 playerHooks.onUnplayable = (code) => {
   if (!feed.cur) return;
+  const fb = feed.cur.fb;
+  if (fb) {
+    // an added Facebook video: keep it (it may be private now, or only for logged-in people) — offer Facebook
+    feed.cur = null;
+    showSpinner(false);
+    toast("Can't play this one here", { label: "Open on Facebook", run: () => window.open(fb.url, "_blank", "noopener") }, 6000);
+    next();
+    return;
+  }
   act({ t: "bad", id: feed.cur.id });
   feed.cur = null; // no learning signal — it never played
   showSpinner(false);
@@ -230,7 +240,7 @@ function show(s: Short) {
 
   state.lastActive = Math.floor(nowSec());
   act({ t: "seen", id: s.id, at: Math.floor(nowSec()) });
-  pool.show(s.id, state.muted);
+  pool.show(s.id, state.muted, s.fb?.url);
 
   // Slow start? Say so, and offer to skip.
   clearTimeout(slowTimer);
@@ -258,7 +268,8 @@ export function renderMeta() {
   const s = feed.cur;
   const bits: string[] = [];
   if (state.rate !== 1) bits.push(`${state.rate}×`);
-  if (s?.v) bits.push(`${compact(s.v)} views`, `${compact(s.l)} likes`, ago(s.p));
+  if (s?.fb) bits.push("f Facebook", ...(s.v ? [`${compact(s.v)} views when added`] : []), `added ${ago(s.p)}`);
+  else if (s?.v) bits.push(`${compact(s.v)} views`, `${compact(s.l)} likes`, ago(s.p));
   if (s) {
     const cats = videoCats(s, state);
     if (cats.length) bits.push(`${cats.map((c) => catInfo(c)?.short ?? c).join(" / ")}${isGuessed(s, state) ? " ?" : ""}`);
@@ -318,21 +329,53 @@ export function applyData(d: Dataset) {
 /** Swap in a dataset. keepExternal: same version (starter → full), keep temporary channels so open lists stay valid. */
 export function setData(d: Dataset, keepExternal: boolean) {
   const ds = feed.ds;
-  const extras = keepExternal ? ds.channels.slice(d.channels.length).filter((c) => c.st === "external") : [];
+  const added = ds.channels.slice(d.channels.length);
+  const extras = keepExternal ? added.filter((c) => c.st === "external") : [];
+  const fbPages = added.filter((c) => c.st === "fb").length; // rebuilt by refreshManual
   const extraShorts = keepExternal ? [...feed.byId.values()].filter((s) => !feed.libIds.has(s.id)) : [];
   ds.generatedAt = d.generatedAt;
   ds.units = d.units;
   ds.usage = d.usage;
   ds.videos = d.videos;
-  ds.channels = keepExternal && d.channels.length === ds.channels.length - extras.length ? [...d.channels, ...extras] : d.channels;
+  ds.channels =
+    keepExternal && d.channels.length === ds.channels.length - extras.length - fbPages ? [...d.channels, ...extras] : d.channels;
   if (!keepExternal) {
     feed.ctx = null;
     renderCtxBar();
   }
   feed.libIds = new Set(ds.videos.map((s) => s.id));
   feed.byId = new Map(ds.videos.map((s) => [s.id, s]));
-  for (const s of extraShorts) feed.byId.set(s.id, s);
+  for (const s of extraShorts) if (!s.fb) feed.byId.set(s.id, s);
+  refreshManual(false);
   renderControls(); // category chips follow the library (which categories have Shorts)
+}
+
+// ---------- Facebook videos you added ----------
+/** Your added Facebook videos changed (added, edited, deleted, synced): put the new copies in the library. */
+export function refreshManual(redraw = true) {
+  const shorts = applyManual(feed.ds, state);
+  const ids = new Set(shorts.map((s) => s.id));
+  for (const [id, s] of feed.byId) if (s.fb && !ids.has(id)) feed.byId.delete(id);
+  for (const s of shorts) {
+    feed.byId.set(s.id, s);
+    feed.libIds.add(s.id);
+  }
+  for (const id of feed.libIds) if (id.startsWith("fb") && !ids.has(id)) feed.libIds.delete(id);
+  const fresh = (s: Short) => (s.fb ? feed.byId.get(s.id) : s);
+  feed.queue = feed.queue.map(fresh).filter((s): s is Short => !!s);
+  feed.history = feed.history.map((s) => fresh(s) ?? s);
+  if (feed.cur?.fb) {
+    const now = feed.byId.get(feed.cur.id);
+    if (now) feed.cur = now;
+  }
+  if (redraw) {
+    renderControls();
+    if (feed.cur) {
+      els.title.textContent = feed.cur.t;
+      els.chName.textContent = feed.ds.channels[feed.cur.ch]?.n ?? "";
+      renderMeta();
+    }
+  }
 }
 
 // ---------- channels outside your list, saved Shorts ----------

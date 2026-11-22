@@ -32,6 +32,7 @@ import {
   offerData,
   onFeedChange,
   playNow,
+  refreshManual,
   renderSave,
   savedShort,
   setData,
@@ -44,9 +45,11 @@ import { currentPanelTab, initPanels, renderControls, renderPanel, showTipsIfNew
 import { applyNetwork } from "./network";
 import { applyCurrent, startRouter } from "./router";
 import { playLinked, showRoute } from "./routes";
+import "./manual"; // Facebook videos you added: the Add dialog, the Added page, a page's screen
 
 /** Background sync brought changes from another device. */
 function onSyncUpdate() {
+  refreshManual();
   renderSave();
   onFeedChange();
   // Don't rebuild the Channels/History panels on background syncs — it would wipe what you're typing.

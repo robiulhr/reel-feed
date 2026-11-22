@@ -3,8 +3,10 @@
  * the next Short is loaded (muted, paused on its first frame) while you watch the current one,
  * and the previous one is kept for swiping back. Only the active player is visible and audible.
  *
- * Uses the official YouTube IFrame Player API.
+ * Uses the official YouTube IFrame Player API. Facebook videos you added play in a separate
+ * Facebook player (fbplayer.ts); the same controls drive whichever one is on screen.
  */
+import { FbPlayer } from "./fbplayer";
 
 declare global {
   interface Window {
@@ -50,6 +52,11 @@ export class PlayerPool {
   private slots: Slot[] = [];
   private active: Slot | null = null;
   private YT: any = null;
+  private fbp: FbPlayer | null = null;
+  /** A Facebook video is on screen (controls go to the Facebook player). */
+  private get fb(): FbPlayer | null {
+    return this.fbp?.active ? this.fbp : null;
+  }
 
   constructor(
     private container: HTMLElement,
@@ -155,7 +162,16 @@ export class PlayerPool {
   }
 
   /** Make `id` the visible, playing video. Instant if it was preloaded. */
-  async show(id: string, muted: boolean) {
+  async show(id: string, muted: boolean, fbUrl?: string) {
+    if (fbUrl) {
+      for (const s of this.slots) s.el.classList.remove("on");
+      this.active?.player?.pauseVideo?.();
+      this.active = null;
+      this.fbp ??= new FbPlayer(this.container, this.ev);
+      this.fbp.setVolume(this.volume);
+      return this.fbp.show(fbUrl, muted);
+    }
+    this.fbp?.hide();
     let slot = this.slots.find((s) => s.id === id && s.failed === null);
     const failed = this.slots.find((s) => s.id === id && s.failed !== null);
     if (failed) {
@@ -189,7 +205,7 @@ export class PlayerPool {
 
   /** Quietly load a Short in a spare player so it can start instantly later. */
   async preload(id: string | undefined) {
-    if (!id || this.slots.length < 2) return;
+    if (!id || id.startsWith("fb") || this.slots.length < 2) return;
     if (this.slots.some((s) => s.id === id)) return;
     const slot = this.pick(this.active ? [this.active] : []);
     if (slot === this.active) return;
@@ -212,10 +228,12 @@ export class PlayerPool {
   /** Volume 0–100 for the current and following videos. */
   setVolume(v: number) {
     this.volume = Math.max(0, Math.min(100, Math.round(v)));
+    this.fbp?.setVolume(this.volume);
     this.p?.setVolume?.(this.volume);
   }
   /** Jump to a time (seconds) in the current video. */
   seek(t: number) {
+    if (this.fb) return this.fb.seek(t);
     const d = this.duration();
     this.p?.seekTo?.(Math.max(0, d ? Math.min(t, d - 0.3) : t), true);
   }
@@ -225,25 +243,35 @@ export class PlayerPool {
     this.p?.setPlaybackRate?.(r);
   }
   play() {
+    if (this.fb) return this.fb.play();
     this.p?.playVideo?.();
   }
   pause() {
+    if (this.fb) return this.fb.pause();
     this.p?.pauseVideo?.();
   }
   mute() {
+    if (this.fb) return this.fb.mute();
     this.p?.mute?.();
   }
   unMute() {
+    if (this.fb) return this.fb.unMute();
     this.p?.unMute?.();
   }
   restart() {
+    if (this.fb) {
+      this.fb.seek(0);
+      return this.fb.play();
+    }
     this.p?.seekTo?.(0, true);
     this.p?.playVideo?.();
   }
   time(): number {
+    if (this.fb) return this.fb.time();
     return this.p?.getCurrentTime?.() ?? 0;
   }
   duration(): number {
+    if (this.fb) return this.fb.duration();
     return this.p?.getDuration?.() ?? 0;
   }
 }

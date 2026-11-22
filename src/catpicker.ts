@@ -13,8 +13,8 @@ export function catSummary(cats: readonly string[], empty = "No category") {
   return cats.length === 1 ? catLabel(cats[0]) : `${catLabel(cats[0])} + ${cats.length - 1}`;
 }
 
-/** Opens the picker. Resolves with the new list (main first), or null if cancelled. */
-export function pickCategories(o: { title: string; current: readonly CatId[]; note?: string; allowEmpty?: boolean; emptyLabel?: string }) {
+/** The category chips (all groups), for a dialog. `set` replaces the choice (e.g. a fresh guess). */
+export function catChooser(o: { current: readonly CatId[]; note?: string; emptyLabel?: string; onChange?: (cats: CatId[]) => void }) {
   let picked: CatId[] = [...o.current];
   const box = el("div", "catpick");
   if (o.note) box.append(el("p", "ch-note", o.note));
@@ -45,6 +45,7 @@ export function pickCategories(o: { title: string; current: readonly CatId[]; no
         () => {
           picked = picked.includes(c.id) ? picked.filter((x) => x !== c.id) : [...picked, c.id];
           render();
+          o.onChange?.(picked);
         },
         "chip",
       );
@@ -56,9 +57,22 @@ export function pickCategories(o: { title: string; current: readonly CatId[]; no
   }
   box.append(el("p", "ch-note", `Up to ${MAX_PICK}. The first one you pick is the main category.`), status);
   render();
-  return confirmDialog({ title: o.title, extra: box, confirm: "Save" }).then((ok) => {
+  return {
+    box,
+    picked: () => picked,
+    set(cats: readonly CatId[]) {
+      picked = cats.slice(0, MAX_PICK);
+      render();
+    },
+  };
+}
+
+/** Opens the picker. Resolves with the new list (main first), or null if cancelled. */
+export function pickCategories(o: { title: string; current: readonly CatId[]; note?: string; allowEmpty?: boolean; emptyLabel?: string }) {
+  const c = catChooser(o);
+  return confirmDialog({ title: o.title, extra: c.box, confirm: "Save" }).then((ok) => {
     if (!ok) return null;
-    if (!picked.length && !o.allowEmpty) return null;
-    return picked;
+    if (!c.picked().length && !o.allowEmpty) return null;
+    return c.picked();
   });
 }

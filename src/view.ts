@@ -1,5 +1,7 @@
 /** The page's fixed elements (from index.html) and small visual feedback helpers. */
 import { byId as $ } from "./dom";
+import { fbThumbUrl } from "./fbdata";
+import { isFbId } from "./store";
 
 export const els = {
   frame: $("frame"),
@@ -86,6 +88,15 @@ export function showEmpty(html: string) {
 
 /** Thumbnail: big vertical one for the poster on good connections; small (~15 KB) everywhere else. */
 export function setThumb(img: HTMLImageElement, id: string, big: boolean) {
+  if (isFbId(id)) {
+    // an added Facebook video: its current thumbnail via the app's server (none → a plain dark card)
+    img.onerror = () => {
+      img.onerror = null;
+      img.removeAttribute("src");
+    };
+    img.src = fbThumbUrl(id);
+    return;
+  }
   const small = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
   img.onerror = big
     ? () => {

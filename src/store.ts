@@ -13,6 +13,69 @@ export interface Shared {
   hist: HistItem[]; // watch history, newest first
   catFix: Record<string, CatId[]>; // your category fixes per Short (main first) — they always win
   lists: ChList[]; // your channel lists (Competitors, Inspiration…), each with its own feed and Saved view
+  manual: ManualVideo[]; // Facebook videos you added by link, newest first (the Added page)
+  fbPages: FbPage[]; // the Facebook pages those videos come from
+}
+
+/** A Facebook video you added by pasting its link. Plays in the feed like a Short (id "fb" + its number). */
+export interface ManualVideo {
+  id: string; // Facebook's video number
+  url: string; // the video's Facebook address
+  t: string; // title ("" = none)
+  note: string; // your private note
+  by: string; // who made it: a page key ("fb:…"), "" = not set
+  cats: CatId[]; // main first
+  lists: string[]; // channel lists this one video is in (its page's lists count too)
+  lg: Lang;
+  at: number; // added (unix seconds)
+  v: number; // views when added
+  l: number; // reactions when added
+}
+/** A Facebook page your added videos come from. Linked to one of your YouTube channels (`ch`) or on its own. */
+export interface FbPage {
+  key: string; // "fb:" + its Facebook address ("fb:mahedi.pro.bd") or name
+  name: string;
+  url: string; // its Facebook address, "" = unknown
+  ch: string; // a YouTube channel's handle it belongs to, "" = none
+}
+const MAX_MANUAL = 3000;
+/** The feed's id for an added Facebook video. */
+export const fbShortId = (id: string) => `fb${id}`;
+export const isFbId = (id: string) => /^fb\d{6,25}$/.test(id);
+/** Cleans added videos from any source (a file, an old backup). */
+export function normManual(x: unknown): ManualVideo[] {
+  if (!Array.isArray(x)) return [];
+  const out: ManualVideo[] = [];
+  for (const m of x) {
+    if (!m || typeof m.id !== "string" || !/^\d{6,25}$/.test(m.id) || typeof m.url !== "string" || out.some((o) => o.id === m.id)) continue;
+    out.push({
+      id: m.id,
+      url: m.url,
+      t: String(m.t ?? "").slice(0, 300),
+      note: String(m.note ?? "").slice(0, 2000),
+      by: String(m.by ?? ""),
+      cats: normCats(m.cats),
+      lists: Array.isArray(m.lists) ? m.lists.filter((l: unknown) => typeof l === "string") : [],
+      lg: ["bn", "en", "hi"].includes(m.lg) ? m.lg : "en",
+      at: Number(m.at) || 0,
+      v: Number(m.v) || 0,
+      l: Number(m.l) || 0,
+    });
+  }
+  return out.slice(0, MAX_MANUAL);
+}
+export function normPages(x: unknown): FbPage[] {
+  if (!Array.isArray(x)) return [];
+  const out: FbPage[] = [];
+  for (const p of x)
+    if (p && typeof p.key === "string" && p.key.startsWith("fb:") && !out.some((o) => o.key === p.key))
+      out.push({
+        key: p.key,
+        name: String(p.name ?? "").slice(0, 120) || p.key.slice(3),
+        url: String(p.url ?? ""),
+        ch: String(p.ch ?? ""),
+      });
+  return out;
 }
 
 /** A list of channels you keep an eye on together, e.g. direct competitors. Channels can be in several. */
@@ -105,12 +168,29 @@ export type Op =
   | { t: "listDrop"; id: string } // delete the list (not its channels)
   | { t: "listAdd"; id: string; h: string } // put a channel in a list
   | { t: "listRemove"; id: string; h: string }
+  | { t: "manAdd"; v: ManualVideo } // add a Facebook video (or put a deleted one back)
+  | { t: "manEdit"; v: ManualVideo }
+  | { t: "manDel"; id: string } // also takes it out of Saved
+  | { t: "pageSet"; p: FbPage } // add or change a Facebook page
   | { t: "restore"; data: Snap; mode: "merge" | "replace" }; // undo an erase / restore a backup
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
 const PENDING_KEY = "ecomgy-reel-feed.pending";
 export const MAX_SEEN = 20000;
-export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog", "hist", "catFix", "lists"] as const;
+export const SHARED_KEYS = [
+  "saved",
+  "hidden",
+  "seen",
+  "bad",
+  "affCh",
+  "affCat",
+  "apiLog",
+  "hist",
+  "catFix",
+  "lists",
+  "manual",
+  "fbPages",
+] as const;
 
 export const emptyShared = (): Shared => ({
   saved: [],
@@ -123,6 +203,8 @@ export const emptyShared = (): Shared => ({
   hist: [],
   catFix: {},
   lists: defaultLists(),
+  manual: [],
+  fbPages: [],
 });
 
 const defaults = (): State => ({
@@ -160,7 +242,7 @@ function read<T>(key: string, fallback: T): T {
  *   LOCAL_VERSION — this device (localStorage).  FILE_VERSION — the synced user-state.json.
  */
 export const LOCAL_VERSION = 3;
-export const FILE_VERSION = 3; // 3: channel lists (older apps must not write the file and drop them)
+export const FILE_VERSION = 4; // 3: channel lists. 4: added Facebook videos (older apps must not write the file and drop them)
 
 export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
   const s = { ...defaults(), ...raw } as State;
@@ -179,6 +261,8 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
   }
   s.cats = normCats(s.cats);
   s.lists = normLists(raw.lists);
+  s.manual = normManual(raw.manual);
+  s.fbPages = normPages(raw.fbPages);
   if (typeof s.list !== "string" || (s.list && !s.lists.some((l) => l.id === s.list))) s.list = "";
   if (!["all", "bn", "en", "hi"].includes(s.lang)) s.lang = "all";
   s.sv = LOCAL_VERSION;
@@ -318,6 +402,23 @@ export function applyOp(s: Shared, op: Op) {
       if (l) l.ch = l.ch.filter((c) => !sameH(c, op.h));
       break;
     }
+    case "manAdd":
+      if (!s.manual.some((m) => m.id === op.v.id) && s.manual.length < MAX_MANUAL)
+        s.manual = [op.v, ...s.manual].sort((a, b) => b.at - a.at);
+      break;
+    case "manEdit":
+      s.manual = s.manual.map((m) => (m.id === op.v.id ? op.v : m));
+      break;
+    case "manDel":
+      s.manual = s.manual.filter((m) => m.id !== op.id);
+      s.saved = s.saved.filter((id) => id !== fbShortId(op.id));
+      break;
+    case "pageSet": {
+      const i = s.fbPages.findIndex((p) => p.key === op.p.key);
+      if (i >= 0) s.fbPages[i] = op.p;
+      else s.fbPages.push(op.p);
+      break;
+    }
     case "restore":
       applyRestore(s, op.data, op.mode);
       break;
@@ -344,7 +445,7 @@ export function snap(s: Shared, keys: readonly (keyof Snap)[] = SNAP_KEYS): Snap
   }
   return out;
 }
-export const SNAP_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "hist", "catFix", "lists"] as const;
+export const SNAP_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "hist", "catFix", "lists", "manual", "fbPages"] as const;
 
 /**
  * replace = put those parts back exactly as they were (a backup restore, learning undo).
@@ -376,6 +477,13 @@ export function applyRestore(s: Shared, d: Snap, mode: "merge" | "replace") {
   for (const [k, v] of Object.entries(d.affCat ?? {})) if (!(k in s.affCat)) s.affCat[k] = v;
   for (const [id, cats] of Object.entries(d.catFix ?? {})) if (!(id in s.catFix)) s.catFix[id] = cats;
   if (d.lists) mergeLists(s, d.lists);
+  mergeManual(s, d);
+}
+
+/** Adds back Facebook videos and pages that are missing (keeps everything already there). */
+function mergeManual(s: Shared, from: Partial<Pick<Shared, "manual" | "fbPages">>) {
+  for (const p of normPages(from.fbPages)) if (!s.fbPages.some((x) => x.key === p.key)) applyOp(s, { t: "pageSet", p });
+  for (const v of normManual(from.manual)) applyOp(s, { t: "manAdd", v });
 }
 
 /** Adds back lists and channels that are missing (keeps everything already there). */
@@ -430,6 +538,8 @@ export interface StateFile {
   hist?: HistItem[];
   catFix?: Record<string, CatId[]>;
   lists?: ChList[];
+  manual?: ManualVideo[];
+  fbPages?: FbPage[];
 }
 
 export function toFile(s: Shared): StateFile {
@@ -448,6 +558,8 @@ export function toFile(s: Shared): StateFile {
     hist: s.hist,
     catFix: s.catFix,
     lists: s.lists,
+    manual: s.manual,
+    fbPages: s.fbPages,
   };
 }
 
@@ -475,6 +587,8 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
     if (c.length) s.catFix[id] = c;
   }
   s.lists = normLists(f.lists);
+  s.manual = normManual(f.manual);
+  s.fbPages = normPages(f.fbPages);
   (f.seen ?? []).forEach((id, i) => {
     s.seen[id] = i + 1;
   }); // keeps order; real timestamps sort after these
@@ -493,6 +607,7 @@ export function mergeInto(base: Shared, local: Shared) {
   for (const [k, v] of Object.entries(local.affCat)) if (!(k in base.affCat)) base.affCat[k] = v;
   for (const [id, cats] of Object.entries(local.catFix ?? {})) if (!(id in base.catFix)) base.catFix[id] = cats;
   mergeLists(base, local.lists ?? []);
+  mergeManual(base, local);
 }
 
 export function sharedOf(s: State): Shared {
@@ -507,6 +622,8 @@ export function sharedOf(s: State): Shared {
     hist: s.hist ?? [],
     catFix: s.catFix ?? {},
     lists: s.lists ?? defaultLists(),
+    manual: s.manual ?? [],
+    fbPages: s.fbPages ?? [],
   });
 }
 
