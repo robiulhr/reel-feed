@@ -85,8 +85,13 @@ export async function dailyBackup() {
 
 /** Puts everything back as it was in this backup — on every device. Backs up the current state first. */
 export async function restoreBackup(b: Backup) {
-  await backupNow("Before restoring a backup");
-  act({ t: "restore", data: b.data, mode: "replace" });
+  await restoreSnap(b.data, "Before restoring a backup");
+}
+
+/** Puts this copy of your data back (on every device), backing up the current state first. */
+export async function restoreSnap(data: Snap, why: string) {
+  await backupNow(why);
+  act({ t: "restore", data, mode: "replace" });
 }
 
 /** "12 saved · 340 watched · 5,200 seen · learned 40 channels" */

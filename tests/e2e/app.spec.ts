@@ -376,4 +376,30 @@ test.describe("saved, undo and backups", () => {
     await page.locator('[data-p="saved"]').click();
     await expect(body.locator(".grid .card")).toHaveCount(n);
   });
+
+  test("Backups: an earlier version from GitHub can be restored", async ({ app: page, sync }) => {
+    const ids = makeDataset().videos.map((v) => v.id);
+    sync.versions.push({
+      sha: "a".repeat(40),
+      at: Date.parse("2026-11-01T10:00:00Z"),
+      msg: "Sync from phone (2 changes)",
+      data: { v: 2, updatedAt: "2026-11-01T10:00:00Z", saved: ids.slice(0, 2), hidden: [], seen: [], bad: [], affCh: {}, affCat: {} },
+    });
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="backups"]').click();
+    const body = page.locator("#panelBody");
+    await expect(body).toContainText("Turn on Sync");
+    await page.locator("#closePanel").click();
+    await login(page);
+    await page.locator('[data-p="backups"]').click();
+    await body.getByRole("button", { name: "Show versions" }).click();
+    const row = body.locator(".bk-row").filter({ hasText: "Sync from phone" });
+    await row.getByRole("button", { name: /^Restore the version from / }).click();
+    const dialog = page.getByRole("dialog", { name: "Restore this version?" });
+    await expect(dialog).toContainText("2 saved");
+    await dialog.getByRole("button", { name: "Restore" }).click();
+    await expect(page.locator("#toast")).toContainText("Restored");
+    await page.locator('[data-p="saved"]').click();
+    await expect(body.locator(".grid .card")).toHaveCount(2);
+  });
 });

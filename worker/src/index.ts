@@ -3,6 +3,8 @@
  *
  * - Login with APP_PASSWORD → signed 180-day session. Devices never see any token.
  * - /state           read/write user-state.json in the private data repo (saves, history, learning)
+ * - /state/versions  earlier versions of it (one per day, from the repo's history) — for "restore from the cloud"
+ * - /state/at        one earlier version
  * - /channels        read/edit channels.json in the code repo (commit triggers a refresh)
  * - /lookup          look a channel up on YouTube before adding it
  * - /refresh,/status start the "Fetch Shorts & deploy" workflow / see the latest run
@@ -116,6 +118,10 @@ async function handle(route: string, req: Request, env: Env, cors: Cors): Promis
       return json(await readJsonFile(env, env.DATA_REPO, STATE_FILE), 200, cors);
     case "PUT /state":
       return await putState(req, env, cors);
+    case "GET /state/versions":
+      return json(await stateVersions(env, new URL(req.url)), 200, cors);
+    case "GET /state/at":
+      return json(await stateAt(env, new URL(req.url)), 200, cors);
     case "GET /channels":
       return json(await readJsonFile(env, env.CODE_REPO, CHANNELS_FILE), 200, cors);
     case "POST /channels":
@@ -333,9 +339,9 @@ async function githubError(r: Response, what: string) {
   return `GitHub error ${r.status}: ${j.message ?? "unknown"}`;
 }
 
-/** Reads a JSON file from a repo. Returns { data: null, sha: null } if it doesn't exist yet. */
-async function readJsonFile(env: Env, repo: string, path: string): Promise<{ data: any; sha: string | null }> {
-  const r = await gh(env, `/repos/${repo}/contents/${path}`);
+/** Reads a JSON file from a repo (at a commit, if `ref` is given). Returns { data: null, sha: null } if it doesn't exist. */
+async function readJsonFile(env: Env, repo: string, path: string, ref = ""): Promise<{ data: any; sha: string | null }> {
+  const r = await gh(env, `/repos/${repo}/contents/${path}${ref ? `?ref=${ref}` : ""}`);
   if (r.status === 404) {
     const repoCheck = await gh(env, `/repos/${repo}`);
     if (!repoCheck.ok) throw new HttpError(502, await githubError(repoCheck, `repo ${repo}`));
@@ -374,6 +380,44 @@ async function putState(req: Request, env: Env, cors: Cors) {
   // conflict = another device saved first; the app re-reads and merges
   if (!sha) return json({ error: "conflict" }, 409, cors);
   return json({ sha }, 200, cors);
+}
+
+/**
+ * Earlier versions of user-state.json, newest first: the latest one of each of the last `days` days
+ * (every sync is a commit, so there are many a day — one per day is what you'd pick from).
+ * One GitHub call per day, in parallel; days without a sync repeat the day before and are skipped.
+ */
+const MAX_VERSION_DAYS = 30;
+async function stateVersions(env: Env, url: URL) {
+  const days = Math.min(MAX_VERSION_DAYS, Math.max(1, Number(url.searchParams.get("days")) || MAX_VERSION_DAYS));
+  const endOfToday = new Date();
+  endOfToday.setUTCHours(23, 59, 59, 999);
+  const found = await Promise.all(
+    Array.from({ length: days }, async (_, i) => {
+      const until = new Date(endOfToday.getTime() - i * 86400_000).toISOString();
+      const r = await gh(env, `/repos/${env.DATA_REPO}/commits?path=${STATE_FILE}&per_page=1&until=${until}`);
+      if (!r.ok) throw new HttpError(502, await githubError(r, `history of ${env.DATA_REPO}/${STATE_FILE}`));
+      const [c] = (await r.json()) as {
+        sha: string;
+        commit: { message: string; committer?: { date?: string }; author?: { date?: string } };
+      }[];
+      return c
+        ? { sha: c.sha, at: Date.parse(c.commit.committer?.date ?? c.commit.author?.date ?? "") || 0, msg: c.commit.message.slice(0, 120) }
+        : null;
+    }),
+  );
+  const seen = new Set<string>();
+  const versions = found.filter((v): v is NonNullable<typeof v> => !!v && !seen.has(v.sha) && !!seen.add(v.sha));
+  return { versions };
+}
+
+/** One earlier version of user-state.json (`sha` = a commit from /state/versions). */
+async function stateAt(env: Env, url: URL) {
+  const sha = url.searchParams.get("sha") ?? "";
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new HttpError(400, "Unknown version");
+  const { data } = await readJsonFile(env, env.DATA_REPO, STATE_FILE, sha);
+  if (!data) throw new HttpError(404, "That version has no saved data");
+  return { data };
 }
 
 // ---------- /channels ----------

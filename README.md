@@ -67,7 +67,7 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **Nothing is erased for good by one tap** (`src/backup.ts`):
   - Every erase shows **Undo**: unsave, remove from history, clear history, unhide, hide/remove channel, reset what the feed learned, show seen Shorts again. The big ones ask first.
   - **Backups** (Menu → Backups): a copy of your synced data (saved, history, seen, hidden, learning, category fixes) kept in this browser (IndexedDB) — one a day and one right before every big erase or restore; kept 30 days (max 20, newest 3 always). **Restore** puts everything back as it was then, on all devices (it's a normal synced change, and the current data is backed up first). *Back up now* makes one by hand.
-  - With sync on, every version of your data is also in the private repo's commit history (`reel-feed-data` → `user-state.json` → History).
+  - **From GitHub** (Menu → Backups → *Show versions*, needs sync): every sync is a commit in the private repo, so the last version of each day (30 days) can be restored from **any device — even a new one**. Uses the Worker's `GET /state/versions` (one GitHub call per day asked) and `GET /state/at?sha=…`; the current data is backed up on this device first.
   - Under the hood: `restore` op — *merge* (Undo of a clear: re-adds what was removed, keeps anything new from any device) or *replace* (backup restore / learning undo: exactly as it was).
 
 ### App updates (installed app included)
@@ -252,7 +252,7 @@ Change the grouping in `GROUPS` / `group:` in `src/categories.ts` (never reorder
 - Every change is recorded as a small **operation** ("saved X", "skipped channel Y", "hid Z"). Every ~60 seconds, when you leave the page, and every 5 minutes, the app: reads the latest `user-state.json` → replays its own pending operations on top → writes it back. If another device saved in between (GitHub sha conflict), it re-reads and merges again. → Two devices can be used at the same time without overwriting each other.
 - Offline: operations wait in the browser and sync later.
 - The first login on a device merges that device's existing local data into the shared file.
-- **Every sync is a commit** in `reel-feed-data` → full version history = backup. To restore an older state: open the repo on GitHub → `user-state.json` → History → copy an old version back.
+- **Every sync is a commit** in `reel-feed-data` → full version history = backup. To restore an older state: in the app, Menu → Backups → *Show versions* → Restore (last 30 days). Older than that: open the repo on GitHub → `user-state.json` → History → copy an old version back.
 - Worker protections: only `https://robiulhr.github.io` (and local dev addresses) may call it; wrong passwords are slowed down; changing `APP_PASSWORD` or `SESSION_SECRET` logs out every device.
 - The Worker refuses to sync without a session; the site itself works without sync (data then stays in that browser only).
 

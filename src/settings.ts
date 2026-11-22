@@ -1,9 +1,9 @@
 /** Menu → About (stats, version, health, data saver, full screen, shortcuts) and Menu → Sync (login). */
-import { persist, state } from "./store";
-import { type Backup, backupNow, backupsAvailable, describe, eraseWithUndo, listBackups, restoreBackup } from "./backup";
+import { fromFile, NewerDataError, persist, type StateFile, snap, state } from "./store";
+import { type Backup, backupNow, backupsAvailable, describe, eraseWithUndo, listBackups, restoreBackup, restoreSnap } from "./backup";
 import * as sync from "./sync";
 import { resetChannels } from "./channels";
-import { busy, confirmDialog, toast } from "./ui";
+import { busy, confirmDialog, toast, toastError } from "./ui";
 import { renderHealth } from "./health";
 import { ago, btn, compact, el, para } from "./dom";
 import { feed } from "./feed";
@@ -228,18 +228,24 @@ export function renderSyncPanel(body: HTMLElement) {
   body.append(form);
 }
 
-/** Menu → Backups: copies of your data kept in this browser; Restore puts everything back as it was then. */
+/**
+ * Menu → Backups: copies of your data kept in this browser, plus (with sync on) earlier versions
+ * from GitHub — those work on any device, even a new one. Restore puts everything back as it was then.
+ */
 export async function renderBackups(panel: HTMLElement) {
   // drawn into its own box: if you switch tabs while it loads, the box is simply gone
   const body = el("div");
   panel.append(body);
+  body.append(el("h3", "bk-h", "On this device"));
   body.append(
     para(
       "A copy of your saved Shorts, history, seen list, hidden channels and what the feed learned — kept in this browser. One is made every day and right before anything big is erased. Kept for 30 days.",
     ),
   );
+  const cloud = el("div");
   if (!(await backupsAvailable())) {
-    body.append(para("Backups aren't available in this browser (private mode or storage blocked).", "ch-note warn"));
+    body.append(para("Backups aren't available in this browser (private mode or storage blocked).", "ch-note warn"), cloud);
+    renderCloud(cloud);
     return;
   }
   const now = btn(
@@ -253,15 +259,78 @@ export async function renderBackups(panel: HTMLElement) {
   );
   body.append(now, para(`Right now: ${describe(snapNow())}`, "ch-note"));
   const list = await listBackups();
-  if (!list.length) {
-    body.append(para("No backups yet — the first one is made automatically within a minute of opening the app."));
+  if (!list.length) body.append(para("No backups yet — the first one is made automatically within a minute of opening the app."));
+  for (const b of list) body.append(backupRow(b));
+  body.append(cloud);
+  renderCloud(cloud);
+}
+
+/** Earlier versions from GitHub (every sync is saved there). Loaded on request — it asks GitHub. */
+function renderCloud(box: HTMLElement) {
+  box.append(el("h3", "bk-h", "On GitHub (all devices)"));
+  if (!sync.isConnected()) {
+    box.append(
+      para("Turn on Sync (Menu → Sync) and every version of your data is also kept on GitHub — restorable from any device.", "ch-note"),
+    );
     return;
   }
-  for (const b of list) body.append(backupRow(b));
-  if (sync.isConnected())
-    body.append(
-      para("Also: every sync is kept as a version in your private GitHub repo (reel-feed-data → user-state.json → History).", "ch-note"),
-    );
+  box.append(para("Every sync is saved in your private GitHub repo. Here's the last version of each day (30 days)."));
+  const load = btn(
+    "Show versions",
+    async () => {
+      load.disabled = true;
+      load.textContent = "Loading…";
+      try {
+        const { versions } = await sync.call<{ versions: CloudVersion[] }>("/state/versions");
+        load.remove();
+        if (!versions.length) box.append(para("No versions on GitHub yet.", "ch-note"));
+        for (const v of versions) box.append(cloudRow(v));
+      } catch (e) {
+        load.disabled = false;
+        load.textContent = "Show versions";
+        toastError(e instanceof Error ? e.message : "Couldn't load the versions");
+      }
+    },
+    "btn",
+  );
+  box.append(load);
+}
+
+interface CloudVersion {
+  sha: string;
+  at: number;
+  msg: string;
+}
+
+function cloudRow(v: CloudVersion) {
+  const row = el("div", "bk-row");
+  const txt = el("div", "bk-txt");
+  const when = new Date(v.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  txt.append(el("div", "bk-title", when), el("div", "ch-note", v.msg));
+  const restore = btn(`Restore`, async () => {
+    restore.disabled = true;
+    try {
+      const { data } = await sync.call<{ data: Partial<StateFile> }>(`/state/at?sha=${v.sha}`);
+      const version = snap(fromFile(data));
+      const ok = await confirmDialog({
+        title: "Restore this version?",
+        body: `Everything goes back to how it was on ${when}: ${describe(version)}. This applies on all your devices. Your current data is backed up on this device first, so you can switch back.`,
+        confirm: "Restore",
+      });
+      if (ok) {
+        await restoreSnap(version, `Before restoring the ${when} version from GitHub`);
+        toast("Restored — your data is back as it was then");
+        renderPanel();
+      }
+    } catch (e) {
+      toastError(e instanceof NewerDataError ? e.message : e instanceof Error ? e.message : "Couldn't load that version");
+    } finally {
+      restore.disabled = false;
+    }
+  });
+  restore.setAttribute("aria-label", `Restore the version from ${when}`);
+  row.append(txt, restore);
+  return row;
 }
 
 function snapNow() {

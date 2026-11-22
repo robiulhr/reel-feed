@@ -50,6 +50,8 @@ export interface FakeSync {
   statePuts: number;
   channels: any[];
   lookups: number;
+  /** Earlier versions of the synced data (GitHub commit history), oldest first. Every PUT adds one. */
+  versions: { sha: string; at: number; msg: string; data: any }[];
 }
 
 export const test = base.extend<{ app: Page; sync: FakeSync }>({
@@ -58,6 +60,7 @@ export const test = base.extend<{ app: Page; sync: FakeSync }>({
       channelPosts: [],
       statePuts: 0,
       lookups: 0,
+      versions: [],
       channels: [
         { name: "Alpha Biz", handle: "@alpha", cat: "stories" },
         { name: "Ads Lab", handle: "@ads", cat: "ads" },
@@ -97,7 +100,14 @@ export const test = base.extend<{ app: Page; sync: FakeSync }>({
         sync.statePuts++;
         state = req.postDataJSON().data;
         stateSha++;
+        sync.versions.push({ sha: String(stateSha).padStart(40, "0"), at: Date.now(), msg: "Sync from test", data: state });
         return ok({ sha: `s${stateSha}` });
+      }
+      if (path === "/state/versions" && method === "GET")
+        return ok({ versions: [...sync.versions].reverse().map(({ sha, at, msg }) => ({ sha, at, msg })) });
+      if (path === "/state/at" && method === "GET") {
+        const v = sync.versions.find((x) => x.sha === new URL(req.url()).searchParams.get("sha"));
+        return v ? ok({ data: v.data }) : route.fulfill({ status: 404, headers: cors, json: { error: "Unknown version" } });
       }
       if (path === "/channels" && method === "GET") return ok({ data: sync.channels, sha: "c" });
       if (path === "/channels" && method === "POST") {
