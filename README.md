@@ -223,7 +223,7 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 - 💡 **Facts & Knowledge**
 - 🕌 **Islamic**: Quran Tilawat · Waz & Islamic Talks · Nasheed & Gajal — left out of **All**; pick it to see them (mixing it with other categories starts a new pick).
 
-Change the grouping in  /  in  (never reorder  — the data file stores categories by position).
+Change the grouping in `GROUPS` / `group:` in `src/categories.ts` (never reorder `CATEGORIES` — the data file stores categories by position).
 
 **Every Short is sorted by its own words** (`scripts/fetch.ts`, no AI, no API key): keyword lists in English, Bangla (whole words) and Roman Bangla/Hindi score the title (×3), tags/hashtags (×2) and description (×1). Lines and tags a channel puts on most of its videos (links, "subscribe", course ads) are ignored.
 - **1–3 categories per Short**, main first. A second/third only with real evidence — so a near-miss still shows up in the right chip.
