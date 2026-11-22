@@ -1,15 +1,11 @@
-import type { State } from "./store";
+import { type CatId, groupOf, PERSONAL_GROUP } from "./categories";
+import type { Shared, State } from "./store";
 import type { Dataset, Short } from "./types";
 
-export const CATS = [
-  { id: "all", label: "All" },
-  { id: "bangla", label: "Bangla" },
-  { id: "ads", label: "Ads & E-com" },
-  { id: "stories", label: "Biz Stories" },
-  { id: "founders", label: "Founders" },
-  { id: "books", label: "Books & Money" },
-  { id: "ai", label: "AI & Brand" },
-];
+/** A Short's categories: your fix if you made one, otherwise the automatic ones. Main first. */
+export const videoCats = (s: Short, st: Pick<Shared, "catFix">): CatId[] => st.catFix[s.id] ?? s.k;
+/** Still guessed? (your fix makes it certain) */
+export const isGuessed = (s: Short, st: Pick<Shared, "catFix">) => !st.catFix[s.id] && s.g;
 
 const WIN_DAYS: Record<string, number> = { all: Infinity, "30": 30, "7": 7, "1": 1 };
 
@@ -33,10 +29,18 @@ export function buildQueue(
     const ch = ds.channels[s.ch];
     if (ch.st === "removed" || hidden.has(ch.h) || bad.has(s.id) || opts.exclude.has(s.id)) return false;
     if (now - s.p > maxAge) return false;
-    if (st.cat !== "all") {
-      if (st.cat === "bangla" ? !(ch.cat === "bangla" || ch.bn) : ch.cat !== st.cat) return false;
-    }
+    if (st.lang !== "all" && s.lg !== st.lang) return false;
+    const cats = videoCats(s, st);
+    if (picked.size) {
+      if (!cats.some((c) => picked.has(c))) return false;
+    } else if (cats[0] && groupOf(cats[0]) === PERSONAL_GROUP) return false; // Islamic Shorts have their own chips
     return ignoreSeen || !st.seen[s.id];
+  };
+  const picked = new Set<string>(st.cats);
+  /** In a category feed: Shorts mainly about it first, guessed ones last. */
+  const fit = (s: Short) => {
+    if (!picked.size) return 0;
+    return (picked.has(videoCats(s, st)[0]) ? 0.2 : 0) - (isGuessed(s, st) ? 0.15 : 0);
   };
 
   let pool = ds.videos.filter((s) => allowed(s, false));
@@ -53,15 +57,17 @@ export function buildQueue(
     switch (st.tab) {
       case "newest":
         return s.p;
+      case "top": // Most viewed: plain view count (the time range picks the period)
+        return s.v;
       case "trending":
-        return 0.65 * s.tr + 0.2 * fresh + 0.15 * s.e + Math.random() * 0.05;
-      case "popular":
-        return 0.6 * s.o + 0.25 * views + 0.15 * s.e + Math.random() * 0.05;
+        return 0.65 * s.tr + 0.2 * fresh + 0.15 * s.e + fit(s) + Math.random() * 0.05;
+      case "popular": // Breakouts: views compared with what the channel usually gets
+        return 0.6 * s.o + 0.25 * views + 0.15 * s.e + fit(s) + Math.random() * 0.05;
       default: {
         const ch = ds.channels[s.ch];
-        const aff = 0.5 + 0.5 * Math.tanh((st.affCh[ch.h] ?? 0) / 4 + (st.affCat[ch.cat] ?? 0) / 8);
+        const aff = 0.5 + 0.5 * Math.tanh((st.affCh[ch.h] ?? 0) / 4 + (st.affCat[videoCats(s, st)[0] ?? "none"] ?? 0) / 8);
         const isNew = s.p > opts.prevVisit ? 0.15 : 0;
-        return 0.28 * s.o + 0.14 * s.e + 0.14 * s.tr + 0.12 * fresh + 0.12 * s.r + 0.2 * aff + isNew + Math.random() * 0.18;
+        return 0.28 * s.o + 0.14 * s.e + 0.14 * s.tr + 0.12 * fresh + 0.12 * s.r + 0.2 * aff + isNew + fit(s) + Math.random() * 0.18;
       }
     }
   };

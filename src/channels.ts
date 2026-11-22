@@ -1,12 +1,13 @@
 /**
- * Channels control panel: list, search, filter, sort, add (with YouTube lookup), change category,
+ * Channels control panel: list, search, filter, sort, add (with YouTube lookup), change categories,
  * hide (personal), remove (soft — restorable any time), delete permanently (only after removing),
  * and "Refresh now".
  *
  * The channel list itself is channels.json in the code repo; edits go through the sync Worker,
  * which commits them (and the commit starts a refresh automatically).
  */
-import { CATS } from "./rank";
+import { CATEGORIES, type CatId, catLabel, normCats } from "./categories";
+import { catSummary, pickCategories } from "./catpicker";
 import { act, state } from "./store";
 import * as sync from "./sync";
 import { COST, confirmCost, noteSpend, spendToast } from "./quota";
@@ -20,7 +21,7 @@ export interface ChannelsCtx {
   ago(sec: number): string;
   fmt(n: number): string;
   onFeedChange(): void; // a channel was removed/restored/re-categorised → refresh the queue
-  explore(info: { id: string; name: string; handle: string; thumb: string; subs: number; suggestedCat?: string }): void;
+  explore(info: { id: string; name: string; handle: string; thumb: string; subs: number; suggestedCats?: CatId[] }): void;
 }
 
 /** Called at startup so other screens (channel page, More like this) can add/remove channels too. */
@@ -40,7 +41,7 @@ export function listStatus(handle: string, id?: string): "listed" | "removed" | 
   return e.status === "removed" ? "removed" : "listed";
 }
 
-export function addFromInfo(info: { name: string; handle: string; id: string; cat: string }) {
+export function addFromInfo(info: { name: string; handle: string; id: string; cats: CatId[] }) {
   return change([{ t: "add", channel: info }], `Added ${info.name} — its Shorts join your feed after the refresh (~3 min)`);
 }
 export function removeByHandle(handle: string, name: string) {
@@ -52,25 +53,37 @@ export function removeByHandle(handle: string, name: string) {
 export function restoreByHandle(handle: string, name: string) {
   return change([{ t: "restore", h: handle }], `Restored ${name}`);
 }
-export function setCategory(handle: string, name: string, cat: string) {
-  return change([{ t: "cat", h: handle, cat }], `${name} → ${CATS.find((c) => c.id === cat)?.label ?? cat}`);
+export function setCategories(handle: string, name: string, cats: CatId[]) {
+  return change([{ t: "cats", h: handle, cats }], `${name} → ${cats.map(catLabel).join(", ")}`);
+}
+
+/** Opens the picker for a channel's categories; saves if you change them. */
+export async function editChannelCats(handle: string, name: string, current: CatId[]) {
+  const cats = await pickCategories({
+    title: `Categories for ${name}`,
+    current,
+    note: "A starting guess for this channel's Shorts. Each Short is still sorted by its own title, tags and description.",
+  });
+  if (cats && cats.join() !== current.join()) return setCategories(handle, name, cats);
+  return false;
 }
 
 interface Entry {
   name: string;
   handle: string;
-  cat: string;
+  cats?: string[];
+  cat?: string; // old single category (lists saved before multi-category)
   id?: string;
   status?: "removed";
   addedAt?: string;
   removedAt?: string;
 }
 type Op =
-  | { t: "add"; channel: { name: string; handle: string; id?: string; cat: string } }
+  | { t: "add"; channel: { name: string; handle: string; id?: string; cats: CatId[] } }
   | { t: "remove"; h: string }
   | { t: "restore"; h: string }
   | { t: "delete"; h: string }
-  | { t: "cat"; h: string; cat: string };
+  | { t: "cats"; h: string; cats: CatId[] };
 
 interface LookupResult {
   id: string;
@@ -82,7 +95,8 @@ interface LookupResult {
   desc: string;
   shorts: number;
   latestShort: number;
-  suggestedCat: string;
+  suggestedCats?: string[];
+  suggestedCat?: string; // older sync server
 }
 
 type RowStatus = "active" | "noShorts" | "notFound" | "removed" | "pending";
@@ -93,7 +107,9 @@ const STATUS_LABEL: Record<RowStatus, string> = {
   removed: "Removed",
   pending: "Waiting for refresh",
 };
-const CAT_OPTIONS = CATS.filter((c) => c.id !== "all");
+const entryCats = (e: Entry) => normCats(e.cats, e.cat);
+/** Categories picked for each lookup result before tapping Add. */
+const addCats = new Map<string, CatId[]>();
 
 // ---------- module state (survives re-opening the panel) ----------
 let entries: Entry[] | null = null; // from GitHub (source of truth); null = not loaded
@@ -120,7 +136,7 @@ function dsByHandle() {
 function fallbackEntries(): Entry[] {
   return ctx.ds.channels
     .filter((c) => c.st !== "external")
-    .map((c) => ({ name: c.n, handle: c.h, cat: c.cat, ...(c.st === "removed" ? { status: "removed" as const } : {}) }));
+    .map((c) => ({ name: c.n, handle: c.h, cats: c.cats, ...(c.st === "removed" ? { status: "removed" as const } : {}) }));
 }
 
 function rowStatus(e: Entry, d: Channel | undefined): RowStatus {
@@ -171,7 +187,8 @@ function applyLocal(list: Entry[], op: Op) {
       const ex = list.find((x) => lc(x.handle) === lc(op.channel.handle) || (op.channel.id && x.id === op.channel.id));
       if (ex) {
         delete ex.status;
-        ex.cat = op.channel.cat;
+        delete ex.cat;
+        ex.cats = op.channel.cats;
       } else list.push({ ...op.channel, addedAt: new Date().toISOString() });
       break;
     }
@@ -190,9 +207,12 @@ function applyLocal(list: Entry[], op: Op) {
       if (c) list.splice(list.indexOf(c), 1);
       break;
     }
-    case "cat": {
+    case "cats": {
       const c = find(op.h);
-      if (c) c.cat = op.cat;
+      if (c) {
+        delete c.cat;
+        c.cats = op.cats;
+      }
       break;
     }
   }
@@ -207,7 +227,12 @@ function applyFeed(op: Op) {
     d.st = "removed";
   }
   if (op.t === "restore") d.st = prevStatus.get(d.h) ?? (d.cnt ? "active" : "noShorts");
-  if (op.t === "cat") d.cat = op.cat as Channel["cat"];
+  if (op.t === "cats") {
+    d.cats = op.cats;
+    // Shorts whose own words said nothing follow the channel's main category straight away
+    const i = ctx.ds.channels.indexOf(d);
+    for (const s of ctx.ds.videos) if (s.ch === i && s.g) s.k = op.cats.slice(0, 1);
+  }
   ctx.onFeedChange();
 }
 
@@ -228,7 +253,7 @@ interface Job {
   success: string;
   undo?: { label: string; run: () => void };
   entriesBefore: Entry[];
-  dsBefore: { st: Channel["st"]; cat: Channel["cat"] }[];
+  dsBefore: { st: Channel["st"]; cats: CatId[] }[];
   resolve: (ok: boolean) => void;
 }
 let jobs: Job[] = [];
@@ -253,8 +278,8 @@ function stillValid(op: Op): boolean {
       return !!e && e.status === "removed";
     case "delete":
       return !!e && e.status === "removed";
-    case "cat":
-      return !!e && e.cat !== op.cat;
+    case "cats":
+      return !!e && entryCats(e).join() !== op.cats.join();
   }
 }
 
@@ -275,7 +300,7 @@ async function change(ops: Op[], success: string, undo?: { label: string; run: (
     undo,
     resolve: () => {},
     entriesBefore: structuredClone(entries),
-    dsBefore: ctx.ds.channels.map((c) => ({ st: c.st, cat: c.cat })),
+    dsBefore: ctx.ds.channels.map((c) => ({ st: c.st, cats: c.cats })),
   };
   for (const op of ops) {
     applyLocal(entries, op);
@@ -304,9 +329,9 @@ function combine(batch: Job[]): Op[] {
   const ops = batch.flatMap((j) => j.ops);
   const lastCat = new Map<string, number>();
   ops.forEach((op, i) => {
-    if (op.t === "cat") lastCat.set(lc(op.h), i);
+    if (op.t === "cats") lastCat.set(lc(op.h), i);
   });
-  return ops.filter((op, i) => op.t !== "cat" || lastCat.get(lc(op.h)) === i);
+  return ops.filter((op, i) => op.t !== "cats" || lastCat.get(lc(op.h)) === i);
 }
 
 async function send(batch: Job[]) {
@@ -328,7 +353,7 @@ async function send(batch: Job[]) {
       const c = ctx.ds.channels[i];
       if (c) {
         c.st = b.st;
-        c.cat = b.cat;
+        c.cats = b.cats;
       }
     });
     ctx.onFeedChange();
@@ -365,8 +390,13 @@ async function deleteChannel(e: Entry) {
   });
   if (ok) await change([{ t: "delete", h: e.handle }], `Deleted ${e.name} permanently`);
 }
-function setCat(e: Entry, cat: string) {
-  change([{ t: "cat", h: e.handle, cat }], `${e.name} → ${CATS.find((c) => c.id === cat)?.label ?? cat}`);
+/** "Posts: Marketing 72% · Career 8%" — what the channel's Shorts are really about. */
+export function mixText(ch: Channel | undefined) {
+  if (!ch?.mix.length) return "";
+  return `Posts: ${ch.mix
+    .slice(0, 3)
+    .map(([c, pct]) => `${catLabel(c)} ${pct}%`)
+    .join(" · ")}`;
 }
 function toggleHide(h: string, hidden: boolean) {
   act({ t: hidden ? "unhide" : "hide", h });
@@ -485,7 +515,7 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
   controls.append(
     search,
     sel(
-      [["all", "All categories"], ...CAT_OPTIONS.map((x) => [x.id, x.label] as [string, string])],
+      [["all", "All categories"], ...CATEGORIES.map((x) => [x.id, x.label] as [string, string])],
       view.cat,
       (v) => {
         view.cat = v;
@@ -652,17 +682,27 @@ function renderAdd() {
     if (!r.shorts) main.append(el("p", "ch-note warn", "No Shorts yet. You can still add it — it'll appear once they post Shorts."));
 
     const row = el("div", "ch-card-actions");
-    const cat = el("select") as HTMLSelectElement;
-    cat.setAttribute("aria-label", "Category");
-    for (const x of CAT_OPTIONS) cat.append(new Option(x.label, x.id));
-    cat.value = r.suggestedCat;
+    if (!addCats.has(r.id)) addCats.set(r.id, normCats(r.suggestedCats, r.suggestedCat));
+    const picked = () => addCats.get(r.id) ?? [];
+    const cat = btn(catSummary(picked(), "Pick categories"), async () => {
+      const cats = await pickCategories({ title: `Categories for ${r.name}`, current: picked() });
+      if (cats) {
+        addCats.set(r.id, cats);
+        cat.textContent = catSummary(cats);
+      }
+    });
+    cat.setAttribute("aria-label", `Categories: ${catSummary(picked())}. Change`);
     const addBtn = btn(
       existing && existing.status === "removed" ? "Restore" : "Add",
       (b) =>
         busy(b, "Adding…", async () => {
           errNote.textContent = "";
+          if (!picked().length) {
+            errNote.textContent = "Pick at least one category first";
+            return;
+          }
           const ok = await change(
-            [{ t: "add", channel: { name: r.name, handle: r.handle, id: r.id, cat: cat.value } }],
+            [{ t: "add", channel: { name: r.name, handle: r.handle, id: r.id, cats: picked() } }],
             `Added ${r.name} — its Shorts appear after the refresh (~3 min)`,
           );
           if (ok) {
@@ -675,10 +715,10 @@ function renderAdd() {
     if (existing && existing.status !== "removed") addBtn.disabled = true;
     const preview = btn(
       r.shorts ? "Preview Shorts" : "View channel",
-      () => ctx.explore({ id: r.id, name: r.name, handle: r.handle, thumb: r.thumb, subs: r.subs, suggestedCat: cat.value }),
+      () => ctx.explore({ id: r.id, name: r.name, handle: r.handle, thumb: r.thumb, subs: r.subs, suggestedCats: picked() }),
       "btn sm",
     );
-    row.append(el("span", "ch-note", "Category"), cat, addBtn, preview);
+    row.append(cat, addBtn, preview);
     const errNote = el("p", "ch-note warn", "");
     main.append(row, errNote);
     card.append(img, main);
@@ -706,7 +746,7 @@ function renderList() {
       if (q && !lc(`${e.name} ${e.handle} ${ch?.n ?? ""}`).includes(q)) return false;
       // A channel you just changed stays where it is (so the next row can't slide under your finger)
       if (sticky.has(lc(e.handle))) return true;
-      if (view.cat !== "all" && e.cat !== view.cat) return false;
+      if (view.cat !== "all" && !entryCats(e).includes(view.cat as CatId)) return false;
       if (view.status === "listed") return st !== "removed";
       if (view.status === "hidden") return isHidden && st !== "removed";
       return st === view.status;
@@ -757,6 +797,8 @@ function renderList() {
     const tv = taste(e.handle);
     if (tv) bits.push(`taste ${tv > 0 ? "+" : ""}${Math.round(tv * 10) / 10}`);
     main.append(title, el("div", "ch-sub", bits.join(" · ")));
+    const mix = mixText(ch);
+    if (mix) main.append(el("div", "ch-sub ch-mix", mix));
 
     const actions = el("div", "ch-actions");
     if (st === "removed") {
@@ -765,12 +807,10 @@ function renderList() {
         btn("Delete", (b) => busy(b, "…", () => deleteChannel(e)), "btn sm danger"),
       );
     } else {
-      const cat = el("select") as HTMLSelectElement;
-      cat.setAttribute("aria-label", "Category");
-      for (const x of CAT_OPTIONS) cat.append(new Option(x.label, x.id));
-      cat.value = e.cat;
+      const cats = entryCats(e);
+      const cat = btn(catSummary(cats), () => editChannelCats(e.handle, e.name, cats));
+      cat.setAttribute("aria-label", `Categories: ${cats.map(catLabel).join(", ") || "none"}. Change`);
       cat.disabled = !canEdit;
-      cat.onchange = () => setCat(e, cat.value);
       actions.append(
         cat,
         btn(isHidden ? "Unhide" : "Hide", () => toggleHide(e.handle, isHidden), "btn sm"),

@@ -21,6 +21,7 @@ export const els = {
   tipsOk: $<HTMLButtonElement>("tipsOk"),
   tabs: $("tabs"),
   win: $<HTMLSelectElement>("win"),
+  lang: $<HTMLSelectElement>("lang"),
   chips: $("chips"),
   refreshBtn: $<HTMLButtonElement>("refreshBtn"),
   menuBtn: $<HTMLButtonElement>("menuBtn"),

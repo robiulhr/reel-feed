@@ -1,11 +1,13 @@
-export type Cat = "bangla" | "ads" | "stories" | "founders" | "books" | "ai" | "other";
-export type Tab = "foryou" | "trending" | "popular" | "newest";
+import type { CatId, Lang } from "./categories";
+
+export type Tab = "foryou" | "trending" | "popular" | "top" | "newest";
 export type Win = "all" | "30" | "7" | "1";
 
 export interface Channel {
   h: string; // handle, e.g. "@TheAponAhsan"
   n: string; // display name
-  cat: Cat;
+  cats: CatId[]; // categories you gave the channel (a starting guess for its videos)
+  mix: [CatId, number][]; // what it really posts: category and % of its sorted Shorts, biggest first
   bn: boolean; // mostly Bengali titles
   subs: number;
   thumb: string;
@@ -27,6 +29,9 @@ export interface Short {
   e: number; // engagement percentile 0..1
   tr: number; // trending-speed percentile 0..1
   r: number; // topic relevance 0..1
+  k: CatId[]; // categories, main first (empty = couldn't tell)
+  lg: Lang; // language
+  g: boolean; // categories guessed from the channel (the video's own text said nothing)
 }
 
 /** One Shorts refresh and the YouTube API units it spent (written by scripts/fetch.ts). */

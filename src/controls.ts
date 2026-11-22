@@ -2,6 +2,7 @@
  * Player controls: play/pause, 10 s skip, the progress bar (drag to jump), speed, sound
  * (mute + volume), save, share, and refresh / "Get newer".
  */
+import { videoCats } from "./rank";
 import { act, learn, persist, state } from "./store";
 import * as sync from "./sync";
 import { checkForUpdate } from "./data";
@@ -217,7 +218,7 @@ export function toggleSave(forceOn = false) {
   } else if (!isSaved) {
     act({ t: "save", id: cur.id });
     const ch = feed.ds.channels[cur.ch];
-    if (ch) learn(ch, 2);
+    if (ch) learn(ch, videoCats(cur, state)[0], 2);
     navigator.vibrate?.(12);
     toast("Saved");
   }

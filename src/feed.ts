@@ -2,7 +2,8 @@
  * The feed: which Short is on screen, what comes next, going back, temporary lists
  * (a channel, "More like this", History, Saved), and swapping in newer data.
  */
-import { buildQueue } from "./rank";
+import { catInfo, normCats } from "./categories";
+import { buildQueue, isGuessed, videoCats } from "./rank";
 import { act, learn, state } from "./store";
 import { openChannel } from "./explore";
 import { historyShorts } from "./history";
@@ -11,7 +12,7 @@ import { announce } from "./a11y";
 import { ago, compact, nowSec } from "./dom";
 import { banner, els, setThumb, showEmpty, showSpinner, thumb } from "./view";
 import { playback, playerHooks, pool, resetWatch, stopClock } from "./player";
-import { closeOverlaysForPlayback, closePage, openPage } from "./panels";
+import { closeOverlaysForPlayback, closePage, openPage, renderControls } from "./panels";
 import type { AppApi, ExternalChannelInfo } from "./app";
 import type { Dataset, Short } from "./types";
 
@@ -47,7 +48,7 @@ export function finishCurrent() {
   else if (frac >= 0.5) delta = 0.5;
   else if (dwell < 3 && frac < 0.3) delta = -1;
   const ch = feed.ds.channels[cur.ch];
-  if (ch) learn(ch, delta);
+  if (ch) learn(ch, videoCats(cur, state)[0], delta);
 
   if (!state.histPaused && (dwell >= 1 || frac > 0.05)) {
     const f = w.loops > 0 ? 1 : Math.round(frac * 100) / 100;
@@ -245,6 +246,10 @@ export function renderMeta() {
   const bits: string[] = [];
   if (state.rate !== 1) bits.push(`${state.rate}×`);
   if (s?.v) bits.push(`${compact(s.v)} views`, `${compact(s.l)} likes`, ago(s.p));
+  if (s) {
+    const cats = videoCats(s, state);
+    if (cats.length) bits.push(`${cats.map((c) => catInfo(c)?.short ?? c).join(" / ")}${isGuessed(s, state) ? " ?" : ""}`);
+  }
   els.meta.textContent = bits.join(" · ");
 }
 
@@ -314,6 +319,7 @@ export function setData(d: Dataset, keepExternal: boolean) {
   feed.libIds = new Set(ds.videos.map((s) => s.id));
   feed.byId = new Map(ds.videos.map((s) => [s.id, s]));
   for (const s of extraShorts) feed.byId.set(s.id, s);
+  renderControls(); // category chips follow the library (which categories have Shorts)
 }
 
 // ---------- channels outside your list, saved Shorts ----------
@@ -326,7 +332,8 @@ function ensureChannel(info: ExternalChannelInfo): number {
   ds.channels.push({
     h: info.handle || info.id,
     n: info.name || info.handle,
-    cat: (info.suggestedCat ?? "stories") as never,
+    cats: normCats(info.suggestedCats),
+    mix: [],
     bn: BENGALI.test(info.name),
     subs: info.subs,
     thumb: info.thumb,

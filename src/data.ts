@@ -6,7 +6,8 @@
  *  3. Update check: a tiny meta.json tells whether newer data was published. New data is
  *     downloaded in the background and offered with a "New Shorts available" banner.
  */
-import type { Dataset } from "./types";
+import { CAT_IDS, type CatId, detectLang, isCat, LANG_CODES, type Lang, normCats } from "./categories";
+import type { Channel, Dataset } from "./types";
 
 const DB = "ecomgy-reel-feed";
 const STORE = "kv";
@@ -50,16 +51,39 @@ export interface RawData {
   generatedAt: number;
   units?: number;
   usage?: any[];
+  cats?: string[]; // category list the video/channel indexes refer to (missing in data from before categories)
+  langs?: string[];
   channels: any[];
   videos: any[][];
 }
 
+/**
+ * Turns the compact published file into objects. Also reads files from before multi-category
+ * (a saved copy on the phone, or an old deploy): channels then had one `cat` and videos had none,
+ * so videos borrow their channel's categories and count as guessed.
+ */
 export function parse(raw: RawData): Dataset {
+  const catList = raw.cats ?? CAT_IDS;
+  const langList = raw.langs ?? LANG_CODES;
+  const cat = (i: unknown): CatId | undefined => {
+    const c = typeof i === "number" ? catList[i] : i;
+    return isCat(c) ? c : undefined;
+  };
+  const channels: Channel[] = raw.channels.map((c) => ({
+    ...c,
+    cats: normCats(c.cats, c.cat),
+    mix: Array.isArray(c.mix)
+      ? c.mix.flatMap(([i, pct]: [number, number]) => {
+          const id = cat(i);
+          return id ? [[id, pct] as [CatId, number]] : [];
+        })
+      : [],
+  }));
   return {
     generatedAt: raw.generatedAt,
     units: raw.units ?? 0,
     usage: raw.usage ?? [],
-    channels: raw.channels,
+    channels,
     videos: raw.videos.map((a) => ({
       id: a[0],
       ch: a[1],
@@ -72,6 +96,13 @@ export function parse(raw: RawData): Dataset {
       e: a[8],
       tr: a[9],
       r: a[10],
+      ...(Array.isArray(a[11])
+        ? {
+            k: (a[11] as unknown[]).map(cat).filter((c): c is CatId => !!c),
+            lg: (langList[a[12]] as Lang) ?? "en",
+            g: a[13] === 1,
+          }
+        : { k: channels[a[1]]?.cats ?? [], lg: detectLang(a[2], "", channels[a[1]]?.bn), g: true }),
     })),
   };
 }

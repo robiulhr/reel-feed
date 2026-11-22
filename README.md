@@ -37,11 +37,12 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **Tabs**
   - **For You** (default): blended recommendation (see §5).
   - **Trending**: fastest-growing (views per day since upload).
-  - **Popular**: biggest hits relative to each channel's normal views.
+  - **Breakouts**: biggest hits relative to each channel's normal views.
+  - **Most viewed**: highest view count first — the best Shorts of any category, language and time range.
   - **Newest**: pure upload order.
-- **Filters**: time range (`All time` default, 30 days, 7 days, Today) + categories (All, Bangla, Ads & E-com, Biz Stories, Founders, Books & Money, AI & Brand).
-- **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), **⋯** → More like this (§6d), Explore this channel (§6c), Hide this channel, Open on YouTube. Tapping the **channel name** also opens the channel explorer.
-- **Menu ☰**: **Channels** (control panel, §6a), Saved list, Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), About (stats, reset learning, clear history).
+- **Filters**: time range (`All time` default, 30 days, 7 days, Today) + **language** (🌐 All, বাংলা, English, हिन्दी/اردو) + **category chips** (§5a). Pick several chips to see Shorts in any of them; **All** clears the pick.
+- **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), **⋯** → More like this (§6d), Explore this channel (§6c), **🏷 Wrong category?**, Hide this channel, Open on YouTube. Tapping the **channel name** also opens the channel explorer.
+- **Menu ☰**: **Channels** (control panel, §6a), **Sorting** (Shorts whose category is only a guess, §5a), Saved list, Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), About (stats, reset learning, clear history).
 - **NEW badge**: Shorts uploaded since your last visit (a gap of 30+ minutes counts as a new visit).
 - Never shows the same Short twice (until you've seen everything in a filter); never the same channel twice in a row; max 3 per channel in any 20.
 - Videos play through YouTube's **official embedded player** (views count for creators; nothing is downloaded or re-hosted).
@@ -184,13 +185,15 @@ Computed in two places:
 - **Outlier (`o`)**: views vs the channel's *median* Short views → finds hits on small channels too.
 - **Engagement (`e`)**: (likes + 3×comments) relative to views.
 - **Trending (`tr`)**: views per day since upload.
-- **Relevance (`r`)**: keyword match on title/description (English + Bangla business words) blended with the channel's category.
+- **Categories (`k`), language (`lg`), guessed (`g`)**: see §5a.
+- **Relevance (`r`)**: keyword match on title/description (English + Bangla business words) blended with how close the Short's main category is to business (business 1, fun 0.6, Islamic 0.3).
 
 Per channel it keeps the best 150 older Shorts + **every** Short from the last 60 days.
 
 **b) In the browser (`src/rank.ts`)**
 - For You = `0.28·outlier + 0.14·engagement + 0.14·trending + 0.12·freshness + 0.12·relevance + 0.20·your-taste + NEW bonus 0.15 + randomness ≤0.18`
-- Trending = mostly trending speed; Popular = mostly outlier + total views; Newest = upload time.
+- Trending = mostly trending speed; Breakouts = mostly outlier + total views; Most viewed = total views; Newest = upload time.
+- A Short whose main category you picked gets +0.2; a guessed one −0.15.
 - Then diversity rules (no same channel twice in a row, ≤3 per channel per 20).
 
 **Learning ("your taste")**, kept per channel and per category (`src/main.ts` → `finishCurrent`, `src/store.ts`):
@@ -207,6 +210,27 @@ Per channel it keeps the best 150 older Shorts + **every** Short from the last 6
 Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → About → *Reset what the feed learned*.
 
 ---
+
+## 5a. Categories — `src/categories.ts` (app) + `src/classify.ts` (rules; fetch, Worker, tests only)
+
+**19 categories in 3 groups**
+- **Business & growth**: Meta & Google Ads · Marketing & Branding · E-commerce · Sales & Customers · Business Stories · Founders & Leaders · Money & Investing · Self-growth · Career & Skills · AI & Tech Tools · Content & Design
+- **Fun & brand-able**: Famous Brand Ads · Funny Brand Content · Office & Work Fun · Comedy · Facts & Knowledge
+- **Islamic**: Quran Tilawat · Waz & Islamic Talks · Nasheed & Gajal — left out of **All**; pick their chips to see them (mixing them with other chips starts a new pick).
+
+**Every Short is sorted by its own words** (`scripts/fetch.ts`, no AI, no API key): keyword lists in English, Bangla (whole words) and Roman Bangla/Hindi score the title (×3), tags/hashtags (×2) and description (×1). Lines and tags a channel puts on most of its videos (links, "subscribe", course ads) are ignored.
+- **1–3 categories per Short**, main first. A second/third only with real evidence — so a near-miss still shows up in the right chip.
+- **Confident** when the words clearly say it (score ≥ 2.5). Otherwise the channel's habits decide: its **content mix** (what its confident Shorts are about, 60%) + **your categories for the channel** (40%). Those Shorts are marked **guessed** ("AI ?" under the title), rank a little lower and appear in **Menu → Sorting**.
+- **A brand's own channel** (main category Famous Brand Ads, e.g. Banglalink, Grameenphone): every Short is a Brand ad first.
+- Office jokes count as Office fun only with a humour signal (😂, funny, meme…); otherwise Career.
+- **Language** is separate: Bengali/Devanagari/Urdu letters, then Roman Bangla/Hindi words, then the channel's language.
+
+**Fixing mistakes** (your answer always wins and syncs to your other devices as a `catFix` op):
+- **⋯ → 🏷 Wrong category?** on any Short (unpick everything = back to automatic).
+- **Menu → Sorting**: guessed Shorts, most viewed first — **✓ Right**, **Change**, or **▶ Play these**.
+- A channel's categories (Channels panel or channel page) are only a starting guess; the mix line ("Posts: Marketing 40% · Money 40% …") shows what it really posts.
+
+**Adding/renaming a keyword**: edit `LEX` in `src/classify.ts` (`~word` = weak hit, `=word` = whole word only), then `npm test`.
 
 ## 6. How sync works (`src/sync.ts`, `worker/src/index.ts`)
 
@@ -227,9 +251,9 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 - **Search** (name/handle), **filter** by category and status, **sort** by name, subscribers, Shorts in feed, latest upload, your taste.
 - **Add**: paste `@handle`, any YouTube link (channel, `/channel/UC…`, a Short or video link, `youtu.be/…`) or type a name.
   - Handles/links → instant lookup (**2–3 API units**). A name → **Search YouTube** button (**~100 units**, only when you press it).
-  - Preview card: avatar, name, handle, subscribers, total videos, **number of Shorts**, latest Short, description; category **suggested automatically** (Bengali text → Bangla, ads/e-com words → Ads & E-com, etc.); warnings for *already in list*, *in Removed (adding restores it)*, *no Shorts yet*.
+  - Preview card: avatar, name, handle, subscribers, total videos, **number of Shorts**, latest Short, description; up to 2 categories **suggested automatically** from its name and description (same rules as the Shorts); warnings for *already in list*, *in Removed (adding restores it)*, *no Shorts yet*.
   - Lookups are remembered for the session, so repeating one costs nothing.
-- **Change category** inline (feed filters update immediately).
+- **Change categories** (pick up to 3, first = main) inline; each row also shows the channel's real content mix.
 - **Hide / Unhide**: personal (synced like your saves); the channel stays in the list.
 - **Remove = soft delete**: the channel moves to **Removed**, leaves the feed immediately, and stops being fetched (saves quota). **Restore any time** — there's no time limit. A toast also offers **Undo**.
 - **Delete** (permanent) exists **only for channels already in Removed** — the "second deletion". It asks for confirmation; afterwards the next refresh also purges its cached data. GitHub history still has every version of `channels.json` if you ever need it back.
@@ -277,8 +301,8 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 
 - Open it by tapping the **channel name/avatar** under a Short, **⋯ → Explore this channel**, a channel in **More like this**, or **Preview Shorts** in Channels → Add.
 - **Header**: avatar, name, handle, subscribers, Shorts count, latest upload, status (*In your list* / *Removed* / *Not in your list*, plus *Hidden*).
-- **Actions**: in your list → category, Hide/Unhide, Remove · removed → Restore · not in your list → category (suggested) + **Add to my list**.
-- **Grid** with **Newest · Popular · Hidden gems** (views ÷ the channel's median, shown as ×N) and **▶ Play all**.
+- **Actions**: in your list → categories, Hide/Unhide, Remove · removed → Restore · not in your list → categories (suggested) + **Add to my list**.
+- **Grid** with **Newest · Most viewed · Breakouts** (views ÷ the channel's median, shown as ×N), **category chips** (what this channel posts) and a **period** (All time / This year / 30 days / 7 days) — e.g. *Most viewed · Sales · This year* — and **▶ Play all**.
 - Tap a Short → **swipe through only this channel**; the top bar shows "← Channel · 3 of 152"; **←** (or Esc) returns to the channel page, and closing it returns to your main feed where you left it.
 - Channels in your list are **free** (best 150 + all recent Shorts already loaded). Others load on request (~10 units, cached 24 h).
 - Watching here **teaches For You** like the main feed.
@@ -298,9 +322,9 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 **Add / remove channels**: use **Menu → Channels** (§6a). Editing the file by hand still works (`git pull` first, then edit, commit, push):
 
 ```json
-{ "name": "Channel name", "handle": "@handle", "cat": "bangla", "id": "UC…(optional)", "status": "removed (optional)" }
+{ "name": "Channel name", "handle": "@handle", "cats": ["marketing", "ads"], "id": "UC…(optional)", "status": "removed (optional)" }
 ```
-`cat`: `bangla`, `ads`, `stories`, `founders`, `books`, `ai`. Channels with no Shorts yet are fine to keep — they appear automatically once they post Shorts.
+`cats`: 1–3 ids from `src/categories.ts` (`ads marketing ecom sales stories founders money growth career ai creative brandads brandfun workfun comedy facts quran waz nasheed`), main first. An old single `"cat"` still works and is translated. Channels with no Shorts yet are fine to keep — they appear automatically once they post Shorts.
 
 **Run locally** (from the `reel-feed` folder; works with Node 20+):
 ```powershell
@@ -407,6 +431,8 @@ npx wrangler deploy                      # prints the Worker address (https://re
 | `src/pool.ts` | Pool of YouTube players for instant swipes |
 | `src/data.ts` | Starter/full/saved library loading, update checks, slow-network detection |
 | `src/history.ts` | Watch history panel |
+| `src/categories.ts`, `src/classify.ts` | Category list + language detection (app); keyword rules (fetch/Worker/tests) |
+| `src/catpicker.ts`, `src/sorting.ts` | Category picker dialog; Menu → Sorting |
 | `public/sw.js`, `public/manifest.webmanifest`, `public/icon.svg` | Offline app files, install support, icon |
 | `public/data/meta.json`, `starter.json` | Generated by the fetch: version check + fast-start subset |
 | `src/style.css`, `index.html` | Layout: top bar / video / bottom bar |

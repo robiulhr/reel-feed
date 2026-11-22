@@ -5,6 +5,7 @@
  *  B) On YouTube (on request, ~103 units, behind the cost card): searches Shorts with the key words
  *     of this Short (editable). Results show new channels you can explore and add.
  */
+import { type CatId, detectLang } from "./categories";
 import type { AppApi } from "./app";
 import { listStatus } from "./channels";
 import { openChannel, shortGrid } from "./explore";
@@ -323,7 +324,7 @@ interface SearchResult {
   v: number;
   l: number;
   c: number;
-  ch: { id: string; name: string; thumb: string; handle: string; subs: number; suggestedCat: string };
+  ch: { id: string; name: string; thumb: string; handle: string; subs: number; suggestedCats?: CatId[] };
 }
 interface SearchResponse {
   q: string;
@@ -517,6 +518,9 @@ export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "fe
       e: 0,
       tr: 0,
       r: 0,
+      k: [],
+      lg: detectLang(r.t),
+      g: true,
       ch: app.ensureChannel(r.ch),
     }));
     const play = (i: number) => app.playList(`YouTube: ${res.q}`, list, i, () => reopen("youtube"));

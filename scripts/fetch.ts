@@ -17,6 +17,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CAT_IDS, type CatId, detectLang, groupOf, LANG_CODES, normCats } from "../src/categories";
+import { channelNoise, channelPrior, ownBrand, pickCats, type Prior, type Scores, textScores } from "../src/classify";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ENV_FILE = join(ROOT, ".env");
@@ -34,13 +36,16 @@ const CONCURRENCY = 8;
 const DAY = 86400;
 const FORCE_PLAYLIST_CHECK = 7 * DAY; // safety net in case RSS misses something
 
-type Cat = "bangla" | "ads" | "stories" | "founders" | "books" | "ai" | "other";
-const CAT_PRIOR: Record<Cat, number> = { ads: 1, stories: 1, bangla: 0.8, founders: 0.8, books: 0.5, ai: 0.5, other: 0.4 };
+/** How close a category is to what Ecomgy is about (part of the For You "topic relevance"). */
+const GROUP_REL = { biz: 1, fun: 0.6, islam: 0.3 } as const;
+/** Fewer confident videos than this → the channel's mix isn't trusted yet (your categories decide). */
+const MIN_MIX = 5;
 
 interface ChannelInput {
   name: string;
   handle: string;
-  cat?: Cat;
+  cats?: string[];
+  cat?: string; // old single category (before multi-category); read for old copies of the list
   id?: string;
   status?: "removed";
 }
@@ -65,6 +70,8 @@ interface CachedVideo {
   emb: boolean;
   bn: boolean;
   s?: number;
+  d?: string; // description (links removed, trimmed) — used to work out categories
+  tg?: string[]; // the creator's tags; undefined = not fetched yet (filled in once by the next run)
 }
 interface Cache {
   channels: Record<string, CachedChannel>;
@@ -232,6 +239,16 @@ function kwScore(text: string) {
   let hits = 0;
   for (const k of KEYWORDS) if (s.includes(k)) hits++;
   return Math.min(1, hits / 3);
+}
+
+/** Description without links and with blank lines squeezed, capped so the cache stays small. */
+function cleanDesc(desc: string) {
+  return desc
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n")
+    .trim()
+    .slice(0, 700);
 }
 
 function median(nums: number[]) {
@@ -414,7 +431,7 @@ async function main() {
   for (const [c, ch] of active) for (const id of ch.known) owner.set(id, c.handle);
   const due = [...owner.keys()].filter((id) => {
     const v = cache.videos[id];
-    return !v || now - (v.s ?? 0) >= statsInterval(now - v.p);
+    return !v || v.tg === undefined || now - (v.s ?? 0) >= statsInterval(now - v.p);
   });
   console.log(`Updating stats for ${due.length} of ${owner.size} Shorts (${newCount} new)...`);
   counts.statsRefreshed = due.length;
@@ -438,6 +455,8 @@ async function main() {
         emb: it.status?.embeddable !== false && it.status?.privacyStatus !== "private",
         bn: BENGALI.test(title),
         s: now,
+        d: cleanDesc(desc),
+        tg: ((it.snippet?.tags ?? []) as string[]).slice(0, 25).map((x) => x.slice(0, 60)),
       };
     }
   });
@@ -451,7 +470,8 @@ async function main() {
   type OutChannel = {
     h: string;
     n: string;
-    cat: Cat;
+    cats: CatId[]; // categories you gave the channel
+    mix: [number, number][]; // what it really posts: [category index, % of its sorted Shorts], biggest first
     bn: boolean;
     subs: number;
     thumb: string;
@@ -461,17 +481,30 @@ async function main() {
     last: number;
   };
   const outChannels: OutChannel[] = [];
-  const rows: { id: string; ch: number; v: CachedVideo; o: number; e: number; tr: number; r: number }[] = [];
+  const rows: {
+    id: string;
+    ch: number;
+    v: CachedVideo;
+    o: number;
+    e: number;
+    tr: number;
+    r: number;
+    k: number[]; // category indexes, main first
+    lg: number; // language index
+    g: boolean; // categories guessed (nothing in the video's own text)
+  }[] = [];
+  const sortStats = { confident: 0, guessed: 0, none: 0 };
   const noShorts: string[] = [];
 
   for (const c of list) {
     const ch = cache.channels[c.handle];
-    const cat: Cat = c.cat ?? "other";
+    const userCats = normCats(c.cats, c.cat);
     const base: OutChannel = {
       h: c.handle,
       n: ch?.title || c.name,
-      cat,
-      bn: cat === "bangla",
+      cats: userCats,
+      mix: [],
+      bn: c.cat === "bangla",
       subs: ch?.subs ?? 0,
       thumb: ch?.thumb ?? "",
       id: ch?.id ?? c.id ?? "",
@@ -517,26 +550,83 @@ async function main() {
     );
     const kept = scored.filter((s) => best.has(s.id) || s.ageDays <= KEEP_RECENT_DAYS);
 
+    // Categories: the channel's repeated boilerplate is ignored, then each video is scored on its own words
+    const texts = vids.map(([, v]) => ({ title: v.t, desc: v.d, tags: v.tg }));
+    const noise = channelNoise(texts);
+    const scores = new Map<string, Scores>(vids.map(([id], i) => [id, textScores(texts[i], noise)]));
+    const counted: Prior = {};
+    let confident = 0;
+    for (const sc of scores.values()) {
+      const r = pickCats(sc, {});
+      if (r.guessed || !r.cats[0]) continue;
+      counted[r.cats[0]] = (counted[r.cats[0]] ?? 0) + 1;
+      confident++;
+    }
+    const mix: Prior = {};
+    for (const [k, n] of Object.entries(counted)) mix[k as CatId] = (n ?? 0) / confident;
+    const prior = channelPrior(confident >= MIN_MIX ? mix : {}, userCats);
+    // A Bangla channel (Bengali text on 30%+ of its videos) — its English-titled Shorts are Bangla too
+    const bnText = vids.filter(([, v]) => BENGALI.test(`${v.t} ${v.d ?? ""}`)).length;
+    const langs = new Map(vids.map(([id, v]) => [id, detectLang(v.t, v.d ?? "", bnText >= vids.length * 0.3)]));
+
     const idx = outChannels.length;
-    const bnShare = vids.filter(([, v]) => v.bn).length / vids.length;
+    const bnShare = [...langs.values()].filter((l) => l === "bn").length / vids.length;
     outChannels.push({
       ...base,
+      mix: (Object.entries(mix) as [CatId, number][])
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([k, v]) => [CAT_IDS.indexOf(k), Math.round(v * 100)]),
       bn: bnShare >= 0.3,
       st: "active",
       cnt: kept.length,
       last: Math.max(...vids.map(([, v]) => v.p)),
     });
-    for (const s of kept) rows.push({ id: s.id, ch: idx, v: s.v, o: s.o, e: s.e, tr: s.tr, r: 0.5 * s.v.kw + 0.5 * CAT_PRIOR[cat] });
+    for (const s of kept) {
+      const sorted = ownBrand(pickCats(scores.get(s.id) ?? {}, prior), userCats);
+      sortStats[!sorted.cats.length ? "none" : sorted.guessed ? "guessed" : "confident"]++;
+      const group = sorted.cats[0] ? groupOf(sorted.cats[0]) : undefined;
+      rows.push({
+        id: s.id,
+        ch: idx,
+        v: s.v,
+        o: s.o,
+        e: s.e,
+        tr: s.tr,
+        r: 0.5 * s.v.kw + 0.5 * (group ? GROUP_REL[group] : 0.4),
+        k: sorted.cats.map((c) => CAT_IDS.indexOf(c)),
+        lg: LANG_CODES.indexOf(langs.get(s.id) ?? "en"),
+        g: sorted.guessed,
+      });
+    }
   }
 
   const oP = percentiles(rows.map((r) => r.o));
   const eP = percentiles(rows.map((r) => r.e));
   const tP = percentiles(rows.map((r) => r.tr));
-  const videos = rows.map((r, i) => [r.id, r.ch, r.v.t, r.v.p, r.v.v, r.v.l, r.v.c, r3(oP[i]), r3(eP[i]), r3(tP[i]), r3(r.r)]);
+  // [id, channel, title, published, views, likes, comments, outlier, engagement, trending, relevance,
+  //  categories, language, guessed]
+  const videos = rows.map((r, i) => [
+    r.id,
+    r.ch,
+    r.v.t,
+    r.v.p,
+    r.v.v,
+    r.v.l,
+    r.v.c,
+    r3(oP[i]),
+    r3(eP[i]),
+    r3(tP[i]),
+    r3(r.r),
+    r.k,
+    r.lg,
+    r.g ? 1 : 0,
+  ]);
 
   mkdirSync(OUT_DIR, { recursive: true });
   const usage = recordUsage(true);
-  writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: now, units, usage, channels: outChannels, videos }));
+  const lists = { cats: CAT_IDS, langs: LANG_CODES };
+  writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: now, units, usage, ...lists, channels: outChannels, videos }));
 
   // Small files for a fast first start on weak networks:
   //  meta.json    — "is there newer data?" check (~200 bytes)
@@ -549,12 +639,19 @@ async function main() {
     .sort((a, b) => b.s - a.s)
     .slice(0, 400)
     .map((x) => x.v);
-  writeFileSync(join(OUT_DIR, "starter.json"), JSON.stringify({ generatedAt: now, units, channels: outChannels, videos: starter }));
+  writeFileSync(
+    join(OUT_DIR, "starter.json"),
+    JSON.stringify({ generatedAt: now, units, ...lists, channels: outChannels, videos: starter }),
+  );
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   const activeCount = outChannels.filter((c) => c.st === "active").length;
   console.log(`\nDone in ${secs}s — ${videos.length} Shorts from ${activeCount} channels written to public/data/shorts.json`);
   console.log(`API units used this run: ~${units} (free limit: 10,000/day)`);
+  const pct = (n: number) => `${Math.round((n / Math.max(1, rows.length)) * 100)}%`;
+  console.log(
+    `Categories: ${pct(sortStats.confident)} sorted from the video's own words, ${pct(sortStats.guessed)} guessed from the channel, ${sortStats.none} unsorted`,
+  );
   console.log(
     `RSS checks: ${counts.rssOk} ok, ${counts.rssFailed} failed · playlist checks: ${counts.playlistChecks} · stats calls: ${counts.statsCalls}`,
   );

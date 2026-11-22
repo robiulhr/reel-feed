@@ -14,6 +14,11 @@
  *   YOUTUBE_API_KEY  for channel lookups
  * Changing APP_PASSWORD or SESSION_SECRET logs out every device.
  */
+// Categories and their keyword rules are shared with the app and the fetch script (bundled in by wrangler)
+import { type CatId, isCat, LEGACY, normCats } from "../../src/categories";
+import { pickCats, textScores } from "../../src/classify";
+
+const suggested = (cats: CatId[]) => ({ suggestedCats: cats, suggestedCat: cats[0] ?? "" });
 
 export interface Env {
   GITHUB_TOKEN: string;
@@ -33,7 +38,6 @@ type Cors = Record<string, string>;
 const STATE_FILE = "user-state.json";
 const CHANNELS_FILE = "channels.json";
 const SESSION_DAYS = 180;
-const CATS = ["bangla", "ads", "stories", "founders", "books", "ai"] as const;
 const enc = new TextEncoder();
 
 class HttpError extends Error {
@@ -376,18 +380,20 @@ async function putState(req: Request, env: Env, cors: Cors) {
 interface ChannelEntry {
   name: string;
   handle: string;
-  cat: string;
+  cats?: CatId[];
+  cat?: string; // old single category — replaced by `cats` the next time the channel is edited
   id?: string;
   status?: "removed";
   addedAt?: string;
   removedAt?: string;
 }
 type ChannelOp =
-  | { t: "add"; channel: { name: string; handle: string; id?: string; cat: string } }
+  | { t: "add"; channel: { name: string; handle: string; id?: string; cats?: string[]; cat?: string } }
   | { t: "remove"; h: string }
   | { t: "restore"; h: string }
   | { t: "delete"; h: string }
-  | { t: "cat"; h: string; cat: string };
+  | { t: "cats"; h: string; cats: string[] }
+  | { t: "cat"; h: string; cat: string }; // from an older version of the app
 
 const sameHandle = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
@@ -397,30 +403,40 @@ function applyChannelOp(list: ChannelEntry[], op: ChannelOp): string {
     if (!c) throw new HttpError(404, `${h} is not in the channel list`);
     return c;
   };
-  const checkCat = (cat: string) => {
-    if (!(CATS as readonly string[]).includes(cat)) throw new HttpError(400, `Unknown category "${cat}"`);
+  /** 1–3 known categories (an older app sends one old-style `cat`, which is translated). */
+  const checkCats = (cats: unknown, legacy?: unknown): CatId[] => {
+    if (Array.isArray(cats)) {
+      const bad = cats.find((c) => !isCat(c));
+      if (bad !== undefined) throw new HttpError(400, `Unknown category "${String(bad).slice(0, 40)}"`);
+    } else if (legacy !== undefined && !(typeof legacy === "string" && (legacy in LEGACY || isCat(legacy)))) {
+      throw new HttpError(400, `Unknown category "${String(legacy).slice(0, 40)}"`);
+    }
+    const out = normCats(cats, legacy);
+    if (!out.length && legacy !== "bangla" && legacy !== "other") throw new HttpError(400, "Pick at least one category");
+    return out;
   };
   const now = new Date().toISOString();
   switch (op.t) {
     case "add": {
-      const { name, handle, id, cat } = op.channel ?? ({} as any);
+      const { name, handle, id, cats: rawCats, cat } = op.channel ?? ({} as any);
       // YouTube handles may use any script (e.g. Bangla) and sometimes come URL-encoded
       if (!/^(@[\p{L}\p{M}\p{N}._\-·%]{2,150}|UC[\w-]{22})$/u.test(String(handle))) {
         throw new HttpError(400, `Can't add: unexpected channel handle "${String(handle).slice(0, 60)}"`);
       }
       if (!name || String(name).length > 200) throw new HttpError(400, "Can't add: missing or too long channel name");
       if (id && !/^UC[\w-]{22}$/.test(id)) throw new HttpError(400, "Invalid channel ID");
-      checkCat(cat);
+      const cats = checkCats(rawCats, cat);
       const existing = list.find((x) => sameHandle(x.handle, handle) || (id && x.id === id));
       if (existing && existing.status !== "removed") throw new HttpError(409, `${existing.name} is already in the list`);
       if (existing) {
         delete existing.status;
         delete existing.removedAt;
-        existing.cat = cat;
+        delete existing.cat;
+        existing.cats = cats;
         if (id) existing.id = id;
         return `restore ${existing.handle}`;
       }
-      list.push({ name: String(name), handle, ...(id ? { id } : {}), cat, addedAt: now });
+      list.push({ name: String(name), handle, ...(id ? { id } : {}), cats, addedAt: now });
       return `add ${handle}`;
     }
     case "remove": {
@@ -441,11 +457,13 @@ function applyChannelOp(list: ChannelEntry[], op: ChannelOp): string {
       list.splice(list.indexOf(c), 1);
       return `delete ${c.handle}`;
     }
+    case "cats":
     case "cat": {
-      checkCat(op.cat);
+      const cats = op.t === "cats" ? checkCats(op.cats) : checkCats(undefined, op.cat);
       const c = find(op.h);
-      c.cat = op.cat;
-      return `category ${c.handle} → ${op.cat}`;
+      delete c.cat;
+      c.cats = cats;
+      return `categories ${c.handle} → ${cats.join(", ") || "none"}`;
     }
     default:
       throw new HttpError(400, "Unknown change");
@@ -487,7 +505,8 @@ interface ChannelInfo {
   desc: string;
   shorts: number;
   latestShort: number;
-  suggestedCat: string;
+  suggestedCats: CatId[];
+  suggestedCat: string; // first of suggestedCats, for older versions of the app
 }
 
 async function yt(env: Env, endpoint: string, params: Record<string, string | number>, used: { units: number }) {
@@ -532,15 +551,10 @@ function parseQuery(raw: string): Query {
   return { kind: "text", v: q };
 }
 
-const BENGALI = /[ঀ-৿]/;
-function suggestCat(text: string) {
-  const t = text.toLowerCase();
-  if (BENGALI.test(text) || /bangla|bangladesh|বাংলা/.test(t)) return "bangla";
-  if (/meta ads|facebook ads|google ads|media buy|ecom|e-commerce|shopify|dtc|dropship|performance market|paid ads/.test(t)) return "ads";
-  if (/podcast|founder|ceo|entrepreneur|mindset|motivation/.test(t)) return "founders";
-  if (/book|summar|invest|stock|finance|money|wealth/.test(t)) return "books";
-  if (/\bai\b|artificial intelligence|design|brand|graphic|creative|productivity/.test(t)) return "ai";
-  return "stories";
+/** Up to 2 categories for a channel, from its name and description (same rules as each Short's sorting). */
+function suggestCats(name: string, desc: string): CatId[] {
+  const picked = pickCats(textScores({ title: name, desc }), {});
+  return picked.cats.length ? picked.cats.slice(0, 2) : ["marketing"];
 }
 
 async function channelInfo(env: Env, ids: string[], used: { units: number }): Promise<ChannelInfo[]> {
@@ -565,7 +579,7 @@ async function channelInfo(env: Env, ids: string[], used: { units: number }): Pr
         latestShort: p?.items?.[0]?.contentDetails?.videoPublishedAt
           ? Math.floor(Date.parse(p.items[0].contentDetails.videoPublishedAt) / 1000)
           : 0,
-        suggestedCat: suggestCat(`${name} ${desc}`),
+        ...suggested(suggestCats(name, desc)),
       };
     }),
   );
@@ -850,13 +864,13 @@ async function searchShorts(req: Request, env: Env) {
           thumb: it.snippet?.thumbnails?.default?.url ?? "",
           handle: cu ? (cu.startsWith("@") ? cu : `@${cu}`) : it.id,
           subs: Number(it.statistics?.subscriberCount ?? 0),
-          suggestedCat: suggestCat(`${it.snippet?.title ?? ""} ${it.snippet?.description ?? ""}`),
+          ...suggested(suggestCats(it.snippet?.title ?? "", it.snippet?.description ?? "")),
         });
       }
     }
     const results = vids.map(({ chId, dur, ...v }) => ({
       ...v,
-      ch: chs.get(chId) ?? { id: chId, name: "", thumb: "", handle: chId, subs: 0, suggestedCat: "stories" },
+      ch: chs.get(chId) ?? { id: chId, name: "", thumb: "", handle: chId, subs: 0, ...suggested(["marketing"]) },
     }));
     const result = { q, results, units: used.units, fetchedAt: Math.floor(Date.now() / 1000) };
     await env.QUOTA?.put(key, JSON.stringify(result), { expirationTtl: SEARCH_TTL });

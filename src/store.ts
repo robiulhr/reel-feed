@@ -1,3 +1,4 @@
+import { type CatId, LEGACY, type Lang, normCats } from "./categories";
 import type { Tab, Win } from "./types";
 
 /** The part of your data that syncs across devices (saved in the private GitHub repo). */
@@ -10,6 +11,7 @@ export interface Shared {
   affCat: Record<string, number>; // learned liking per category
   apiLog: ApiUse[]; // YouTube API units spent by channel lookups (newest first)
   hist: HistItem[]; // watch history, newest first
+  catFix: Record<string, CatId[]>; // your category fixes per Short (main first) — they always win
 }
 
 /** One watched Short. `x` keeps title/channel for Shorts that aren't in your library (searches, previews). */
@@ -34,7 +36,8 @@ export interface DevicePrefs {
   muted: boolean;
   tab: Tab;
   win: Win;
-  cat: string;
+  cats: CatId[]; // categories picked in the top bar (none = All)
+  lang: Lang | "all"; // language filter
   lastActive: number; // unix seconds
   prevVisit: number; // unix seconds — start of "NEW since last visit"
   histPaused: boolean; // don't record watch history on this device
@@ -62,21 +65,33 @@ export type Op =
   | { t: "api"; at: number; units: number; what: string }
   | { t: "watch"; item: HistItem }
   | { t: "histDel"; id: string }
-  | { t: "histClear" };
+  | { t: "histClear" }
+  | { t: "catFix"; id: string; cats: CatId[] }; // empty cats = back to automatic
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
 const PENDING_KEY = "ecomgy-reel-feed.pending";
 export const MAX_SEEN = 20000;
-export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog", "hist"] as const;
+export const SHARED_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "apiLog", "hist", "catFix"] as const;
 
-export const emptyShared = (): Shared => ({ saved: [], hidden: [], seen: {}, bad: [], affCh: {}, affCat: {}, apiLog: [], hist: [] });
+export const emptyShared = (): Shared => ({
+  saved: [],
+  hidden: [],
+  seen: {},
+  bad: [],
+  affCh: {},
+  affCat: {},
+  apiLog: [],
+  hist: [],
+  catFix: {},
+});
 
 const defaults = (): State => ({
   ...emptyShared(),
   muted: true,
   tab: "foryou",
   win: "all",
-  cat: "all",
+  cats: [],
+  lang: "all",
   lastActive: 0,
   prevVisit: 0,
   histPaused: false,
@@ -103,8 +118,8 @@ function read<T>(key: string, fallback: T): T {
  * so data saved by an older version of the app is upgraded instead of breaking.
  *   LOCAL_VERSION — this device (localStorage).  FILE_VERSION — the synced user-state.json.
  */
-export const LOCAL_VERSION = 2;
-export const FILE_VERSION = 1;
+export const LOCAL_VERSION = 3;
+export const FILE_VERSION = 2;
 
 export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
   const s = { ...defaults(), ...raw } as State;
@@ -113,6 +128,16 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
     for (const k of ["saved", "hidden", "bad", "apiLog", "hist"] as const) if (!Array.isArray(s[k])) (s as any)[k] = [];
     for (const k of ["seen", "affCh", "affCat"] as const) if (!s[k] || typeof s[k] !== "object") (s as any)[k] = {};
   }
+  // v2 → v3: one category (`cat`) → several (`cats`) + a language filter; old "bangla" was a language
+  if (!raw.sv || raw.sv < 3) {
+    const old = typeof raw.cat === "string" ? raw.cat : "all";
+    s.cats = old === "all" ? [] : normCats(LEGACY[old] ?? [old]);
+    if (old === "bangla") s.lang = "bn";
+    delete (s as any).cat;
+    if (!s.catFix || typeof s.catFix !== "object") s.catFix = {};
+  }
+  s.cats = normCats(s.cats);
+  if (!["all", "bn", "en", "hi"].includes(s.lang)) s.lang = "all";
   s.sv = LOCAL_VERSION;
   return s;
 }
@@ -222,6 +247,12 @@ export function applyOp(s: Shared, op: Op) {
     case "histClear":
       s.hist = [];
       break;
+    case "catFix": {
+      const cats = normCats(op.cats);
+      if (cats.length) s.catFix[op.id] = cats;
+      else delete s.catFix[op.id];
+      break;
+    }
     case "api":
       if (!s.apiLog.some((x) => x.at === op.at && x.what === op.what)) {
         s.apiLog = [{ at: op.at, units: op.units, what: op.what }, ...s.apiLog].sort((a, b) => b.at - a.at).slice(0, MAX_API_LOG);
@@ -255,9 +286,9 @@ export function startVisit(now: number) {
   persist();
 }
 
-/** Nudges what the feed has learned about you. Positive = show more like this. */
-export function learn(ch: { h: string; cat: string }, delta: number) {
-  if (delta) act({ t: "learn", h: ch.h, cat: ch.cat, d: delta });
+/** Nudges what the feed has learned about you. Positive = show more like this. `cat` = the Short's main category. */
+export function learn(ch: { h: string }, cat: string | undefined, delta: number) {
+  if (delta) act({ t: "learn", h: ch.h, cat: cat ?? "none", d: delta });
 }
 
 // ---------- file format for the GitHub copy ----------
@@ -272,6 +303,7 @@ export interface StateFile {
   affCat: Record<string, number>;
   apiLog?: ApiUse[];
   hist?: HistItem[];
+  catFix?: Record<string, CatId[]>;
 }
 
 export function toFile(s: Shared): StateFile {
@@ -288,6 +320,7 @@ export function toFile(s: Shared): StateFile {
     affCat: s.affCat,
     apiLog: s.apiLog,
     hist: s.hist,
+    catFix: s.catFix,
   };
 }
 
@@ -310,6 +343,10 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
   s.affCat = f.affCat ?? {};
   s.apiLog = f.apiLog ?? [];
   s.hist = f.hist ?? [];
+  for (const [id, cats] of Object.entries(f.catFix ?? {})) {
+    const c = normCats(cats);
+    if (c.length) s.catFix[id] = c;
+  }
   (f.seen ?? []).forEach((id, i) => {
     s.seen[id] = i + 1;
   }); // keeps order; real timestamps sort after these
@@ -326,6 +363,7 @@ export function mergeInto(base: Shared, local: Shared) {
   for (const u of local.apiLog ?? []) applyOp(base, { t: "api", ...u });
   for (const h of local.hist ?? []) applyOp(base, { t: "watch", item: h });
   for (const [k, v] of Object.entries(local.affCat)) if (!(k in base.affCat)) base.affCat[k] = v;
+  for (const [id, cats] of Object.entries(local.catFix ?? {})) if (!(id in base.catFix)) base.catFix[id] = cats;
 }
 
 export function sharedOf(s: State): Shared {
@@ -338,6 +376,7 @@ export function sharedOf(s: State): Shared {
     affCat: s.affCat,
     apiLog: s.apiLog ?? [],
     hist: s.hist ?? [],
+    catFix: s.catFix ?? {},
   });
 }
 

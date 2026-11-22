@@ -202,3 +202,43 @@ test.describe("channels (with the fake sync server)", () => {
     expect(sync.channels.some((c) => c.handle === "@ads")).toBe(true);
   });
 });
+
+test.describe("categories", () => {
+  test("a category chip filters the feed; All clears it", async ({ app: page }) => {
+    await closeTips(page);
+    const sales = page.locator('#chips button[data-cat="sales"]');
+    await sales.click();
+    await expect(sales).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#meta")).toContainText("Sales");
+    await swipe(page, "up");
+    await expect(page.locator("#meta")).toContainText("Sales");
+    await page.locator('#chips button[data-cat=""]').click();
+    await expect(sales).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("⋯ → Wrong category? saves your pick and shows it", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#moreBtn").click();
+    await page.locator('[data-a="fixcat"]').click();
+    const dlg = page.getByRole("dialog", { name: "Categories for this Short" });
+    const picked = dlg.locator('button[aria-pressed="true"]');
+    while ((await picked.count()) > 0) await picked.first().click(); // start from nothing
+    await expect(picked).toHaveCount(0);
+    await dlg.getByRole("button", { name: "Comedy", exact: true }).click();
+    await dlg.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#meta")).toContainText("Comedy");
+    await expect(page.locator("#meta")).not.toContainText("?");
+  });
+
+  test("Menu → Sorting lists the guessed Shorts; ✓ Right takes one off the list", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="sorting"]').click();
+    const body = page.locator("#panelBody");
+    await expect(body).toContainText("9 of 30 Shorts");
+    await expect(body.locator(".sort-row")).toHaveCount(9);
+    await body.locator(".sort-row").first().getByRole("button", { name: "✓ Right" }).click();
+    await expect(body.locator(".sort-row")).toHaveCount(8);
+    await expect(body).toContainText("sorted 1 yourself");
+  });
+});

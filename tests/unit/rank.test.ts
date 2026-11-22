@@ -45,8 +45,8 @@ describe("ranking (buildQueue)", () => {
     for (const s of items) expect(NOW - s.p).toBeLessThanOrEqual(7 * 86400);
   });
 
-  it("Bangla filter includes Bangla channels", () => {
-    st.cat = "bangla";
+  it("Bangla language filter keeps only Bangla Shorts", () => {
+    st.lang = "bn";
     const { items } = buildQueue(ds, st, opts(), 30);
     expect(items.length).toBe(6);
     for (const s of items) expect(ds.channels[s.ch].h).toBe("@bangla");

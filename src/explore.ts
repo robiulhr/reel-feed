@@ -1,12 +1,15 @@
 /**
  * Channel explorer: a page for any channel — in your list (free, Shorts already loaded) or not
  * (loaded on demand through the Worker: ~10 units, then free for 24 hours on every device).
- * Grid sorted Newest / Popular / Hidden gems; tap a Short to swipe through just this channel.
+ * Grid sorted Newest / Most viewed / Breakouts, filtered by category and time range;
+ * tap a Short to swipe through just this channel.
  */
 import type { AppApi, ExternalChannelInfo } from "./app";
-import { addFromInfo, lastChangeError, listStatus, removeByHandle, restoreByHandle, setCategory } from "./channels";
+import { type CatId, catLabel, detectLang, normCats } from "./categories";
+import { catSummary, pickCategories } from "./catpicker";
+import { addFromInfo, editChannelCats, lastChangeError, listStatus, mixText, removeByHandle, restoreByHandle } from "./channels";
 import { COST, confirmCost, noteSpend, spendToast } from "./quota";
-import { CATS } from "./rank";
+import { videoCats } from "./rank";
 import { act, state } from "./store";
 import * as sync from "./sync";
 import type { Channel, Short } from "./types";
@@ -32,7 +35,8 @@ interface PreviewResponse {
     desc: string;
     shorts: number;
     latestShort: number;
-    suggestedCat: string;
+    suggestedCats?: string[];
+    suggestedCat?: string; // older sync server
   };
   shorts: MiniShort[];
   units: number;
@@ -43,6 +47,16 @@ interface PreviewResponse {
 
 const previews = new Map<string, PreviewResponse>(); // this session
 let sortPref: Sort = "newest";
+/** Category + time range picked on the channel page (reset when you open another channel). */
+const pageFilter = { handle: "", cat: "" as CatId | "", days: 0 };
+/** Categories picked for a channel you're about to add. */
+const addPick = new Map<string, CatId[]>();
+const PERIODS: [number, string][] = [
+  [0, "All time"],
+  [365, "This year"],
+  [30, "30 days"],
+  [7, "7 days"],
+];
 
 const ytUrl = (h: string, id: string) =>
   h.startsWith("@") ? `https://www.youtube.com/${h}/shorts` : `https://www.youtube.com/channel/${id}/shorts`;
@@ -103,7 +117,7 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
   }
   const ch: Channel | undefined = chIndex !== undefined ? ds.channels[chIndex] : undefined;
   const info: ExternalChannelInfo = ch
-    ? { id: ch.id, name: ch.n, handle: ch.h, thumb: ch.thumb, subs: ch.subs, suggestedCat: ch.cat }
+    ? { id: ch.id, name: ch.n, handle: ch.h, thumb: ch.thumb, subs: ch.subs, suggestedCats: ch.cats }
     : target.info!;
   const inLibrary = !!ch && ch.st !== "external" && ds.videos.some((v) => v.ch === chIndex);
 
@@ -137,6 +151,8 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
     else if (preview) stats.push(`${app.fmt(preview.channel.shorts)} Shorts`);
     if (ch?.last) stats.push(`latest ${app.ago(ch.last)}`);
     meta.append(titleRow, el("div", "cp-sub", stats.join(" · ")));
+    const mix = mixText(ch);
+    if (mix) meta.append(el("div", "cp-sub", mix));
     head.append(avatar, meta);
     body.append(head);
 
@@ -144,11 +160,11 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
     const actions = el("div", "cp-actions");
     let addError: HTMLElement | null = null;
     if (status === "listed") {
-      const cat = el("select") as HTMLSelectElement;
-      cat.setAttribute("aria-label", "Category");
-      for (const c of CATS.filter((c) => c.id !== "all")) cat.append(new Option(c.label, c.id));
-      cat.value = ch?.cat ?? "stories";
-      cat.onchange = () => setCategory(info.handle, info.name, cat.value);
+      const cats = ch?.cats ?? [];
+      const cat = btn(catSummary(cats), async () => {
+        if (await editChannelCats(info.handle, info.name, cats)) reopen();
+      });
+      cat.setAttribute("aria-label", `Categories: ${cats.map(catLabel).join(", ") || "none"}. Change`);
       actions.append(
         cat,
         btn(hidden ? "Unhide" : "Hide", () => {
@@ -175,17 +191,29 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
         ),
       );
     } else {
-      const cat = el("select") as HTMLSelectElement;
-      cat.setAttribute("aria-label", "Category");
-      for (const c of CATS.filter((c) => c.id !== "all")) cat.append(new Option(c.label, c.id));
-      cat.value = info.suggestedCat ?? preview?.channel.suggestedCat ?? "stories";
+      const key = info.id || info.handle;
+      if (!addPick.has(key) || (!addPick.get(key)!.length && preview))
+        addPick.set(key, normCats(info.suggestedCats ?? preview?.channel.suggestedCats, preview?.channel.suggestedCat));
+      const picked = () => addPick.get(key) ?? [];
+      const cat = btn(catSummary(picked(), "Pick categories"), async () => {
+        const cats = await pickCategories({ title: `Categories for ${info.name}`, current: picked() });
+        if (cats) {
+          addPick.set(key, cats);
+          cat.textContent = catSummary(cats);
+        }
+      });
+      cat.setAttribute("aria-label", `Categories: ${catSummary(picked())}. Change`);
       const err = el("p", "ch-note warn", "");
       const addBtn = btn(
         "+ Add to my list",
         async () => {
+          if (!picked().length) {
+            err.textContent = "Pick at least one category first";
+            return;
+          }
           addBtn.disabled = true;
           addBtn.textContent = "Adding…";
-          if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cat: cat.value })) {
+          if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cats: picked() })) {
             reopen();
             return;
           }
@@ -195,7 +223,7 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
         },
         "btn sm primary",
       );
-      actions.append(el("span", "ch-note", "Category"), cat, addBtn);
+      actions.append(cat, addBtn);
       addError = err;
     }
     body.append(actions);
@@ -207,7 +235,7 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       items = ds.videos.filter((v) => v.ch === chIndex);
     } else if (preview) {
       const idx = app.ensureChannel({ ...info, thumb: info.thumb || preview.channel.thumb, subs: info.subs || preview.channel.subs });
-      items = preview.shorts.map((s) => ({ ...s, ch: idx, o: 0, e: 0, tr: 0, r: 0 }));
+      items = preview.shorts.map((s) => ({ ...s, ch: idx, o: 0, e: 0, tr: 0, r: 0, k: [], lg: detectLang(s.t), g: true }));
     } else {
       const box = el("div", "cp-load");
       box.append(
@@ -252,11 +280,52 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       return;
     }
 
+    // ---- filters: category (only ones this channel has) + time range
+    if (pageFilter.handle !== info.handle) Object.assign(pageFilter, { handle: info.handle, cat: "", days: 0 });
+    const counts = new Map<CatId, number>();
+    for (const s of items) for (const c of videoCats(s, state)) counts.set(c, (counts.get(c) ?? 0) + 1);
+    const catsHere = [...counts].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]);
+    if (pageFilter.cat && !counts.has(pageFilter.cat)) pageFilter.cat = "";
+    const filters = el("div", "cp-filters");
+    if (catsHere.length > 1) {
+      const chips = el("div", "cp-chips");
+      chips.setAttribute("role", "group");
+      chips.setAttribute("aria-label", "Category");
+      for (const [id, label] of [["", "All"], ...catsHere.map(([c, n]) => [c, `${catLabel(c)} ${n}`])] as [CatId | "", string][]) {
+        const b = btn(
+          label,
+          () => {
+            pageFilter.cat = id;
+            reopen(sort);
+          },
+          `chip${pageFilter.cat === id ? " on" : ""}`,
+        );
+        b.setAttribute("aria-pressed", String(pageFilter.cat === id));
+        chips.append(b);
+      }
+      filters.append(chips);
+    }
+    const period = el("select") as HTMLSelectElement;
+    period.setAttribute("aria-label", "Time range");
+    for (const [d, label] of PERIODS) period.append(new Option(label, String(d)));
+    period.value = String(pageFilter.days);
+    period.onchange = () => {
+      pageFilter.days = Number(period.value);
+      reopen(sort);
+    };
+    filters.append(period);
+    body.append(filters);
+    const now = Date.now() / 1000;
+    const shown = items.filter(
+      (s) =>
+        (!pageFilter.cat || videoCats(s, state).includes(pageFilter.cat)) && (!pageFilter.days || now - s.p <= pageFilter.days * 86400),
+    );
+
     const tabs = el("div", "cp-tabs");
     const labels: [Sort, string][] = [
       ["newest", "Newest"],
-      ["popular", "Popular"],
-      ["gems", "Hidden gems"],
+      ["popular", "Most viewed"],
+      ["gems", "Breakouts"],
     ];
     for (const [k, label] of labels) {
       const b = btn(
@@ -269,12 +338,17 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       );
       tabs.append(b);
     }
-    const { list, ratio } = sortShorts(items, sort);
-    const play = (i: number) => app.playList(`${info.name} · ${labels.find(([k]) => k === sort)![1]}`, list, i, () => reopen(sort));
+    const { list, ratio } = sortShorts(shown, sort);
+    const what = [labels.find(([k]) => k === sort)![1], pageFilter.cat ? catLabel(pageFilter.cat) : ""].filter(Boolean).join(" · ");
+    const play = (i: number) => app.playList(`${info.name} · ${what}`, list, i, () => reopen(sort));
     tabs.append(btn("▶ Play all", () => play(0), "btn sm primary cp-playall"));
     body.append(tabs);
     if (sort === "gems")
       body.append(el("p", "ch-note", "Shorts that got far more views than this channel's typical Short (×N = times its usual)."));
+    if (!list.length) {
+      body.append(el("p", "ch-note", "No Shorts match these filters."));
+      return;
+    }
     if (preview && !inLibrary)
       body.append(el("p", "ch-note", `Loaded ${app.ago(preview.fetchedAt)} · newest ${preview.shorts.length} Shorts`));
     body.append(shortGrid(app, list, play, { badge: sort === "gems" ? (s) => `×${ratio(s).toFixed(1)}` : undefined }));

@@ -1,4 +1,5 @@
 /** What the feature modules (explore, similar) can ask the main app to do. */
+import type { CatId } from "./categories";
 import type { Dataset, Short } from "./types";
 
 export interface ExternalChannelInfo {
@@ -7,7 +8,7 @@ export interface ExternalChannelInfo {
   handle: string;
   thumb: string;
   subs: number;
-  suggestedCat?: string;
+  suggestedCats?: CatId[];
 }
 
 export interface AppApi {

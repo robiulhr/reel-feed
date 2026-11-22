@@ -2,6 +2,7 @@
  * Watch history (Menu ☰ → History): every Short you watched, newest first, grouped by day,
  * with how much you watched. Search, replay, remove, clear, pause. Synced across devices.
  */
+import { detectLang } from "./categories";
 import type { AppApi } from "./app";
 import { act, persist, state, type HistItem } from "./store";
 import { confirmDialog } from "./ui";
@@ -39,7 +40,7 @@ export function historyShorts(app: AppApi, byId: Map<string, Short>, items: Hist
     }
     if (!h.x) continue;
     const ch = app.ensureChannel({ id: h.x.c, name: h.x.n, handle: h.x.h, thumb: "", subs: 0 });
-    const made: Short = { id: h.id, ch, t: h.x.t, p: 0, v: 0, l: 0, c: 0, o: 0, e: 0, tr: 0, r: 0 };
+    const made: Short = { id: h.id, ch, t: h.x.t, p: 0, v: 0, l: 0, c: 0, o: 0, e: 0, tr: 0, r: 0, k: [], lg: detectLang(h.x.t), g: true };
     byId.set(h.id, made);
     out.push(made);
   }

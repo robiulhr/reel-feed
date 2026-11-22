@@ -100,7 +100,30 @@ describe("channel list edits", () => {
       },
     });
     expect(f.ghWrites() - before).toBe(1);
-    expect(channelsOnGitHub(f)[0].cat).toBe("books");
+    // an older app's single category is translated to the new list
+    expect(channelsOnGitHub(f)[0].cats).toEqual(["growth", "money"]);
+    expect(channelsOnGitHub(f)[0].cat).toBeUndefined();
+  });
+
+  it("saves several categories per channel (main first) and checks them", async () => {
+    const f = setup();
+    const s = await login(f);
+    const ok = await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "cats", h: "@hook", cats: ["sales", "marketing"] }] } });
+    expect(ok.status).toBe(200);
+    expect(channelsOnGitHub(f)[0].cats).toEqual(["sales", "marketing"]);
+    const add = await call(f, "POST", "/channels", {
+      session: s,
+      body: { ops: [{ t: "add", channel: { name: "Quran Daily", handle: "@qurandaily", cats: ["quran", "waz"] } }] },
+    });
+    expect(add.status).toBe(200);
+    expect(channelsOnGitHub(f).find((c) => c.handle === "@qurandaily")?.cats).toEqual(["quran", "waz"]);
+    for (const cats of [["sales", "hacker"], []]) {
+      const bad = await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "cats", h: "@hook", cats }] } });
+      expect(bad.status, JSON.stringify(cats)).toBe(400);
+    }
+    // more than 3 → only the first 3 are kept
+    await call(f, "POST", "/channels", { session: s, body: { ops: [{ t: "cats", h: "@hook", cats: ["ads", "ecom", "sales", "ai"] }] } });
+    expect(channelsOnGitHub(f)[0].cats).toEqual(["ads", "ecom", "sales"]);
   });
 });
 
@@ -160,7 +183,8 @@ describe("YouTube lookups, previews, searches + quota guard", () => {
       const r = await call(f, "POST", "/lookup", { session: s, body: { q } });
       expect(r.status, q).toBe(200);
       expect(r.body.results[0]?.name, q).toBe("Pricing Lab");
-      expect(r.body.results[0].suggestedCat).toBe("ads");
+      expect(r.body.results[0].suggestedCats.length).toBeGreaterThan(0);
+      expect(r.body.results[0].suggestedCat).toBe(r.body.results[0].suggestedCats[0]); // for older app versions
     }
   });
 
