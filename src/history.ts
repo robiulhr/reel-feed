@@ -4,7 +4,8 @@
  */
 import { detectLang } from "./categories";
 import type { AppApi } from "./app";
-import { act, persist, state, type HistItem } from "./store";
+import { act, persist, snap, state, type HistItem } from "./store";
+import { backupNow, undoable } from "./backup";
 import { confirmDialog } from "./ui";
 import type { Short } from "./types";
 import { el } from "./dom";
@@ -64,13 +65,19 @@ export function renderHistory(body: HTMLElement, app: AppApi, byId: Map<string, 
     if (!state.hist.length) return;
     const ok = await confirmDialog({
       title: "Clear your whole watch history?",
-      body: "This clears it on all your devices. (Your saved Shorts and what the feed learned stay.)",
+      body: "This clears it on all your devices. You can undo it, and a backup is saved first. (Your saved Shorts and what the feed learned stay.)",
       confirm: "Clear history",
       danger: true,
     });
     if (ok) {
+      const before = snap(state, ["hist"]);
+      await backupNow("Before: clear history");
       act({ t: "histClear" });
       rerender();
+      undoable("History cleared", () => {
+        act({ t: "restore", data: before, mode: "merge" });
+        rerender();
+      });
     }
   };
   head.append(search, pause, clear);
@@ -132,6 +139,10 @@ export function renderHistory(body: HTMLElement, app: AppApi, byId: Map<string, 
         e.stopPropagation();
         act({ t: "histDel", id: h.id });
         draw();
+        undoable("Removed from history", () => {
+          act({ t: "watch", item: h });
+          draw();
+        });
       };
       clickable(row, () => app.playList("History", playable, playable.indexOf(s), rerender), `Play ${s.t}`);
       x.type = "button";

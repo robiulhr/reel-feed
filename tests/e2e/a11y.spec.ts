@@ -18,7 +18,11 @@ test.describe("accessibility", () => {
     await expect(page.locator("#tips")).toBeVisible();
     expect(await wcagProblems(page)).toEqual([]);
     await closeTips(page);
-    for (const tab of ["about", "history", "saved", "sync"]) {
+    // save one Short, so Saved shows its search and filters too
+    const box = (await page.locator("#tap").boundingBox())!;
+    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator("#saveBtn")).toHaveClass(/on/);
+    for (const tab of ["about", "history", "saved", "backups", "sync"]) {
       await page.locator("#menuBtn").click();
       await page.locator(`[data-p="${tab}"]`).click();
       expect(await wcagProblems(page), `menu → ${tab}`).toEqual([]);

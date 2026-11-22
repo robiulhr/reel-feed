@@ -1,5 +1,6 @@
 /** Menu → About (stats, version, health, data saver, full screen, shortcuts) and Menu → Sync (login). */
-import { act, persist, state } from "./store";
+import { persist, state } from "./store";
+import { type Backup, backupNow, backupsAvailable, describe, eraseWithUndo, listBackups, restoreBackup } from "./backup";
 import * as sync from "./sync";
 import { resetChannels } from "./channels";
 import { busy, confirmDialog, toast } from "./ui";
@@ -110,19 +111,38 @@ export function renderAbout(body: HTMLElement, opts: { showTips: () => void }) {
     btn("Show the tips again", () => opts.showTips(), "btn"),
     btn(
       "Reset what the feed learned",
-      () => {
-        act({ t: "resetLearn" });
-        toast("Learning reset");
-      },
+      () =>
+        eraseWithUndo({
+          ask: {
+            title: "Reset what the feed learned?",
+            body: "For You forgets which channels and topics you like, on all your devices. You can undo it, and a backup is saved first.",
+            confirm: "Reset",
+          },
+          op: { t: "resetLearn" },
+          keys: ["affCh", "affCat"],
+          undo: "replace",
+          backup: "Before: reset what the feed learned",
+          done: "Learning reset",
+          after: () => {},
+        }),
       "btn",
     ),
     btn(
       `Show already-seen Shorts again (${compact(seen)})`,
-      () => {
-        act({ t: "clearSeen" });
-        toast("Done — seen Shorts can appear again");
-        renderPanel();
-      },
+      () =>
+        eraseWithUndo({
+          ask: {
+            title: `Forget the ${compact(seen)} Shorts you've seen?`,
+            body: "They can show up in your feed again, on all your devices. You can undo it, and a backup is saved first.",
+            confirm: "Forget seen",
+          },
+          op: { t: "clearSeen" },
+          keys: ["seen"],
+          undo: "merge",
+          backup: "Before: show seen Shorts again",
+          done: "Done — seen Shorts can appear again",
+          after: renderPanel,
+        }),
       "btn danger",
     ),
   );
@@ -206,4 +226,66 @@ export function renderSyncPanel(body: HTMLElement) {
     });
   };
   body.append(form);
+}
+
+/** Menu → Backups: copies of your data kept in this browser; Restore puts everything back as it was then. */
+export async function renderBackups(panel: HTMLElement) {
+  // drawn into its own box: if you switch tabs while it loads, the box is simply gone
+  const body = el("div");
+  panel.append(body);
+  body.append(
+    para(
+      "A copy of your saved Shorts, history, seen list, hidden channels and what the feed learned — kept in this browser. One is made every day and right before anything big is erased. Kept for 30 days.",
+    ),
+  );
+  if (!(await backupsAvailable())) {
+    body.append(para("Backups aren't available in this browser (private mode or storage blocked).", "ch-note warn"));
+    return;
+  }
+  const now = btn(
+    "Back up now",
+    async () => {
+      now.disabled = true;
+      toast((await backupNow("Made by you")) ? "Backup saved" : "Couldn't save a backup");
+      renderPanel();
+    },
+    "btn primary",
+  );
+  body.append(now, para(`Right now: ${describe(snapNow())}`, "ch-note"));
+  const list = await listBackups();
+  if (!list.length) {
+    body.append(para("No backups yet — the first one is made automatically within a minute of opening the app."));
+    return;
+  }
+  for (const b of list) body.append(backupRow(b));
+  if (sync.isConnected())
+    body.append(
+      para("Also: every sync is kept as a version in your private GitHub repo (reel-feed-data → user-state.json → History).", "ch-note"),
+    );
+}
+
+function snapNow() {
+  return { saved: state.saved, hist: state.hist, seen: Object.keys(state.seen), affCh: state.affCh, hidden: state.hidden };
+}
+
+function backupRow(b: Backup) {
+  const row = el("div", "bk-row");
+  const txt = el("div", "bk-txt");
+  txt.append(
+    el("div", "bk-title", `${new Date(b.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} · ${b.why}`),
+    el("div", "ch-note", describe(b.data)),
+  );
+  const restore = btn("Restore", async () => {
+    const ok = await confirmDialog({
+      title: "Restore this backup?",
+      body: `Everything goes back to how it was on ${new Date(b.at).toLocaleString()}: ${describe(b.data)}. This applies on all your devices. Your current data is backed up first, so you can switch back.`,
+      confirm: "Restore",
+    });
+    if (!ok) return;
+    await restoreBackup(b);
+    toast("Restored — your data is back as it was then");
+    renderPanel();
+  });
+  row.append(txt, restore);
+  return row;
 }

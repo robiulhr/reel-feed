@@ -2315,3 +2315,33 @@ button[aria-busy="true"] {
   opacity: 0.4;
   cursor: default;
 }
+/* Menu → Backups */
+.bk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.bk-txt {
+  flex: 1;
+  min-width: 0;
+}
+.bk-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+/* Menu → Saved: search, sort/time/language, main category + topic chips */
+.sv-head {
+  margin-bottom: 8px;
+}
+.sv-head .ch-search {
+  width: 100%;
+}
+.sv-filters,
+.sv-chips {
+  margin-bottom: 8px;
+}
+.sv-play {
+  margin-bottom: 10px;
+}

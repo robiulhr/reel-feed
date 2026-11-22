@@ -42,7 +42,7 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
   - **Newest**: pure upload order.
 - **Filters**: tap **⚙ Filters** for one sheet with time range (All time, 30 days, 7 days, Today), language (All, বাংলা, English, हिन्दी/اردو) and every topic grouped with its number of Shorts — the button shows **Show N Shorts** before you apply. The bar beside it keeps the quick ones: **All**, your active time/language (tap **✕** to remove), your picked topics, the biggest main categories and **More…**. Pick several topics to see Shorts in any of them (§5a).
 - **Actions** (bottom bar): sound, save ♡, **share ⤴** (phone share sheet with the YouTube Shorts link; on desktop it copies the link), **⋯** → More like this (§6d), Explore this channel (§6c), **🏷 Wrong category?**, Hide this channel, Open on YouTube. Tapping the **channel name** also opens the channel explorer.
-- **Menu ☰**: **Channels** (control panel, §6a), **Sorting** (Shorts whose category is only a guess, §5a), Saved list, Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), About (stats, reset learning, clear history).
+- **Menu ☰**: **Channels** (control panel, §6a), **Sorting** (Shorts whose category is only a guess, §5a), **Saved** (search, sort, time, language and main category → topic chips; *▶ Play these* plays just the filtered ones), Hidden channels (unhide), Sync (log in / status), **API usage** (§6b), **Backups** (see below), About (stats, reset learning, show seen Shorts again).
 - **NEW badge**: Shorts uploaded since your last visit (a gap of 30+ minutes counts as a new visit).
 - Never shows the same Short twice (until you've seen everything in a filter); never the same channel twice in a row; max 3 per channel in any 20.
 - Videos play through YouTube's **official embedded player** (views count for creators; nothing is downloaded or re-hosted).
@@ -64,6 +64,11 @@ Phone / laptop ── password login ──► Cloudflare Worker ──┬──
 - **Menu → History** (`src/history.ts`): every Short you watched, newest first, grouped Today / Yesterday / date, with *✓ Watched*, *N% watched* or *Skipped*; search; tap to replay (swipe through history); ✕ to remove; **Clear all**; **Pause history** (per device). Synced across devices (up to 600 entries).
 - **Continue watching**: if you left a Short unfinished in the last 24 h, the app offers **Resume**.
 - Saved and History also work for Shorts found outside your library (title/channel are remembered).
+- **Nothing is erased for good by one tap** (`src/backup.ts`):
+  - Every erase shows **Undo**: unsave, remove from history, clear history, unhide, hide/remove channel, reset what the feed learned, show seen Shorts again. The big ones ask first.
+  - **Backups** (Menu → Backups): a copy of your synced data (saved, history, seen, hidden, learning, category fixes) kept in this browser (IndexedDB) — one a day and one right before every big erase or restore; kept 30 days (max 20, newest 3 always). **Restore** puts everything back as it was then, on all devices (it's a normal synced change, and the current data is backed up first). *Back up now* makes one by hand.
+  - With sync on, every version of your data is also in the private repo's commit history (`reel-feed-data` → `user-state.json` → History).
+  - Under the hood: `restore` op — *merge* (Undo of a clear: re-adds what was removed, keeps anything new from any device) or *replace* (backup restore / learning undo: exactly as it was).
 
 ### App updates (installed app included)
 - The page is always fetched fresh (bypassing the browser cache). On a slow connection the saved copy opens after 3 s **and** the new version keeps downloading in the background.

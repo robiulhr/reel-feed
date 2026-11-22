@@ -53,7 +53,7 @@ export type State = Shared & DevicePrefs;
 
 /** Every change is recorded as a small operation, so two devices can merge without overwriting each other. */
 export type Op =
-  | { t: "save"; id: string }
+  | { t: "save"; id: string; i?: number } // i = position to put it back at (undo)
   | { t: "unsave"; id: string }
   | { t: "hide"; h: string }
   | { t: "unhide"; h: string }
@@ -66,7 +66,8 @@ export type Op =
   | { t: "watch"; item: HistItem }
   | { t: "histDel"; id: string }
   | { t: "histClear" }
-  | { t: "catFix"; id: string; cats: CatId[] }; // empty cats = back to automatic
+  | { t: "catFix"; id: string; cats: CatId[] } // empty cats = back to automatic
+  | { t: "restore"; data: Snap; mode: "merge" | "replace" }; // undo an erase / restore a backup
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
 const PENDING_KEY = "ecomgy-reel-feed.pending";
@@ -207,7 +208,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 export function applyOp(s: Shared, op: Op) {
   switch (op.t) {
     case "save":
-      if (!s.saved.includes(op.id)) s.saved.unshift(op.id);
+      if (!s.saved.includes(op.id)) s.saved.splice(clamp(op.i ?? 0, 0, s.saved.length), 0, op.id);
       break;
     case "unsave":
       s.saved = s.saved.filter((id) => id !== op.id);
@@ -253,12 +254,63 @@ export function applyOp(s: Shared, op: Op) {
       else delete s.catFix[op.id];
       break;
     }
+    case "restore":
+      applyRestore(s, op.data, op.mode);
+      break;
     case "api":
       if (!s.apiLog.some((x) => x.at === op.at && x.what === op.what)) {
         s.apiLog = [{ at: op.at, units: op.units, what: op.what }, ...s.apiLog].sort((a, b) => b.at - a.at).slice(0, MAX_API_LOG);
       }
       break;
   }
+}
+
+/**
+ * A copy of some or all of your synced data (seen = ids oldest → newest). Used for Undo and backups.
+ * Only the parts present are touched.
+ */
+export type Snap = Partial<Omit<Shared, "seen" | "apiLog"> & { seen: string[] }>;
+
+/** Takes a copy of the given parts (all of them by default). */
+export function snap(s: Shared, keys: readonly (keyof Snap)[] = SNAP_KEYS): Snap {
+  const out: Snap = {};
+  for (const k of keys) {
+    if (k === "seen") out.seen = Object.keys(s.seen).sort((a, b) => s.seen[a] - s.seen[b]);
+    else (out as any)[k] = structuredClone(s[k]);
+  }
+  return out;
+}
+export const SNAP_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "hist", "catFix"] as const;
+
+/**
+ * replace = put those parts back exactly as they were (a backup restore, learning undo).
+ * merge = add back what was removed, keeping anything added since (undo of a clear, from any device).
+ */
+export function applyRestore(s: Shared, d: Snap, mode: "merge" | "replace") {
+  if (mode === "replace") {
+    for (const k of SNAP_KEYS) {
+      if (d[k] === undefined) continue;
+      if (k === "seen") {
+        s.seen = {};
+        d.seen?.forEach((id, i) => {
+          s.seen[id] = i + 1;
+        });
+      } else (s as any)[k] = structuredClone(d[k]);
+    }
+    return;
+  }
+  d.saved?.forEach((id, i) => {
+    applyOp(s, { t: "save", id, i });
+  });
+  for (const h of d.hidden ?? []) applyOp(s, { t: "hide", h });
+  for (const id of d.bad ?? []) applyOp(s, { t: "bad", id });
+  d.seen?.forEach((id, i) => {
+    if (!(id in s.seen)) s.seen[id] = i + 1;
+  });
+  for (const item of d.hist ?? []) if (!s.hist.some((h) => h.id === item.id)) applyOp(s, { t: "watch", item });
+  for (const [k, v] of Object.entries(d.affCh ?? {})) if (!(k in s.affCh)) s.affCh[k] = v;
+  for (const [k, v] of Object.entries(d.affCat ?? {})) if (!(k in s.affCat)) s.affCat[k] = v;
+  for (const [id, cats] of Object.entries(d.catFix ?? {})) if (!(id in s.catFix)) s.catFix[id] = cats;
 }
 
 type Listener = () => void;

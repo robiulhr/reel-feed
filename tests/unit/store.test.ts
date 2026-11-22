@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyOp, emptyShared, fromFile, mergeInto, toFile, type HistItem } from "../../src/store";
+import { type Backup, toPrune } from "../../src/backup";
+import { applyOp, emptyShared, fromFile, mergeInto, snap, toFile, type HistItem } from "../../src/store";
 
 describe("store: changes (ops)", () => {
   it("save is idempotent and newest first; unsave removes", () => {
@@ -105,5 +106,69 @@ describe("store: merging a second device", () => {
     expect(new Set(github.saved)).toEqual(new Set(["from-phone", "from-laptop"]));
     expect(github.saved.length).toBe(2);
     expect(github.hist.length).toBe(1);
+  });
+});
+
+describe("undo and backups", () => {
+  const filled = () => {
+    const s = emptyShared();
+    for (const id of ["a", "b", "c"]) applyOp(s, { t: "save", id });
+    applyOp(s, { t: "seen", id: "x", at: 5 });
+    applyOp(s, { t: "seen", id: "y", at: 9 });
+    applyOp(s, { t: "learn", h: "@ch", cat: "ads", d: 4 });
+    applyOp(s, { t: "watch", item: { id: "w", at: 100, f: 1 } });
+    return s;
+  };
+
+  it("an unsaved Short goes back to the same place", () => {
+    const s = filled(); // saved: c, b, a
+    applyOp(s, { t: "unsave", id: "b" });
+    applyOp(s, { t: "save", id: "b", i: 1 });
+    expect(s.saved).toEqual(["c", "b", "a"]);
+  });
+
+  it("undoing a clear brings everything back and keeps what came after (merge)", () => {
+    const s = filled();
+    const before = snap(s, ["seen", "hist"]);
+    applyOp(s, { t: "clearSeen" });
+    applyOp(s, { t: "histClear" });
+    applyOp(s, { t: "seen", id: "new", at: 50 }); // watched after clearing (maybe on another device)
+    applyOp(s, { t: "restore", data: before, mode: "merge" });
+    expect(Object.keys(s.seen).sort()).toEqual(["new", "x", "y"]);
+    expect(s.seen.x).toBeLessThan(s.seen.y); // order kept
+    expect(s.hist.map((h) => h.id)).toEqual(["w"]);
+  });
+
+  it("undoing a learning reset puts the exact values back (replace)", () => {
+    const s = filled();
+    const before = snap(s, ["affCh", "affCat"]);
+    applyOp(s, { t: "resetLearn" });
+    expect(s.affCh).toEqual({});
+    applyOp(s, { t: "restore", data: before, mode: "replace" });
+    expect(s.affCh).toEqual({ "@ch": 4 });
+    expect(s.affCat).toEqual({ ads: 2 });
+  });
+
+  it("restoring a backup puts everything back as it was — and syncs like any change", () => {
+    const s = filled();
+    const backup = snap(s);
+    applyOp(s, { t: "unsave", id: "a" });
+    applyOp(s, { t: "hide", h: "@bad" });
+    applyOp(s, { t: "clearSeen" });
+    applyOp(s, { t: "restore", data: backup, mode: "replace" });
+    const back = fromFile(toFile(s));
+    expect(back.saved).toEqual(["c", "b", "a"]);
+    expect(back.hidden).toEqual([]);
+    expect(Object.keys(back.seen)).toEqual(["x", "y"]);
+  });
+
+  it("backups: kept 30 days, at most 20, the newest 3 always", () => {
+    const day = 86400_000;
+    const now = 100 * day;
+    const mk = (agoDays: number): Backup => ({ at: now - agoDays * day, why: "Daily", data: {} });
+    const old = [mk(40), mk(50), mk(60), mk(70)];
+    expect(toPrune(old, now)).toHaveLength(1); // newest 3 stay even though they're old
+    const many = Array.from({ length: 25 }, (_, i) => mk(i / 2));
+    expect(toPrune(many, now)).toHaveLength(5);
   });
 });

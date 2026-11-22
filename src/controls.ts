@@ -4,6 +4,7 @@
  */
 import { videoCats } from "./rank";
 import { act, learn, persist, state } from "./store";
+import { undoable } from "./backup";
 import * as sync from "./sync";
 import { checkForUpdate } from "./data";
 import { infoDialog, once, toast, toastError } from "./ui";
@@ -213,8 +214,12 @@ export function toggleSave(forceOn = false) {
   if (!cur) return;
   const isSaved = state.saved.includes(cur.id);
   if (isSaved && !forceOn) {
+    const i = state.saved.indexOf(cur.id);
     act({ t: "unsave", id: cur.id });
-    toast("Removed from saved");
+    undoable("Removed from saved", () => {
+      act({ t: "save", id: cur.id, i });
+      renderSave();
+    });
   } else if (!isSaved) {
     act({ t: "save", id: cur.id });
     const ch = feed.ds.channels[cur.ch];

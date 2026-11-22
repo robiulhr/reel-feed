@@ -16,6 +16,7 @@ installErrorCatcher(); // first: anything that breaks from here on is caught and
 import { loadApi } from "./pool";
 import { startVisit, state } from "./store";
 import * as sync from "./sync";
+import { dailyBackup } from "./backup";
 import { initChannels } from "./channels";
 import { checkForUpdate, loadInitial, onNetworkChange } from "./data";
 import { toast } from "./ui";
@@ -92,6 +93,7 @@ async function boot() {
   console.info(`First video in ${Math.round(performance.now() - t0)} ms (from ${first.source})`);
 
   showTipsIfNew();
+  window.setTimeout(() => void dailyBackup(), 30000); // after the first sync, so the backup has your latest data
   window.setTimeout(warnIfTokenExpiring, 5000); // early warning before the GitHub token expires
   applyNetwork();
 

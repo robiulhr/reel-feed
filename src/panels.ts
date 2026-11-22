@@ -3,9 +3,9 @@
  * API usage, About), full pages (channel explorer, More like this), the ⋯ sheet and the first-time tips.
  * Plus the top bar: feed tabs, time range, categories, and ‹ › buttons for rows that don't fit.
  */
-import { catLabel } from "./categories";
+import { type CatId, catInfo, catLabel, GROUPS, type GroupId, groupCats, groupInfo, groupOf, type Lang } from "./categories";
 import { pickCategories } from "./catpicker";
-import { bindFilterBar, renderFilterBar } from "./filters";
+import { bindFilterBar, LANG_OPTS, renderFilterBar, WINS } from "./filters";
 import { videoCats } from "./rank";
 import { act, persist, state } from "./store";
 import { renderChannelsPanel } from "./channels";
@@ -14,7 +14,7 @@ import { openSimilar } from "./similar";
 import { renderHistory } from "./history";
 import { renderSorting } from "./sorting";
 import { clickable, modal } from "./a11y";
-import { ago, btn, el } from "./dom";
+import { ago, btn, el, nowSec } from "./dom";
 import { els, thumb } from "./view";
 import { playback, pool } from "./player";
 import {
@@ -33,9 +33,10 @@ import {
 } from "./feed";
 import { setRate } from "./controls";
 import { maybeAutoFull } from "./fullscreen";
-import { renderAbout, renderSyncPanel } from "./settings";
+import { renderAbout, renderBackups, renderSyncPanel } from "./settings";
+import { undoable } from "./backup";
 import { toast } from "./ui";
-import type { Short, Tab } from "./types";
+import type { Short, Tab, Win } from "./types";
 
 // ---------- overlays ----------
 const pageModal = modal(els.page, { label: "Page", onRequestClose: () => closePage(), focus: () => els.pageClose });
@@ -101,6 +102,7 @@ export function renderPanel() {
   else if (panelTab === "sorting") renderSorting(body, app, () => openPanel("sorting"));
   else if (panelTab === "api") renderUsagePanel(body, feed.ds, ago);
   else if (panelTab === "sync") renderSyncPanel(body);
+  else if (panelTab === "backups") renderBackups(body);
   else
     renderAbout(body, {
       showTips: () => {
@@ -110,17 +112,169 @@ export function renderPanel() {
     });
 }
 
+/** Saved list filters (kept while the app is open). */
+const savedFilter = {
+  group: "" as GroupId | "",
+  cat: "" as CatId | "",
+  lang: "all" as Lang | "all",
+  win: "all" as Win,
+  sort: "saved" as "saved" | "views" | "new",
+  q: "",
+};
+
 function renderSaved(body: HTMLElement) {
-  const items = state.saved.map(savedShort).filter((s): s is Short => !!s);
-  if (!items.length) {
+  const all = state.saved.map(savedShort).filter((s): s is Short => !!s);
+  if (!all.length) {
     body.append(el("p", "", "No saved Shorts yet. Tap ♡ or double-tap a video to save it."));
     return;
   }
-  body.append(btn("▶ Play all saved", () => playList("Saved", items, 0, () => openPanel("saved")), "btn primary"));
+  const f = savedFilter;
+  const now = nowSec();
+  const chName = (s: Short) => feed.ds.channels[s.ch]?.n ?? "";
+  // everything except the category, so the chip counts show what each chip would give
+  const base = all.filter(
+    (s) =>
+      (f.lang === "all" || s.lg === f.lang) &&
+      (f.win === "all" || now - s.p <= Number(f.win) * 86400) &&
+      (!f.q || `${s.t} ${chName(s)}`.toLowerCase().includes(f.q.toLowerCase())),
+  );
+  const inGroup = (s: Short, g: GroupId) => videoCats(s, state).some((c) => groupOf(c) === g);
+  const items = base.filter((s) => (f.cat ? videoCats(s, state).includes(f.cat) : !f.group || inGroup(s, f.group)));
+  if (f.sort === "views") items.sort((x, y) => y.v - x.v);
+  else if (f.sort === "new") items.sort((x, y) => y.p - x.p);
+
+  // ---- controls
+  const head = el("div", "sv-head");
+  const search = el("input", "ch-search");
+  search.type = "search";
+  search.placeholder = "Search saved";
+  search.setAttribute("aria-label", "Search saved Shorts");
+  search.value = f.q;
+  let t: number | undefined;
+  search.oninput = () => {
+    clearTimeout(t);
+    t = window.setTimeout(() => {
+      f.q = search.value.trim();
+      renderPanel();
+      const again = els.panelBody.querySelector<HTMLInputElement>(".sv-head input");
+      again?.focus();
+      again?.setSelectionRange(again.value.length, again.value.length);
+    }, 250);
+  };
+  head.append(search);
+
+  const pick = <T extends string>(label: string, opts: [T, string][], value: T, set: (v: T) => void) => {
+    const sel = el("select");
+    sel.setAttribute("aria-label", label);
+    for (const [v, l] of opts) sel.append(new Option(l, v));
+    sel.value = value;
+    sel.onchange = () => {
+      set(sel.value as T);
+      renderPanel();
+    };
+    return sel;
+  };
+  const row = el("div", "cp-filters sv-filters");
+  row.append(
+    pick(
+      "Sort",
+      [
+        ["saved", "Recently saved"],
+        ["views", "Most viewed"],
+        ["new", "Newest"],
+      ],
+      f.sort,
+      (v) => {
+        f.sort = v;
+      },
+    ),
+    pick("Time range", WINS, f.win, (v) => {
+      f.win = v;
+    }),
+  );
+  const langsHere = new Set(all.map((s) => s.lg));
+  if (langsHere.size > 1)
+    row.append(
+      pick(
+        "Language",
+        LANG_OPTS.filter(([v]) => v === "all" || langsHere.has(v)),
+        f.lang,
+        (v) => {
+          f.lang = v;
+        },
+      ),
+    );
+
+  // main categories, then (when one is picked) its topics
+  const chip = (label: string, on: boolean, run: () => void, extra = "") => {
+    const c = btn(label, run, `chip${on ? " on" : ""}${extra}`);
+    c.setAttribute("aria-pressed", String(on));
+    return c;
+  };
+  const groups = GROUPS.map((g) => [g, base.filter((s) => inGroup(s, g.id)).length] as const).filter(([, n]) => n);
+  const gRow = el("div", "cp-chips sv-chips");
+  gRow.setAttribute("role", "group");
+  gRow.setAttribute("aria-label", "Main category");
+  gRow.append(
+    chip(`All · ${base.length}`, !f.group, () => {
+      f.group = "";
+      f.cat = "";
+      renderPanel();
+    }),
+  );
+  for (const [g, n] of groups)
+    gRow.append(
+      chip(`${g.icon} ${g.label} · ${n}`, f.group === g.id, () => {
+        f.group = f.group === g.id ? "" : g.id;
+        f.cat = "";
+        renderPanel();
+      }),
+    );
+  body.append(head, row, gRow);
+  if (f.group) {
+    const topics = groupCats(f.group)
+      .map((c) => [c, base.filter((s) => videoCats(s, state).includes(c)).length] as const)
+      .filter(([, n]) => n);
+    if (topics.length > 1) {
+      const tRow = el("div", "cp-chips sv-chips");
+      tRow.setAttribute("role", "group");
+      tRow.setAttribute("aria-label", "Topic");
+      tRow.append(
+        chip(`All ${groupInfo(f.group)?.label ?? ""}`, !f.cat, () => {
+          f.cat = "";
+          renderPanel();
+        }),
+      );
+      for (const [c, n] of topics)
+        tRow.append(
+          chip(`${catInfo(c)?.short ?? c} · ${n}`, f.cat === c, () => {
+            f.cat = f.cat === c ? "" : c;
+            renderPanel();
+          }),
+        );
+      body.append(tRow);
+    }
+  }
+
+  const filtered = items.length !== all.length;
+  const back = () => openPanel("saved");
+  body.append(
+    btn(
+      filtered ? `▶ Play these ${items.length}` : `▶ Play all saved (${all.length})`,
+      () => playList("Saved", items, 0, back),
+      "btn primary sv-play",
+    ),
+  );
+  if (!items.length) {
+    body.append(el("p", "ch-note", "Nothing saved matches these filters."));
+    return;
+  }
   const grid = el("div", "grid");
   items.forEach((s, i) => {
-    const title = `${feed.ds.channels[s.ch]?.n ?? ""} · ${s.t}`;
-    const card = clickable(el("div", "card"), () => playList("Saved", items, i, () => openPanel("saved")), `Play ${title}`);
+    const title = `${chName(s)} · ${s.t}`;
+    // the play area and ✕ sit side by side (a button inside a button confuses screen readers)
+    const card = el("div", "card");
+    const play = clickable(el("div", "card-play"), () => playList("Saved", items, i, back), `Play ${title}`);
     const img = el("img");
     img.loading = "lazy";
     img.alt = "";
@@ -128,16 +282,22 @@ function renderSaved(body: HTMLElement) {
     const x = btn(
       "✕",
       () => {
+        const at = state.saved.indexOf(s.id);
         act({ t: "unsave", id: s.id });
         renderPanel();
         renderSave();
+        undoable("Removed from saved", () => {
+          act({ t: "save", id: s.id, i: at });
+          renderPanel();
+          renderSave();
+        });
       },
       "x",
     );
     x.title = "Remove from saved";
     x.setAttribute("aria-label", `Remove ${s.t} from saved`);
-    x.addEventListener("click", (e) => e.stopPropagation());
-    card.append(img, el("div", "cap", title), x);
+    play.append(img, el("div", "cap", title));
+    card.append(play, x);
     grid.append(card);
   });
   body.append(grid);
@@ -158,6 +318,10 @@ function renderHidden(body: HTMLElement) {
         () => {
           act({ t: "unhide", h });
           renderPanel();
+          undoable(`Unhidden ${ch?.n ?? h}`, () => {
+            act({ t: "hide", h });
+            renderPanel();
+          });
         },
         "btn",
       ),

@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+import { makeDataset } from "../fixtures/data";
 import { closeTips, expect, login, player, swipe, test } from "./fixtures";
 
 test.describe("layout", () => {
@@ -273,5 +275,105 @@ test.describe("categories", () => {
     await body.locator(".sort-row").first().getByRole("button", { name: "✓ Right" }).click();
     await expect(body.locator(".sort-row")).toHaveCount(8);
     await expect(body).toContainText("sorted 1 yourself");
+  });
+});
+
+/**
+ * Reloads with some saved data on this device (as if from earlier). Written before the app starts —
+ * writing it into the running page would be overwritten when the page saves on its way out.
+ */
+async function withData(page: Page, data: Record<string, unknown>) {
+  await page.addInitScript((d) => {
+    if (sessionStorage.getItem("seeded")) return;
+    sessionStorage.setItem("seeded", "1");
+    const k = "ecomgy-reel-feed.v1";
+    localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) ?? "{}"), ...d, tipsSeen: true }));
+  }, data);
+  await page.reload();
+}
+/** Every library Short in Saved. */
+async function saveAll(page: Page) {
+  const ids = makeDataset().videos.map((v) => v.id);
+  await withData(page, { saved: ids });
+  return ids.length;
+}
+
+test.describe("saved, undo and backups", () => {
+  test("Saved: main category and topic chips, search, and Play these", async ({ app: page }) => {
+    const n = await saveAll(page);
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="saved"]').click();
+    const body = page.locator("#panelBody");
+    await expect(body.getByRole("button", { name: `▶ Play all saved (${n})` })).toBeVisible();
+    await expect(body.locator(".grid .card")).toHaveCount(n);
+    // a main category: fewer Shorts, and its topics appear
+    const group = body.locator('.sv-chips[aria-label="Main category"] .chip').nth(1);
+    const groupCount = Number((await group.textContent())!.split("·").pop());
+    await group.click();
+    await expect(body.locator(".grid .card")).toHaveCount(groupCount);
+    await expect(body.getByRole("button", { name: `▶ Play these ${groupCount}` })).toBeVisible();
+    // search narrows it further; playing starts the filtered list
+    await body.getByRole("searchbox", { name: "Search saved Shorts" }).fill("zzzz-nothing");
+    await expect(body).toContainText("Nothing saved matches these filters.");
+    await body.getByRole("searchbox", { name: "Search saved Shorts" }).fill("");
+    await expect(body.locator(".grid .card")).toHaveCount(groupCount);
+    await body.getByRole("button", { name: /^▶ Play these/ }).click();
+    await expect(page.locator("#ctxTitle")).toContainText(/Saved/);
+  });
+
+  test("removing a saved Short can be undone, in the same place", async ({ app: page }) => {
+    await saveAll(page);
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="saved"]').click();
+    const body = page.locator("#panelBody");
+    const second = await body.locator(".grid .card .cap").nth(1).textContent();
+    await body
+      .locator(".grid .card")
+      .nth(1)
+      .getByRole("button", { name: /^Remove / })
+      .click();
+    await expect(body.locator(".grid .card .cap").nth(1)).not.toHaveText(second!);
+    await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+    await expect(body.locator(".grid .card .cap").nth(1)).toHaveText(second!);
+  });
+
+  test("Reset what the feed learned asks first, and Undo brings it back", async ({ app: page }) => {
+    await withData(page, { affCh: { "@ads": 6 }, affCat: { ads: 3 } });
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="about"]').click();
+    await page.getByRole("button", { name: "Reset what the feed learned" }).click();
+    const dlg = page.getByRole("dialog", { name: "Reset what the feed learned?" });
+    await dlg.getByRole("button", { name: "Cancel" }).click();
+    const learned = () => page.evaluate(() => JSON.parse(localStorage.getItem("ecomgy-reel-feed.v1")!).affCh);
+    await page.getByRole("button", { name: "Reset what the feed learned" }).click();
+    await page.getByRole("dialog", { name: "Reset what the feed learned?" }).getByRole("button", { name: "Reset" }).click();
+    await expect.poll(learned).toEqual({});
+    await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+    await expect.poll(learned).toEqual({ "@ads": 6 });
+  });
+
+  test("Backups: back up now, then Restore puts everything back", async ({ app: page }) => {
+    const n = await saveAll(page);
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="backups"]').click();
+    const body = page.locator("#panelBody");
+    await body.getByRole("button", { name: "Back up now" }).click();
+    await expect(body.locator(".bk-row").first()).toContainText("Made by you");
+    await expect(body.locator(".bk-row").first()).toContainText(`${n} saved`);
+    // lose the saved list, then restore the backup
+    await page.locator('[data-p="saved"]').click();
+    for (let i = 0; i < 3; i++)
+      await body
+        .locator(".grid .card")
+        .first()
+        .getByRole("button", { name: /^Remove / })
+        .click();
+    await expect(body.locator(".grid .card")).toHaveCount(n - 3);
+    await page.locator('[data-p="backups"]').click();
+    await body.locator(".bk-row").filter({ hasText: "Made by you" }).getByRole("button", { name: "Restore" }).click();
+    await page.getByRole("dialog", { name: "Restore this backup?" }).getByRole("button", { name: "Restore" }).click();
+    await expect(page.locator("#toast")).toContainText("Restored");
+    await page.locator('[data-p="saved"]').click();
+    await expect(body.locator(".grid .card")).toHaveCount(n);
   });
 });
