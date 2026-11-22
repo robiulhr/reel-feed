@@ -14,6 +14,8 @@ interface V {
   v: number;
   d?: string;
   tg?: string[];
+  tp?: string[];
+  yc?: number;
 }
 const cache = JSON.parse(readFileSync("data/cache.json", "utf8")) as { videos: Record<string, V>; channels: Record<string, unknown> };
 const list = JSON.parse(readFileSync("channels.json", "utf8")) as {
@@ -38,7 +40,7 @@ const userCatsOf = (h: string) => {
 const rows: { id: string; ch: string; t: string; tags: string; cats: CatId[]; g: boolean }[] = [];
 for (const [chId, vids] of byChannel) {
   const { name, cats: userCats } = userCatsOf(chId);
-  const texts = vids.map(([, v]) => ({ title: v.t, desc: v.d, tags: v.tg }));
+  const texts = vids.map(([, v]) => ({ title: v.t, desc: v.d, tags: v.tg, topics: v.tp, ytCat: v.yc }));
   const noise = channelNoise(texts);
   const scores = texts.map((t) => textScores(t, noise));
   const counted: Prior = {};

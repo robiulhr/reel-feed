@@ -72,6 +72,19 @@ describe("sorting a Short into categories", () => {
     expect(ownBrand(sort({ title: "Meta ads mistakes" }), ["marketing"]).cats).toEqual(["ads"]);
   });
 
+  it("YouTube's own topics tip vague titles, but don't beat clear words", () => {
+    expect(sort({ title: "আজ রাতে কথা গুলো ভাবুন", topics: ["Religion", "Society"] }).cats[0]).toBe("waz");
+    // "Religion" on a Hindu / other video is not Islamic
+    expect(sort({ title: "Gita in action: the easiest way", topics: ["Religion"] }).cats).not.toContain("waz");
+    expect(sort({ title: "Why bridges don't break", topics: ["Knowledge"] }).cats[0]).toBe("facts");
+    expect(sort({ title: "Coaches corner", ytCat: 23 }).cats[0]).toBe("comedy");
+    expect(sort({ title: "Rahmatun Lil’Alameen | رحمةٌ للعالمين", topics: ["Religion", "Music_of_Asia"] }).cats[0]).toBe("nasheed");
+    // vague topics count for nothing
+    expect(textScores({ title: "x", topics: ["Entertainment", "Lifestyle_(sociology)", "Society", "Business"] })).toEqual({});
+    // a clear title wins over a topic
+    expect(sort({ title: "Facebook ads targeting for dentists", topics: ["Knowledge"] }).cats[0]).toBe("ads");
+  });
+
   it("detects the language", () => {
     expect(detectLang("দাম কমানো ভুল")).toBe("bn");
     expect(detectLang("Business kivabe korben")).toBe("bn");

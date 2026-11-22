@@ -174,7 +174,7 @@ const LEX: Record<CatId, string[]> = {
     "~নির্বাচন", "~স্বাস্থ্য", "~ক্যান্সার", "~খাবার", "~যুদ্ধ", "~ফিলিস্তিন", "~গাজা",
   ],
   quran: [
-    "quran", "qur'an", "koran", "tilawat", "tilawah", "telawat", "recitation", "recite", "surah", "=sura", "ayat",
+    "quran", "qur'an", "koran", "tilawat", "tilawah", "telawat", "recitation", "recite", "surah", "surath", "=sura", "ayat",
     "ayah", "qari", "qiraat", "yasin", "ar-rahman", "al-mulk", "al-kahf", "hafiz", "hifz", "কুরআন", "কোরআন",
     "কুরআনের", "তিলাওয়াত", "তেলাওয়াত", "তিলাওয়াত", "সূরা", "সুরা", "আয়াত", "আয়াত", "ক্বারী", "হাফেজ", "سورة",
     "القرآن", "قرآن", "تلاوة",
@@ -251,6 +251,47 @@ export interface VideoText {
   title: string;
   desc?: string;
   tags?: string[];
+  /** YouTube's own topics for the video (Wikipedia names: "Religion", "Knowledge"…) */
+  topics?: string[];
+  /** YouTube video category the creator picked (23 = Comedy, 25 = News & Politics, 28 = Science & Tech…) */
+  ytCat?: number;
+}
+
+/**
+ * YouTube's own signals, which come from the video itself (picture and sound), not just its words.
+ * Only the reliable ones count — Entertainment, Lifestyle, Society, Film and Education are on almost
+ * everything. Worth less than a clear title word, so they tip close calls rather than decide alone.
+ */
+const TOPIC_SIGNAL: Record<string, Partial<Record<CatId, number>>> = {
+  Knowledge: { facts: 1 },
+  Technology: { ai: 0.6 }, // also on productivity / phone clips — a hint
+  Humour: { comedy: 1.5 },
+  Health: { facts: 0.3 }, // also on fitness/motivation clips — only a hint
+  Politics: { facts: 1 },
+  Military: { facts: 1 },
+};
+const YTCAT_SIGNAL: Record<number, Partial<Record<CatId, number>>> = {
+  23: { comedy: 1.5 }, // Comedy
+  25: { facts: 0.6 }, // News & Politics (business news uses it too)
+  28: { facts: 0.3, ai: 0.3 }, // Science & Technology
+};
+const ISLAMIC = new Set<string>(["quran", "waz", "nasheed"]);
+/** Arabic or Bengali letters — "Religion" on these channels means Islamic (on Hindi/English ones it can be Hindu, Christian…). */
+const ISLAMIC_SCRIPT = /[؀-ۿঀ-৿]/;
+function addSignals(v: VideoText, out: Partial<Record<string, number>>) {
+  const add = (m?: Partial<Record<CatId, number>>) => {
+    for (const [c, w] of Object.entries(m ?? {})) out[c] = (out[c] ?? 0) + (w ?? 0);
+  };
+  const topics = v.topics ?? [];
+  for (const t of topics) add(TOPIC_SIGNAL[t]);
+  if (v.ytCat !== undefined) add(YTCAT_SIGNAL[v.ytCat]);
+  if (!topics.includes("Religion")) return;
+  const islamicWords = Object.entries(out).some(([c, n]) => ISLAMIC.has(c) && (n ?? 0) > 0);
+  if (!islamicWords && !ISLAMIC_SCRIPT.test(v.title)) return;
+  // Music on an Islamic video = nasheed / gajal; otherwise it's a talk
+  const music = v.ytCat === 10 || topics.some((t) => t === "Music" || t === "Music_of_Asia");
+  if (music) out.nasheed = (out.nasheed ?? 0) + 1.5;
+  else out.waz = (out.waz ?? 0) + 1;
 }
 
 /** Lines/tags this channel puts on most of its videos (social links, "subscribe", course ads…). */
@@ -302,6 +343,7 @@ export function textScores(v: VideoText, noise?: ChannelNoise): Scores {
   scoreText(v.title.replace(/#[\p{L}\p{M}\p{N}_]+/gu, " "), W_TITLE, out);
   scoreText([...new Set(tags)].join(" | "), W_TAGS, out);
   scoreText(desc.replace(/#[\p{L}\p{M}\p{N}_]+/gu, " "), W_DESC, out);
+  addSignals(v, out);
   // Office words + a joke = office fun; office words alone = (a hint of) career talk
   if (out.office) {
     if ((out.comedy ?? 0) >= 1.5) out.workfun = (out.workfun ?? 0) + out.office;

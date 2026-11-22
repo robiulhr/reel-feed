@@ -230,6 +230,7 @@ Change the grouping in `GROUPS` / `group:` in `src/categories.ts` (never reorder
 - **Confident** when the words clearly say it (score ≥ 2.5). Otherwise the channel's habits decide: its **content mix** (what its confident Shorts are about, 60%) + **your categories for the channel** (40%). Those Shorts are marked **guessed** ("AI ?" under the title), rank a little lower and appear in **Menu → Sorting**.
 - **A brand's own channel** (main category Famous Brand Ads, e.g. Banglalink, Grameenphone): every Short is a Brand ad first.
 - Office jokes count as Office fun only with a humour signal (😂, funny, meme…); otherwise Career.
+- **YouTube's own signals** (free, same API call): the video's topics (YouTube works these out from the video itself) and the creator's video category. Only the reliable ones count, as hints worth less than a clear title word: Knowledge/Politics/Military → Facts, Technology → AI, Humour or the Comedy category → Comedy, Religion on an Islamic video → Waz (or Nasheed when it's music). Vague ones (Entertainment, Lifestyle, Society, Education) are ignored, and Religion on Hindu/other videos doesn't count as Islamic.
 - **Language** is separate: Bengali/Devanagari/Urdu letters, then Roman Bangla/Hindi words, then the channel's language.
 
 **Fixing mistakes** (your answer always wins and syncs to your other devices as a `catFix` op):

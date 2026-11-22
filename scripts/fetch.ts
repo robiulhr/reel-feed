@@ -72,6 +72,8 @@ interface CachedVideo {
   s?: number;
   d?: string; // description (links removed, trimmed) — used to work out categories
   tg?: string[]; // the creator's tags; undefined = not fetched yet (filled in once by the next run)
+  tp?: string[]; // YouTube's own topics ("Religion", "Knowledge"…); undefined = not fetched yet
+  yc?: number; // YouTube video category id (23 = Comedy…)
 }
 interface Cache {
   channels: Record<string, CachedChannel>;
@@ -431,7 +433,7 @@ async function main() {
   for (const [c, ch] of active) for (const id of ch.known) owner.set(id, c.handle);
   const due = [...owner.keys()].filter((id) => {
     const v = cache.videos[id];
-    return !v || v.tg === undefined || now - (v.s ?? 0) >= statsInterval(now - v.p);
+    return !v || v.tg === undefined || v.tp === undefined || now - (v.s ?? 0) >= statsInterval(now - v.p);
   });
   console.log(`Updating stats for ${due.length} of ${owner.size} Shorts (${newCount} new)...`);
   counts.statsRefreshed = due.length;
@@ -439,7 +441,7 @@ async function main() {
   const missing = new Set(due);
   await pool(chunk(due, 50), CONCURRENCY, async (batch) => {
     counts.statsCalls++;
-    const j = await yt("videos", { part: "snippet,statistics,status", id: batch.join(","), maxResults: 50 }, "stats");
+    const j = await yt("videos", { part: "snippet,statistics,status,topicDetails", id: batch.join(","), maxResults: 50 }, "stats");
     for (const it of j?.items ?? []) {
       missing.delete(it.id);
       const title: string = it.snippet?.title ?? "";
@@ -457,6 +459,8 @@ async function main() {
         s: now,
         d: cleanDesc(desc),
         tg: ((it.snippet?.tags ?? []) as string[]).slice(0, 25).map((x) => x.slice(0, 60)),
+        tp: ((it.topicDetails?.topicCategories ?? []) as string[]).map((u) => decodeURIComponent(u.split("/wiki/")[1] ?? u)),
+        yc: Number(it.snippet?.categoryId) || undefined,
       };
     }
   });
@@ -551,7 +555,7 @@ async function main() {
     const kept = scored.filter((s) => best.has(s.id) || s.ageDays <= KEEP_RECENT_DAYS);
 
     // Categories: the channel's repeated boilerplate is ignored, then each video is scored on its own words
-    const texts = vids.map(([, v]) => ({ title: v.t, desc: v.d, tags: v.tg }));
+    const texts = vids.map(([, v]) => ({ title: v.t, desc: v.d, tags: v.tg, topics: v.tp, ytCat: v.yc }));
     const noise = channelNoise(texts);
     const scores = new Map<string, Scores>(vids.map(([id], i) => [id, textScores(texts[i], noise)]));
     const counted: Prior = {};
