@@ -1,6 +1,7 @@
 /** Facebook videos you add by link: the synced changes, merging, and how they join the feeds, lists and Saved. */
 import { beforeEach, describe, expect, it } from "vitest";
 import { applyManual, fbIdFromLink, fbPageOf, pageKey } from "../../src/fbdata";
+import { listSize } from "../../src/lists";
 import { buildQueue, feedFilter, shortInList } from "../../src/rank";
 import { parse, toPath } from "../../src/router";
 import {
@@ -112,6 +113,9 @@ describe("added Facebook videos", () => {
     expect(ids("")).toEqual(expect.arrayContaining(["fb8888888888", "fb9999999999"]));
     const comp = st.lists.find((l) => l.id === "comp")!;
     expect(shortInList(comp, ds.videos.find((s) => s.id === "fb8888888888")!, "fb:")).toBe(true);
+    // a list with only a video you put in it still has a feed (its chip shows)
+    expect(comp.ch).toEqual([]);
+    expect(listSize(comp, st)).toBe(1);
     // its category feed too
     st.cats = ["sales"];
     const { items } = buildQueue(ds, st, { prevVisit: NOW - 86400, exclude: new Set() }, 200);

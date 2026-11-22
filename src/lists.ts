@@ -18,6 +18,9 @@ export function listSummary(h: string, empty = "Add to a list") {
   return ls.length === 1 ? listLabel(ls[0]) : `${listLabel(ls[0])} + ${ls.length - 1}`;
 }
 
+/** What's in a list: its channels plus Facebook videos you put in it one by one. 0 = no feed yet. */
+export const listSize = (l: ChList, s = state) => l.ch.length + s.manual.filter((m) => m.lists.includes(l.id)).length;
+
 /** The feed of one list ("" = all channels). */
 export function setFeedList(id: string) {
   state.list = id;

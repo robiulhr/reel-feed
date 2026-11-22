@@ -11,7 +11,7 @@ import { feedFilter, videoCats } from "./rank";
 import { persist, state } from "./store";
 import type { Win } from "./types";
 import { confirmDialog, toast } from "./ui";
-import { listById, listLabel, manageLists } from "./lists";
+import { listById, listLabel, listSize, manageLists } from "./lists";
 import { els } from "./view";
 
 export const WINS: [Win, string][] = [
@@ -90,7 +90,7 @@ export function renderFilterBar() {
   els.filtBtn.classList.toggle("on", active > 0);
 
   // biggest main categories for this time range + language (order only changes with those, so chips don't jump)
-  const key = `${feed.ds.generatedAt}|${state.win}|${state.lang}|${state.list}|${state.lists.map((l) => l.ch.length).join()}`;
+  const key = `${feed.ds.generatedAt}|${state.win}|${state.lang}|${state.list}|${state.lists.map((l) => listSize(l)).join()}`;
   if (key !== countsKey) {
     countsKey = key;
     const n = counts(state).group;
@@ -110,7 +110,7 @@ export function renderFilterBar() {
   // your channel lists (Competitors, Inspiration…): each is a feed of its own
   const curList = state.list ? listById(state.list) : undefined;
   if (curList) out.push(chip(`${listLabel(curList)} ✕`, { list: "" }, true, `${curList.name} feed. Back to all channels`));
-  for (const l of state.lists) if (l !== curList && l.ch.length) out.push(chip(listLabel(l), { list: l.id }, false, `${l.name} feed`));
+  for (const l of state.lists) if (l !== curList && listSize(l)) out.push(chip(listLabel(l), { list: l.id }, false, `${l.name} feed`));
   if (state.win !== "all") out.push(chip(`${winLabel(state.win)} ✕`, { clear: "win" }, true, `${winLabel(state.win)}. Remove`));
   if (state.lang !== "all") out.push(chip(`${langLabel(state.lang)} ✕`, { clear: "lang" }, true, `${langLabel(state.lang)}. Remove`));
   // what you picked: a whole main category shows as one chip, single topics as their own chips
@@ -213,11 +213,11 @@ export async function openFilters(toTopics = false) {
   function renderListBtns() {
     listRow.replaceChildren();
     for (const l of [{ id: "", name: "All channels", icon: "", ch: [] as string[] }, ...state.lists]) {
-      const b = el("button", "", l.id ? `${listLabel(l)} · ${l.ch.length}` : l.name);
+      const b = el("button", "", l.id ? `${listLabel(l)} · ${listSize(l)}` : l.name);
       b.type = "button";
       b.dataset.v = l.id;
       b.onclick = () => {
-        if (l.id && !l.ch.length) return void toast(`No channels in ${l.name} yet — add them from a channel's page or the ⋯ menu`);
+        if (l.id && !listSize(l)) return void toast(`Nothing in ${l.name} yet — add channels from a channel's page or the ⋯ menu`);
         d.list = l.id;
         update();
       };
