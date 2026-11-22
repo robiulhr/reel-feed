@@ -2,7 +2,7 @@
  * The rules that sort each Short into categories (see categories.ts for the list itself).
  * Used by the fetch script (scripts/fetch.ts), the sync Worker and tests — not shipped to phones.
  *
- * How a Short is sorted (no AI, no extra API cost):
+ * How a Short is sorted (no AI runs here, no extra API cost):
  *  1. Its title, hashtags/tags and description are matched against a keyword list per category
  *     (English, Bangla, a little Arabic/Hindi). A title hit counts most, a tag next, the description least.
  *     Lines and tags a channel puts on (almost) every video are ignored — they say nothing about this video.
@@ -10,9 +10,10 @@
  *  3. Main category = best score. Up to 2 more if they're nearly as strong (a lower bar for close
  *     topics like Stories/Founders, a higher one for unrelated topics).
  *  4. Nothing in the text? The video takes the channel's usual topic and is marked "guessed".
+ *  5. A guess can be replaced by a label from a one-off AI pass, saved in ai-cats.json (see README).
  */
 
-import { CAT_IDS, type CatId } from "./categories";
+import { CAT_IDS, type CatId, normCats } from "./categories";
 
 /** Topics close enough that a video sitting between them may go in both. */
 const CLOSE: [CatId, CatId][] = [
@@ -407,4 +408,14 @@ export function pickCats(text: Scores, prior: Prior): Sorted {
 export function ownBrand(sorted: Sorted, userCats: readonly CatId[]): Sorted {
   if (userCats[0] !== "brandads") return sorted;
   return { cats: ["brandads" as CatId, ...sorted.cats.filter((c) => c !== "brandads")].slice(0, 3), guessed: false };
+}
+
+/**
+ * A label from the one-off AI pass (ai-cats.json, "ads,ecom") replaces a guess. Never words the
+ * rules were sure of, and a brand channel's own Shorts stay as they are.
+ */
+export function withAiLabel(sorted: Sorted, label: string | undefined): Sorted {
+  if (!label || (!sorted.guessed && sorted.cats.length)) return sorted;
+  const cats = normCats(label.split(","));
+  return cats.length ? { cats, guessed: false } : sorted;
 }

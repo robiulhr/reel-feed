@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { CAT_IDS, CATEGORIES, detectLang, normCats } from "../../src/categories";
-import { channelNoise, channelPrior, ownBrand, pickCats, textScores, type VideoText } from "../../src/classify";
+import { channelNoise, channelPrior, ownBrand, pickCats, textScores, type VideoText, withAiLabel } from "../../src/classify";
 import { parse } from "../../src/data";
 import { buildQueue, videoCats } from "../../src/rank";
 import { applyOp, emptyShared, fromFile, migrateLocal, type State, toFile } from "../../src/store";
@@ -70,6 +70,15 @@ describe("sorting a Short into categories", () => {
     expect(r.cats[0]).toBe("brandads");
     expect(r.guessed).toBe(false);
     expect(ownBrand(sort({ title: "Meta ads mistakes" }), ["marketing"]).cats).toEqual(["ads"]);
+  });
+
+  it("an AI label replaces only a guess, never words the rules were sure of", () => {
+    const guess = sort({ title: "Have a nice day :)" }, channelPrior({}, ["growth"]));
+    expect(withAiLabel(guess, "sales,ecom")).toEqual({ cats: ["sales", "ecom"], guessed: false });
+    expect(withAiLabel(sort({ title: "Have a nice day :)" }), "facts")).toEqual({ cats: ["facts"], guessed: false });
+    expect(withAiLabel(sort({ title: "Meta ads mistakes" }), "comedy").cats).toEqual(["ads"]);
+    expect(withAiLabel(guess, undefined)).toBe(guess);
+    expect(withAiLabel(guess, "nope")).toBe(guess); // unknown ids are ignored
   });
 
   it("YouTube's own topics tip vague titles, but don't beat clear words", () => {

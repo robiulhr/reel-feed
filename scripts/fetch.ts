@@ -18,11 +18,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CAT_IDS, type CatId, detectLang, type GroupId, groupOf, LANG_CODES, normCats } from "../src/categories";
-import { channelNoise, channelPrior, ownBrand, pickCats, type Prior, type Scores, textScores } from "../src/classify";
+import { channelNoise, channelPrior, ownBrand, pickCats, type Prior, type Scores, textScores, withAiLabel } from "../src/classify";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ENV_FILE = join(ROOT, ".env");
 const CHANNELS_FILE = join(ROOT, "channels.json");
+/** Labels from a one-off AI pass over Shorts the rules could only guess: { cats: { videoId: "ads,ecom" } } */
+const AI_FILE = join(ROOT, "ai-cats.json");
 const CACHE_DIR = join(ROOT, "data");
 const CACHE_FILE = join(CACHE_DIR, "cache.json");
 const OUT_DIR = join(ROOT, "public", "data");
@@ -497,7 +499,8 @@ async function main() {
     lg: number; // language index
     g: boolean; // categories guessed (nothing in the video's own text)
   }[] = [];
-  const sortStats = { confident: 0, guessed: 0, none: 0 };
+  const sortStats = { confident: 0, ai: 0, guessed: 0, none: 0 };
+  const aiCats: Record<string, string> = existsSync(AI_FILE) ? (JSON.parse(readFileSync(AI_FILE, "utf8")).cats ?? {}) : {};
   const noShorts: string[] = [];
 
   for (const c of list) {
@@ -587,8 +590,9 @@ async function main() {
       last: Math.max(...vids.map(([, v]) => v.p)),
     });
     for (const s of kept) {
-      const sorted = ownBrand(pickCats(scores.get(s.id) ?? {}, prior), userCats);
-      sortStats[!sorted.cats.length ? "none" : sorted.guessed ? "guessed" : "confident"]++;
+      const rules = ownBrand(pickCats(scores.get(s.id) ?? {}, prior), userCats);
+      const sorted = withAiLabel(rules, aiCats[s.id]);
+      sortStats[!sorted.cats.length ? "none" : sorted.guessed ? "guessed" : sorted !== rules ? "ai" : "confident"]++;
       const group = sorted.cats[0] ? groupOf(sorted.cats[0]) : undefined;
       rows.push({
         id: s.id,
@@ -654,7 +658,7 @@ async function main() {
   console.log(`API units used this run: ~${units} (free limit: 10,000/day)`);
   const pct = (n: number) => `${Math.round((n / Math.max(1, rows.length)) * 100)}%`;
   console.log(
-    `Categories: ${pct(sortStats.confident)} sorted from the video's own words, ${pct(sortStats.guessed)} guessed from the channel, ${sortStats.none} unsorted`,
+    `Categories: ${pct(sortStats.confident)} sorted from the video's own words, ${pct(sortStats.ai)} from the AI labels, ${pct(sortStats.guessed)} guessed from the channel, ${sortStats.none} unsorted`,
   );
   console.log(
     `RSS checks: ${counts.rssOk} ok, ${counts.rssFailed} failed · playlist checks: ${counts.playlistChecks} · stats calls: ${counts.statsCalls}`,

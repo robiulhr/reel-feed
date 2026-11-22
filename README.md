@@ -225,12 +225,13 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 
 Change the grouping in `GROUPS` / `group:` in `src/categories.ts` (never reorder `CATEGORIES` — the data file stores categories by position).
 
-**Every Short is sorted by its own words** (`scripts/fetch.ts`, no AI, no API key): keyword lists in English, Bangla (whole words) and Roman Bangla/Hindi score the title (×3), tags/hashtags (×2) and description (×1). Lines and tags a channel puts on most of its videos (links, "subscribe", course ads) are ignored.
+**Every Short is sorted by its own words** (`scripts/fetch.ts`, no AI at run time, no API key): keyword lists in English, Bangla (whole words) and Roman Bangla/Hindi score the title (×3), tags/hashtags (×2) and description (×1). Lines and tags a channel puts on most of its videos (links, "subscribe", course ads) are ignored.
 - **1–3 categories per Short**, main first. A second/third only with real evidence — so a near-miss still shows up in the right chip.
 - **Confident** when the words clearly say it (score ≥ 2.5). Otherwise the channel's habits decide: its **content mix** (what its confident Shorts are about, 60%) + **your categories for the channel** (40%). Those Shorts are marked **guessed** ("AI ?" under the title), rank a little lower and appear in **Menu → Sorting**.
 - **A brand's own channel** (main category Famous Brand Ads, e.g. Banglalink, Grameenphone): every Short is a Brand ad first.
 - Office jokes count as Office fun only with a humour signal (😂, funny, meme…); otherwise Career.
 - **YouTube's own signals** (free, same API call): the video's topics (YouTube works these out from the video itself) and the creator's video category. Only the reliable ones count, as hints worth less than a clear title word: Knowledge/Politics/Military → Facts, Technology → AI, Humour or the Comedy category → Comedy, Religion on an Islamic video → Waz (or Nasheed when it's music). Vague ones (Entertainment, Lifestyle, Society, Education) are ignored, and Religion on Hindu/other videos doesn't count as Islamic.
+- **AI labels for old guesses** (`ai-cats.json`): a one-off pass in November 2026 where Claude Haiku read the title, description and tags of every guessed Short and wrote its categories, or nothing when even it couldn't tell. The fetch uses a label **only for a Short the rules could only guess**, never over a clear keyword hit, and your own fixes still win. No API key is involved: it was run from a Claude Code session, not by the app. New Shorts after that date are sorted by the rules only; to label them, ask Claude Code to "redo the AI labels for guessed Shorts" (export guessed Shorts → Haiku labels them → merge into `ai-cats.json`).
 - **Language** is separate: Bengali/Devanagari/Urdu letters, then Roman Bangla/Hindi words, then the channel's language.
 
 **Fixing mistakes** (your answer always wins and syncs to your other devices as a `catFix` op):
