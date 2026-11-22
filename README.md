@@ -369,6 +369,13 @@ npx wrangler deploy                      # prints the Worker address (https://re
 ```
 `npx wrangler logout` removes the Cloudflare login from this PC.
 
+**Automatic deploys** (`.github/workflows/worker.yml`): every push to `main` that changes `worker/` type-checks and deploys the Worker — no need to run `wrangler deploy` by hand. Also runnable from Actions → *Deploy sync Worker* → Run workflow. One-time setup:
+1. Cloudflare dashboard → My Profile → API Tokens → **Create Token** → template **Edit Cloudflare Workers** → Account Resources: your account; Zone Resources: *All zones* is fine (the Worker uses no zone) → Create. Copy the token (shown once).
+2. GitHub `reel-feed` → Settings → Secrets and variables → Actions → **New repository secret** → name `CLOUDFLARE_API_TOKEN`, paste the token.
+3. Only if the token covers more than one Cloudflare account: add a repo **variable** `CLOUDFLARE_ACCOUNT_ID` (dashboard → Workers & Pages → Account ID on the right).
+
+The Worker's secrets (`GITHUB_TOKEN`, `APP_PASSWORD`, …) stay in Cloudflare and survive every deploy; secrets are still set by hand with `wrangler secret put`.
+
 **Forgot the app password?** Nothing is lost (data is in GitHub). Reset it: Cloudflare dashboard → Workers & Pages → `reel-feed-sync` → Settings → Variables and Secrets → edit `APP_PASSWORD`, or `npx wrangler secret put APP_PASSWORD`. All devices log out; log in again. Devices already logged in keep working until you reset.
 
 ---
@@ -381,6 +388,7 @@ npx wrangler deploy                      # prints the Worker address (https://re
 - [ ] Revoke the token that was pasted in chat; create a new fine-grained token (settings in §4)
 - [x] `wrangler login` + set `GITHUB_TOKEN`, `APP_PASSWORD`, `SESSION_SECRET`
 - [x] `npx wrangler deploy` → `https://reel-feed-sync.robiulhr2201.workers.dev`
+- [ ] Repo secret `CLOUDFLARE_API_TOKEN` for automatic Worker deploys (§8 → Automatic deploys)
 - [x] GitHub repo `reel-feed` → Settings → Pages → Source: **GitHub Actions**
 - [x] Repo secret `YOUTUBE_API_KEY` (Settings → Secrets and variables → Actions → Secrets)
 - [x] Repo variable `SYNC_URL` = Worker address (same page → Variables)
