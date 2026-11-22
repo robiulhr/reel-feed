@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CAT_IDS, CATEGORIES, detectLang, normCats } from "../../src/categories";
+import { CAT_IDS, CATEGORIES, detectLang, groupOf, normCats } from "../../src/categories";
 import { channelNoise, channelPrior, ownBrand, pickCats, textScores, type VideoText, withAiLabel } from "../../src/classify";
 import { parse } from "../../src/data";
 import { buildQueue, videoCats } from "../../src/rank";
@@ -70,6 +70,14 @@ describe("sorting a Short into categories", () => {
     expect(r.cats[0]).toBe("brandads");
     expect(r.guessed).toBe(false);
     expect(ownBrand(sort({ title: "Meta ads mistakes" }), ["marketing"]).cats).toEqual(["ads"]);
+  });
+
+  it("a company channel (Ghorerbazar, NVIDIA…): its Shorts go under Company Channels, in Brands & Companies", () => {
+    const r = ownBrand(sort({ title: "Meta ads mistakes" }), ["brandch", "ai"]);
+    expect(r.cats[0]).toBe("brandch");
+    expect(r.cats).toContain("ads");
+    expect(groupOf("brandch")).toBe("brands");
+    expect(groupOf("comedy")).toBe("fun");
   });
 
   it("an AI label replaces only a guess, never words the rules were sure of", () => {

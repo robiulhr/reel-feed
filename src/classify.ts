@@ -26,6 +26,8 @@ const CLOSE: [CatId, CatId][] = [
   ["marketing", "creative"],
   ["marketing", "brandads"],
   ["brandads", "brandfun"],
+  ["brandch", "brandads"],
+  ["brandch", "marketing"],
   ["brandfun", "comedy"],
   ["workfun", "comedy"],
   ["workfun", "career"],
@@ -147,6 +149,8 @@ const LEX: Record<CatId, string[]> = {
     "brilliant ad", "genius ad", "clever ad", "ads that", "this ad", "the ad", "ad by", "advertising", "campaign by",
     "টিভিসি", "বিজ্ঞাপনটি", "অ্যাডটি", "এডটি", "বিলবোর্ড", "বিজ্ঞাপন", "অ্যাড ক্যাম্পেইন",
   ],
+  // Only a company's own channel puts a Short here (see ownBrand) — no words for it.
+  brandch: [],
   brandfun: [
     "meme", "brand meme", "marketing meme", "brands be like", "savage reply", "brand trolls", "moment marketing",
     "~parody", "duolingo", "zomato", "ryanair", "brand twitter", "~relatable", "~pov", "funny brand",
@@ -401,13 +405,18 @@ export function pickCats(text: Scores, prior: Prior): Sorted {
   return { cats: [p[0][0]], guessed: true };
 }
 
+/** Categories a channel can claim for everything it posts (when listed first in channels.json). */
+const OWN_CATS: readonly CatId[] = ["brandch", "brandads"];
+
 /**
- * A brand's own channel (Banglalink, Grameenphone…): whatever it posts is that brand's advertising, so
- * "Famous Brand Ads" is the main category of every Short, sure — the words only add the other categories.
+ * A company's own channel (Banglalink, Ghorerbazar…) or a brand-ads channel: whatever it posts is that
+ * brand's advertising, so its first category is the main category of every Short, sure — the words only
+ * add the other categories.
  */
 export function ownBrand(sorted: Sorted, userCats: readonly CatId[]): Sorted {
-  if (userCats[0] !== "brandads") return sorted;
-  return { cats: ["brandads" as CatId, ...sorted.cats.filter((c) => c !== "brandads")].slice(0, 3), guessed: false };
+  const own = userCats[0];
+  if (!own || !OWN_CATS.includes(own)) return sorted;
+  return { cats: [own, ...sorted.cats.filter((c) => c !== own)].slice(0, 3), guessed: false };
 }
 
 /**
