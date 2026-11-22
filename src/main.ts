@@ -42,6 +42,8 @@ import { initGestures } from "./gestures";
 import { initFullscreen } from "./fullscreen";
 import { currentPanelTab, initPanels, renderControls, renderPanel, showTipsIfNew } from "./panels";
 import { applyNetwork } from "./network";
+import { applyCurrent, startRouter } from "./router";
+import { playLinked, showRoute } from "./routes";
 
 /** Background sync brought changes from another device. */
 function onSyncUpdate() {
@@ -64,6 +66,8 @@ async function boot() {
   pool.setRate(state.rate ?? 1);
   pool.setVolume(state.volume ?? 100);
   sync.startSync(onSyncUpdate);
+  const opened = startRouter(showRoute); // the address the app was opened on (shared link, refresh)
+  let wantShort = opened.k === "feed" ? opened.v : undefined;
   onNetworkChange(() => applyNetwork());
 
   const t0 = performance.now();
@@ -74,6 +78,9 @@ async function boot() {
         setData(full, true);
         updatePeeks();
       } else offerData(full);
+      // a linked Short that wasn't in the quick starter library
+      if (wantShort && !playLinked(wantShort)) toast("That Short isn't in the library any more");
+      wantShort = undefined;
     },
     (msg) => toast(msg),
   );
@@ -89,7 +96,16 @@ async function boot() {
   }
   setData(first.ds, false);
   initChannels(channelsCtx());
-  next();
+  const linked = !!wantShort;
+  if (wantShort && playLinked(wantShort)) wantShort = undefined;
+  else {
+    next();
+    if (wantShort && first.source !== "starter") {
+      toast("That Short isn't in the library any more");
+      wantShort = undefined;
+    }
+  }
+  if (opened.k !== "feed") applyCurrent(); // opened on a menu page / channel / More like this
   console.info(`First video in ${Math.round(performance.now() - t0)} ms (from ${first.source})`);
 
   showTipsIfNew();
@@ -99,7 +115,7 @@ async function boot() {
 
   // Continue where you left off
   const last = state.hist[0];
-  if (last && nowSec() - last.at < 24 * 3600 && last.f < 0.9 && last.id !== feed.cur?.id) {
+  if (!linked && last && nowSec() - last.at < 24 * 3600 && last.f < 0.9 && last.id !== feed.cur?.id) {
     const s = savedShort(last.id);
     if (s) toast(`Continue “${s.t.slice(0, 40)}${s.t.length > 40 ? "…" : ""}”?`, { label: "Resume", run: () => playNow(s) }, 7000);
   }
@@ -123,7 +139,7 @@ function registerServiceWorker() {
   const hadController = !!navigator.serviceWorker.controller;
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./sw.js", { updateViaCache: "none" })
+      .register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL, updateViaCache: "none" })
       .then((reg) => {
         const check = () => reg.update().catch(() => {});
         document.addEventListener("visibilitychange", () => {

@@ -20,10 +20,10 @@ import { playback, pool } from "./player";
 import {
   app,
   channelsCtx,
-  exitList,
   exploreCurrent,
   feed,
   hideChannel,
+  leaveList,
   onFeedChange,
   playList,
   renderMeta,
@@ -37,22 +37,51 @@ import { renderAbout, renderBackups, renderSyncPanel } from "./settings";
 import { undoable } from "./backup";
 import { toast } from "./ui";
 import type { Short, Tab, Win } from "./types";
+import { dismiss, go, pushLayer, type Route, toPath } from "./router";
 
 // ---------- overlays ----------
-const pageModal = modal(els.page, { label: "Page", onRequestClose: () => closePage(), focus: () => els.pageClose });
+// ✕, Esc and tapping outside are the same as Back (router.dismiss); the router then closes it.
+const pageModal = modal(els.page, { label: "Page", onRequestClose: () => dismiss(), focus: () => els.pageClose });
 const panelModal = modal(els.panel, {
   label: "Menu",
-  onRequestClose: () => closePanel(),
+  onRequestClose: () => dismiss(),
   focus: () => els.ptabs.querySelector<HTMLElement>("button.on"),
 });
-const sheetModal = modal(els.moreSheet, { label: "More options", onRequestClose: () => sheetModal.close() });
-const tipsModal = modal(els.tips, { label: "Quick tips", onRequestClose: () => closeTips(), focus: () => els.tipsOk });
+const sheetModal = layered(modal(els.moreSheet, { label: "More options", onRequestClose: () => sheetModal.close() }));
+const tipsModal = layered(modal(els.tips, { label: "Quick tips", onRequestClose: () => closeTips(), focus: () => els.tipsOk }), () =>
+  closeTips(),
+);
 
-/** Full-screen page over the feed (channel page, More like this). */
-export function openPage(title: string, render: (body: HTMLElement) => void) {
+/** A sheet that Back closes: opening it adds a Back step, closing it takes the step out again. */
+function layered<M extends { open(): void; close(): void; isOpen(): boolean }>(m: M, onBack = () => m.close()): M {
+  const open = m.open.bind(m);
+  const close = m.close.bind(m);
+  let closed: (() => void) | null = null;
+  m.open = () => {
+    if (!m.isOpen()) closed = pushLayer(() => (m.isOpen() ? onBack() : undefined));
+    open();
+  };
+  m.close = () => {
+    close();
+    closed?.();
+    closed = null;
+  };
+  return m;
+}
+
+/** The page on screen (its address), so Back only re-draws a page that isn't showing already. */
+let shownPage = "";
+export const shownPagePath = () => (pageModal.isOpen() ? shownPage : "");
+
+/** Full-screen page over the feed (channel page, More like this). `route` = its address. */
+export function openPage(title: string, render: (body: HTMLElement) => void, route?: Route) {
   if (playback.playing) pool.pause();
   panelModal.close();
   sheetModal.close();
+  if (route) {
+    go(route);
+    shownPage = toPath(route);
+  }
   els.pageTitle.textContent = title;
   els.page.setAttribute("aria-label", title);
   els.pageBody.replaceChildren();
@@ -60,13 +89,15 @@ export function openPage(title: string, render: (body: HTMLElement) => void) {
   pageModal.open();
   render(els.pageBody);
 }
+/** Closes the page (no history step — the router or a new screen decides that). */
 export function closePage() {
   pageModal.close();
+  shownPage = "";
 }
 
 /** A list starts playing: get every overlay out of the way. */
 export function closeOverlaysForPlayback() {
-  pageModal.close();
+  closePage();
   panelModal.close();
   sheetModal.close();
 }
@@ -74,14 +105,20 @@ export function closeOverlaysForPlayback() {
 // ---------- menu panel ----------
 let panelTab = "history";
 export const currentPanelTab = () => panelTab;
+export const panelOpen = () => panelModal.isOpen();
 
 export function openPanel(tab = panelTab) {
+  const wasOpen = panelModal.isOpen();
   panelTab = tab;
   if (playback.playing) pool.pause();
+  closePage();
+  go({ k: "panel", tab }, { replace: wasOpen }); // switching tabs doesn't add Back steps
   renderPanel();
   panelModal.open();
 }
+/** Closes the menu (no history step — see dismiss()). */
 export function closePanel() {
+  if (!panelModal.isOpen()) return;
   panelModal.close();
   onFeedChange(); // skip the current Short if its channel was removed/hidden while the menu was open
 }
@@ -459,15 +496,15 @@ export function initPanels() {
   scrollArrows(els.tabs);
   scrollArrows(els.chips);
   scrollArrows(els.ptabs);
-  els.pageClose.onclick = closePage;
+  els.pageClose.onclick = dismiss;
   els.page.addEventListener("click", (e) => {
-    if (e.target === els.page) closePage();
+    if (e.target === els.page) dismiss();
   });
-  els.ctxBack.onclick = exitList;
+  els.ctxBack.onclick = leaveList;
   els.menuBtn.onclick = () => openPanel();
-  els.closePanel.onclick = closePanel;
+  els.closePanel.onclick = dismiss;
   els.panel.addEventListener("click", (e) => {
-    if (e.target === els.panel) closePanel();
+    if (e.target === els.panel) dismiss();
   });
   els.ptabs.addEventListener("click", (e) => {
     const p = (e.target as HTMLElement).closest("button")?.dataset.p;

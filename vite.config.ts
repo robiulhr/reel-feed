@@ -66,7 +66,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const syncUrl = process.env.VITE_SYNC_URL || env.VITE_SYNC_URL || "";
   return {
-    base: "./", // relative paths, so it can be hosted anywhere (e.g. GitHub Pages)
+    // Absolute paths, so files load from any page address (/saved, /channel/@x). "/" on Cloudflare;
+    // the GitHub Pages copy is built with BASE_PATH=/reel-feed/.
+    base: process.env.BASE_PATH || "/",
     server: { port: 5173, host: true },
     define: {
       // shown in Menu → About, so you can tell which version the app is running

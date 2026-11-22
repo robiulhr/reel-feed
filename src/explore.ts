@@ -121,241 +121,245 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
     : target.info!;
   const inLibrary = !!ch && ch.st !== "external" && ds.videos.some((v) => v.ch === chIndex);
 
-  app.openPage(info.name, (body) => {
-    const reopen = (s: Sort = sort) => openChannel(app, { chIndex, info }, s);
-    const status = listStatus(info.handle, info.id);
-    const preview = previews.get(info.id);
+  app.openPage(
+    info.name,
+    (body) => {
+      const reopen = (s: Sort = sort) => openChannel(app, { chIndex, info }, s);
+      const status = listStatus(info.handle, info.id);
+      const preview = previews.get(info.id);
 
-    // ---- header
-    const head = el("div", "cp-head");
-    const avatar = el("img", "cp-avatar") as HTMLImageElement;
-    avatar.alt = "";
-    if (info.thumb || preview?.channel.thumb) avatar.src = info.thumb || preview!.channel.thumb;
-    const meta = el("div", "cp-meta");
-    const name = el("a", "cp-name", info.name) as HTMLAnchorElement;
-    name.href = ytUrl(info.handle, info.id);
-    name.target = "_blank";
-    name.rel = "noopener";
-    const pill = el(
-      "span",
-      `pill st-${status === "listed" ? "active" : status === "removed" ? "removed" : "pending"}`,
-      status === "listed" ? "In your list" : status === "removed" ? "Removed" : "Not in your list",
-    );
-    const hidden = state.hidden.some((h) => h.toLowerCase() === info.handle.toLowerCase());
-    const titleRow = el("div", "cp-title-row");
-    titleRow.append(name, pill);
-    if (hidden) titleRow.append(el("span", "pill st-hidden", "Hidden"));
-    const libCount = inLibrary ? ds.videos.filter((v) => v.ch === chIndex).length : 0;
-    const stats = [info.handle, `${app.fmt(info.subs || preview?.channel.subs || 0)} subs`];
-    if (inLibrary) stats.push(`${libCount} Shorts in your feed`);
-    else if (preview) stats.push(`${app.fmt(preview.channel.shorts)} Shorts`);
-    if (ch?.last) stats.push(`latest ${app.ago(ch.last)}`);
-    meta.append(titleRow, el("div", "cp-sub", stats.join(" · ")));
-    const mix = mixText(ch);
-    if (mix) meta.append(el("div", "cp-sub", mix));
-    head.append(avatar, meta);
-    body.append(head);
-
-    // ---- actions
-    const actions = el("div", "cp-actions");
-    let addError: HTMLElement | null = null;
-    if (status === "listed") {
-      const cats = ch?.cats ?? [];
-      const cat = btn(`🏷 ${catSummary(cats)}`, async () => {
-        if (await editChannelCats(info.handle, info.name, cats)) reopen();
-      });
-      cat.setAttribute("aria-label", `Categories: ${cats.map(catLabel).join(", ") || "none"}. Change`);
-      actions.append(
-        cat,
-        btn(hidden ? "Unhide" : "Hide", () => {
-          act({ t: hidden ? "unhide" : "hide", h: info.handle });
-          app.onFeedChange();
-          reopen();
-        }),
-        btn(
-          "Remove",
-          async () => {
-            if (await removeByHandle(info.handle, info.name)) reopen();
-          },
-          "btn sm danger",
-        ),
+      // ---- header
+      const head = el("div", "cp-head");
+      const avatar = el("img", "cp-avatar") as HTMLImageElement;
+      avatar.alt = "";
+      if (info.thumb || preview?.channel.thumb) avatar.src = info.thumb || preview!.channel.thumb;
+      const meta = el("div", "cp-meta");
+      const name = el("a", "cp-name", info.name) as HTMLAnchorElement;
+      name.href = ytUrl(info.handle, info.id);
+      name.target = "_blank";
+      name.rel = "noopener";
+      const pill = el(
+        "span",
+        `pill st-${status === "listed" ? "active" : status === "removed" ? "removed" : "pending"}`,
+        status === "listed" ? "In your list" : status === "removed" ? "Removed" : "Not in your list",
       );
-    } else if (status === "removed") {
-      actions.append(
-        btn(
-          "Restore to my list",
+      const hidden = state.hidden.some((h) => h.toLowerCase() === info.handle.toLowerCase());
+      const titleRow = el("div", "cp-title-row");
+      titleRow.append(name, pill);
+      if (hidden) titleRow.append(el("span", "pill st-hidden", "Hidden"));
+      const libCount = inLibrary ? ds.videos.filter((v) => v.ch === chIndex).length : 0;
+      const stats = [info.handle, `${app.fmt(info.subs || preview?.channel.subs || 0)} subs`];
+      if (inLibrary) stats.push(`${libCount} Shorts in your feed`);
+      else if (preview) stats.push(`${app.fmt(preview.channel.shorts)} Shorts`);
+      if (ch?.last) stats.push(`latest ${app.ago(ch.last)}`);
+      meta.append(titleRow, el("div", "cp-sub", stats.join(" · ")));
+      const mix = mixText(ch);
+      if (mix) meta.append(el("div", "cp-sub", mix));
+      head.append(avatar, meta);
+      body.append(head);
+
+      // ---- actions
+      const actions = el("div", "cp-actions");
+      let addError: HTMLElement | null = null;
+      if (status === "listed") {
+        const cats = ch?.cats ?? [];
+        const cat = btn(`🏷 ${catSummary(cats)}`, async () => {
+          if (await editChannelCats(info.handle, info.name, cats)) reopen();
+        });
+        cat.setAttribute("aria-label", `Categories: ${cats.map(catLabel).join(", ") || "none"}. Change`);
+        actions.append(
+          cat,
+          btn(hidden ? "Unhide" : "Hide", () => {
+            act({ t: hidden ? "unhide" : "hide", h: info.handle });
+            app.onFeedChange();
+            reopen();
+          }),
+          btn(
+            "Remove",
+            async () => {
+              if (await removeByHandle(info.handle, info.name)) reopen();
+            },
+            "btn sm danger",
+          ),
+        );
+      } else if (status === "removed") {
+        actions.append(
+          btn(
+            "Restore to my list",
+            async () => {
+              if (await restoreByHandle(info.handle, info.name)) reopen();
+            },
+            "btn sm primary",
+          ),
+        );
+      } else {
+        const key = info.id || info.handle;
+        if (!addPick.has(key) || (!addPick.get(key)!.length && preview))
+          addPick.set(key, normCats(info.suggestedCats ?? preview?.channel.suggestedCats, preview?.channel.suggestedCat));
+        const picked = () => addPick.get(key) ?? [];
+        const cat = btn(`🏷 ${catSummary(picked(), "Pick categories")}`, async () => {
+          const cats = await pickCategories({ title: `Categories for ${info.name}`, current: picked() });
+          if (cats) {
+            addPick.set(key, cats);
+            cat.textContent = `🏷 ${catSummary(cats)}`;
+          }
+        });
+        cat.setAttribute("aria-label", `Categories: ${catSummary(picked())}. Change`);
+        const err = el("p", "ch-note warn", "");
+        const addBtn = btn(
+          "+ Add to my list",
           async () => {
-            if (await restoreByHandle(info.handle, info.name)) reopen();
+            if (!picked().length) {
+              err.textContent = "Pick at least one category first";
+              return;
+            }
+            addBtn.disabled = true;
+            addBtn.textContent = "Adding…";
+            if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cats: picked() })) {
+              reopen();
+              return;
+            }
+            addBtn.disabled = false;
+            addBtn.textContent = "+ Add to my list";
+            err.textContent = `Not added: ${lastChangeError}`;
           },
           "btn sm primary",
-        ),
-      );
-    } else {
-      const key = info.id || info.handle;
-      if (!addPick.has(key) || (!addPick.get(key)!.length && preview))
-        addPick.set(key, normCats(info.suggestedCats ?? preview?.channel.suggestedCats, preview?.channel.suggestedCat));
-      const picked = () => addPick.get(key) ?? [];
-      const cat = btn(`🏷 ${catSummary(picked(), "Pick categories")}`, async () => {
-        const cats = await pickCategories({ title: `Categories for ${info.name}`, current: picked() });
-        if (cats) {
-          addPick.set(key, cats);
-          cat.textContent = `🏷 ${catSummary(cats)}`;
+        );
+        actions.append(cat, addBtn);
+        addError = err;
+      }
+      body.append(actions);
+      if (addError) body.append(addError);
+
+      // ---- Shorts
+      let items: Short[] = [];
+      if (inLibrary) {
+        items = ds.videos.filter((v) => v.ch === chIndex);
+      } else if (preview) {
+        const idx = app.ensureChannel({ ...info, thumb: info.thumb || preview.channel.thumb, subs: info.subs || preview.channel.subs });
+        items = preview.shorts.map((s) => ({ ...s, ch: idx, o: 0, e: 0, tr: 0, r: 0, k: [], lg: detectLang(s.t), g: true }));
+      } else {
+        const box = el("div", "cp-load");
+        box.append(
+          el("p", "ch-note", "This channel isn't in your feed data, so its Shorts are loaded from YouTube when you ask."),
+          el("p", "ch-note", `Cost: ~${COST.preview} units — free if it was opened in the last 24 hours on any of your devices.`),
+        );
+        const go = btn(
+          `Load Shorts · ~${COST.preview} units`,
+          async () => {
+            if (!sync.isConnected()) {
+              app.toast("Log in first (Menu → Sync)");
+              return;
+            }
+            if (!info.id) {
+              app.toast("Unknown channel ID");
+              return;
+            }
+            if (!(await confirmCost({ title: `Load ${info.name}'s Shorts`, cost: COST.preview }))) return;
+            go.disabled = true;
+            go.textContent = "Loading…";
+            try {
+              const r = await sync.call<PreviewResponse>("/channel-shorts", { method: "POST", body: JSON.stringify({ id: info.id }) });
+              previews.set(info.id, r);
+              noteSpend(r.units, `Channel preview: ${info.name}`, r.quota);
+              app.toast(spendToast(r.units, r.quota, r.cached));
+              reopen();
+            } catch (e) {
+              app.toast(e instanceof Error ? e.message : "Couldn't load the channel");
+              go.disabled = false;
+              go.textContent = `Load Shorts · ~${COST.preview} units`;
+            }
+          },
+          "btn primary",
+        );
+        box.append(go);
+        body.append(box);
+        return;
+      }
+
+      if (!items.length) {
+        body.append(el("p", "ch-note", "No Shorts to show for this channel yet."));
+        return;
+      }
+
+      // ---- filters: category (only ones this channel has) + time range
+      if (pageFilter.handle !== info.handle) Object.assign(pageFilter, { handle: info.handle, cat: "", days: 0 });
+      const counts = new Map<CatId, number>();
+      for (const s of items) for (const c of videoCats(s, state)) counts.set(c, (counts.get(c) ?? 0) + 1);
+      const catsHere = [...counts].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]);
+      if (pageFilter.cat && !counts.has(pageFilter.cat)) pageFilter.cat = "";
+      const filters = el("div", "cp-filters");
+      let chipRow: HTMLElement | null = null;
+      if (catsHere.length > 1) {
+        const chips = el("div", "cp-chips");
+        chips.setAttribute("role", "group");
+        chips.setAttribute("aria-label", "Category");
+        for (const [id, label] of [["", "All"], ...catsHere.map(([c, n]) => [c, `${catInfo(c)?.short ?? c} · ${n}`])] as [
+          CatId | "",
+          string,
+        ][]) {
+          const b = btn(
+            label,
+            () => {
+              pageFilter.cat = id;
+              reopen(sort);
+            },
+            `chip${pageFilter.cat === id ? " on" : ""}`,
+          );
+          b.setAttribute("aria-pressed", String(pageFilter.cat === id));
+          chips.append(b);
         }
-      });
-      cat.setAttribute("aria-label", `Categories: ${catSummary(picked())}. Change`);
-      const err = el("p", "ch-note warn", "");
-      const addBtn = btn(
-        "+ Add to my list",
-        async () => {
-          if (!picked().length) {
-            err.textContent = "Pick at least one category first";
-            return;
-          }
-          addBtn.disabled = true;
-          addBtn.textContent = "Adding…";
-          if (await addFromInfo({ name: info.name, handle: info.handle, id: info.id, cats: picked() })) {
-            reopen();
-            return;
-          }
-          addBtn.disabled = false;
-          addBtn.textContent = "+ Add to my list";
-          err.textContent = `Not added: ${lastChangeError}`;
-        },
-        "btn sm primary",
+        chipRow = chips;
+      }
+      const period = el("select") as HTMLSelectElement;
+      period.setAttribute("aria-label", "Time range");
+      for (const [d, label] of PERIODS) period.append(new Option(label, String(d)));
+      period.value = String(pageFilter.days);
+      period.onchange = () => {
+        pageFilter.days = Number(period.value);
+        reopen(sort);
+      };
+      filters.append(period);
+      if (chipRow) filters.append(chipRow);
+      body.append(filters);
+      const now = Date.now() / 1000;
+      const shown = items.filter(
+        (s) =>
+          (!pageFilter.cat || videoCats(s, state).includes(pageFilter.cat)) && (!pageFilter.days || now - s.p <= pageFilter.days * 86400),
       );
-      actions.append(cat, addBtn);
-      addError = err;
-    }
-    body.append(actions);
-    if (addError) body.append(addError);
 
-    // ---- Shorts
-    let items: Short[] = [];
-    if (inLibrary) {
-      items = ds.videos.filter((v) => v.ch === chIndex);
-    } else if (preview) {
-      const idx = app.ensureChannel({ ...info, thumb: info.thumb || preview.channel.thumb, subs: info.subs || preview.channel.subs });
-      items = preview.shorts.map((s) => ({ ...s, ch: idx, o: 0, e: 0, tr: 0, r: 0, k: [], lg: detectLang(s.t), g: true }));
-    } else {
-      const box = el("div", "cp-load");
-      box.append(
-        el("p", "ch-note", "This channel isn't in your feed data, so its Shorts are loaded from YouTube when you ask."),
-        el("p", "ch-note", `Cost: ~${COST.preview} units — free if it was opened in the last 24 hours on any of your devices.`),
-      );
-      const go = btn(
-        `Load Shorts · ~${COST.preview} units`,
-        async () => {
-          if (!sync.isConnected()) {
-            app.toast("Log in first (Menu → Sync)");
-            return;
-          }
-          if (!info.id) {
-            app.toast("Unknown channel ID");
-            return;
-          }
-          if (!(await confirmCost({ title: `Load ${info.name}'s Shorts`, cost: COST.preview }))) return;
-          go.disabled = true;
-          go.textContent = "Loading…";
-          try {
-            const r = await sync.call<PreviewResponse>("/channel-shorts", { method: "POST", body: JSON.stringify({ id: info.id }) });
-            previews.set(info.id, r);
-            noteSpend(r.units, `Channel preview: ${info.name}`, r.quota);
-            app.toast(spendToast(r.units, r.quota, r.cached));
-            reopen();
-          } catch (e) {
-            app.toast(e instanceof Error ? e.message : "Couldn't load the channel");
-            go.disabled = false;
-            go.textContent = `Load Shorts · ~${COST.preview} units`;
-          }
-        },
-        "btn primary",
-      );
-      box.append(go);
-      body.append(box);
-      return;
-    }
-
-    if (!items.length) {
-      body.append(el("p", "ch-note", "No Shorts to show for this channel yet."));
-      return;
-    }
-
-    // ---- filters: category (only ones this channel has) + time range
-    if (pageFilter.handle !== info.handle) Object.assign(pageFilter, { handle: info.handle, cat: "", days: 0 });
-    const counts = new Map<CatId, number>();
-    for (const s of items) for (const c of videoCats(s, state)) counts.set(c, (counts.get(c) ?? 0) + 1);
-    const catsHere = [...counts].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]);
-    if (pageFilter.cat && !counts.has(pageFilter.cat)) pageFilter.cat = "";
-    const filters = el("div", "cp-filters");
-    let chipRow: HTMLElement | null = null;
-    if (catsHere.length > 1) {
-      const chips = el("div", "cp-chips");
-      chips.setAttribute("role", "group");
-      chips.setAttribute("aria-label", "Category");
-      for (const [id, label] of [["", "All"], ...catsHere.map(([c, n]) => [c, `${catInfo(c)?.short ?? c} · ${n}`])] as [
-        CatId | "",
-        string,
-      ][]) {
+      const tabs = el("div", "cp-tabs");
+      const labels: [Sort, string][] = [
+        ["newest", "Newest"],
+        ["popular", "Most viewed"],
+        ["gems", "Breakouts"],
+      ];
+      for (const [k, label] of labels) {
         const b = btn(
           label,
           () => {
-            pageFilter.cat = id;
-            reopen(sort);
+            sortPref = k;
+            reopen(k);
           },
-          `chip${pageFilter.cat === id ? " on" : ""}`,
+          `cp-tab${k === sort ? " on" : ""}`,
         );
-        b.setAttribute("aria-pressed", String(pageFilter.cat === id));
-        chips.append(b);
+        tabs.append(b);
       }
-      chipRow = chips;
-    }
-    const period = el("select") as HTMLSelectElement;
-    period.setAttribute("aria-label", "Time range");
-    for (const [d, label] of PERIODS) period.append(new Option(label, String(d)));
-    period.value = String(pageFilter.days);
-    period.onchange = () => {
-      pageFilter.days = Number(period.value);
-      reopen(sort);
-    };
-    filters.append(period);
-    if (chipRow) filters.append(chipRow);
-    body.append(filters);
-    const now = Date.now() / 1000;
-    const shown = items.filter(
-      (s) =>
-        (!pageFilter.cat || videoCats(s, state).includes(pageFilter.cat)) && (!pageFilter.days || now - s.p <= pageFilter.days * 86400),
-    );
-
-    const tabs = el("div", "cp-tabs");
-    const labels: [Sort, string][] = [
-      ["newest", "Newest"],
-      ["popular", "Most viewed"],
-      ["gems", "Breakouts"],
-    ];
-    for (const [k, label] of labels) {
-      const b = btn(
-        label,
-        () => {
-          sortPref = k;
-          reopen(k);
-        },
-        `cp-tab${k === sort ? " on" : ""}`,
-      );
-      tabs.append(b);
-    }
-    const { list, ratio } = sortShorts(shown, sort);
-    const what = [labels.find(([k]) => k === sort)![1], pageFilter.cat ? catLabel(pageFilter.cat) : ""].filter(Boolean).join(" · ");
-    const play = (i: number) => app.playList(`${info.name} · ${what}`, list, i, () => reopen(sort));
-    tabs.append(btn("▶ Play all", () => play(0), "btn sm primary cp-playall"));
-    body.append(tabs);
-    if (sort === "gems")
-      body.append(el("p", "ch-note", "Shorts that got far more views than this channel's typical Short (×N = times its usual)."));
-    if (!list.length) {
-      body.append(el("p", "ch-note", "No Shorts match these filters."));
-      return;
-    }
-    if (preview && !inLibrary)
-      body.append(el("p", "ch-note", `Loaded ${app.ago(preview.fetchedAt)} · newest ${preview.shorts.length} Shorts`));
-    body.append(shortGrid(app, list, play, { badge: sort === "gems" ? (s) => `×${ratio(s).toFixed(1)}` : undefined }));
-  });
+      const { list, ratio } = sortShorts(shown, sort);
+      const what = [labels.find(([k]) => k === sort)![1], pageFilter.cat ? catLabel(pageFilter.cat) : ""].filter(Boolean).join(" · ");
+      const play = (i: number) => app.playList(`${info.name} · ${what}`, list, i, () => reopen(sort));
+      tabs.append(btn("▶ Play all", () => play(0), "btn sm primary cp-playall"));
+      body.append(tabs);
+      if (sort === "gems")
+        body.append(el("p", "ch-note", "Shorts that got far more views than this channel's typical Short (×N = times its usual)."));
+      if (!list.length) {
+        body.append(el("p", "ch-note", "No Shorts match these filters."));
+        return;
+      }
+      if (preview && !inLibrary)
+        body.append(el("p", "ch-note", `Loaded ${app.ago(preview.fetchedAt)} · newest ${preview.shorts.length} Shorts`));
+      body.append(shortGrid(app, list, play, { badge: sort === "gems" ? (s) => `×${ratio(s).toFixed(1)}` : undefined }));
+    },
+    { k: "channel", h: info.handle || info.id },
+  );
 }

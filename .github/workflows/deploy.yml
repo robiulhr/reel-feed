@@ -92,6 +92,9 @@ jobs:
         env:
           # Address of the sync Worker (repo Settings → Secrets and variables → Actions → Variables)
           VITE_SYNC_URL: ${{ vars.SYNC_URL }}
+          BASE_PATH: /reel-feed/ # GitHub Pages serves the app from this folder
+      # GitHub Pages has no "any address → the app" setting; its 404 page doing that is the usual trick
+      - run: cp dist/index.html dist/404.html
 
       - uses: actions/upload-pages-artifact@v5
         with:

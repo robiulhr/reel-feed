@@ -14,6 +14,7 @@ import { banner, els, setThumb, showEmpty, showSpinner, thumb } from "./view";
 import { playback, playerHooks, pool, resetWatch, stopClock } from "./player";
 import { closeOverlaysForPlayback, closePage, openPage, renderControls } from "./panels";
 import type { AppApi, ExternalChannelInfo } from "./app";
+import { dismiss, go, inList, setFeed } from "./router";
 import type { Dataset, Short } from "./types";
 
 export const feed = {
@@ -142,11 +143,16 @@ export function playList(title: string, items: Short[], start: number, onBack?: 
   finishCurrent();
   closeOverlaysForPlayback();
   feed.ctx = { title, items, i: Math.max(0, Math.min(start, items.length - 1)), onBack };
+  go({ k: "feed", v: feed.ctx.items[feed.ctx.i].id }, { list: true }); // Back leaves the list
   renderCtxBar();
   show(feed.ctx.items[feed.ctx.i]);
 }
 
-export function exitList() {
+/**
+ * Back to the main feed. `reopen`: also re-open where the list came from (Back does that by itself —
+ * the screen underneath comes back — so it's only needed when there's no Back step).
+ */
+export function exitList(reopen = true) {
   if (!feed.ctx) return;
   const back = feed.ctx.onBack;
   finishCurrent();
@@ -154,7 +160,13 @@ export function exitList() {
   renderCtxBar();
   if (feed.history[feed.idx]) show(feed.history[feed.idx]);
   else next();
-  back?.();
+  if (reopen) back?.();
+}
+
+/** ← in the list bar / Esc: same as Back. */
+export function leaveList() {
+  if (inList()) dismiss();
+  else exitList();
 }
 
 function renderCtxBar() {
@@ -213,6 +225,7 @@ function show(s: Short) {
   renderMeta();
   renderSave();
   if (feed.ctx) renderCtxBar();
+  setFeed(s.id); // the address follows the Short on screen (refresh / share keeps it)
   announce(`${ch?.n ? `${ch.n}: ` : ""}${s.t}`);
 
   state.lastActive = Math.floor(nowSec());

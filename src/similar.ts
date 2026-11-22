@@ -340,196 +340,202 @@ const searches = new Map<string, SearchResponse>(); // by source Short id (this 
 const queries = new Map<string, string>();
 
 export function openSimilar(app: AppApi, s: Short, tab: "feed" | "youtube" = "feed") {
-  app.openPage("More like this", (body) => {
-    const reopen = (t: "feed" | "youtube" = tab) => openSimilar(app, s, t);
+  app.openPage(
+    "More like this",
+    (body) => {
+      const reopen = (t: "feed" | "youtube" = tab) => openSimilar(app, s, t);
 
-    // source Short
-    const src = el("div", "sim-src");
-    const img = el("img") as HTMLImageElement;
-    img.alt = "";
-    app.thumb(img, s.id);
-    const txt = el("div", "sim-src-txt");
-    txt.append(el("div", "sim-src-title", s.t), el("div", "ch-note", app.ds.channels[s.ch]?.n ?? ""));
-    src.append(img, txt);
-    body.append(src);
+      // source Short
+      const src = el("div", "sim-src");
+      const img = el("img") as HTMLImageElement;
+      img.alt = "";
+      app.thumb(img, s.id);
+      const txt = el("div", "sim-src-txt");
+      txt.append(el("div", "sim-src-title", s.t), el("div", "ch-note", app.ds.channels[s.ch]?.n ?? ""));
+      src.append(img, txt);
+      body.append(src);
 
-    const lib = similarInLibrary(app, s);
-    const tabs = el("div", "cp-tabs");
-    tabs.append(
-      btn(`In your feed (${lib.length}) · free`, () => reopen("feed"), `cp-tab${tab === "feed" ? " on" : ""}`),
-      btn("On YouTube", () => reopen("youtube"), `cp-tab${tab === "youtube" ? " on" : ""}`),
-    );
-    body.append(tabs);
+      const lib = similarInLibrary(app, s);
+      const tabs = el("div", "cp-tabs");
+      tabs.append(
+        btn(`In your feed (${lib.length}) · free`, () => reopen("feed"), `cp-tab${tab === "feed" ? " on" : ""}`),
+        btn("On YouTube", () => reopen("youtube"), `cp-tab${tab === "youtube" ? " on" : ""}`),
+      );
+      body.append(tabs);
 
-    if (tab === "feed") {
-      if (!lib.length) {
-        body.append(el("p", "ch-note", "No close matches in your library for this one. Try the On YouTube tab."));
+      if (tab === "feed") {
+        if (!lib.length) {
+          body.append(el("p", "ch-note", "No close matches in your library for this one. Try the On YouTube tab."));
+          return;
+        }
+        const list = lib.map((r) => r.short);
+        const play = (i: number) => app.playList("More like this", list, i, () => reopen("feed"));
+        body.append(btn("▶ Play all", () => play(0), "btn sm primary"));
+        body.append(
+          el("p", "ch-note", "Matched by topic words in the titles, then by how well each Short performed. Free — no API units."),
+        );
+        body.append(shortGrid(app, list, play, { showChannel: true }));
         return;
       }
-      const list = lib.map((r) => r.short);
-      const play = (i: number) => app.playList("More like this", list, i, () => reopen("feed"));
-      body.append(btn("▶ Play all", () => play(0), "btn sm primary"));
-      body.append(el("p", "ch-note", "Matched by topic words in the titles, then by how well each Short performed. Free — no API units."));
-      body.append(shortGrid(app, list, play, { showChannel: true }));
-      return;
-    }
 
-    // ---- On YouTube
-    const form = el("form", "ch-add-form");
-    const input = el("input") as HTMLInputElement;
-    input.value = queries.get(s.id) ?? suggestQuery(app, s);
-    input.placeholder = "Search words";
-    input.autocomplete = "off";
-    const go = btn(`Search · ~${COST.search} units`, () => {}, "btn sm primary");
-    go.type = "submit";
-    form.append(input, go);
-    body.append(form);
-    const hint = el(
-      "p",
-      "ch-note",
-      "These are the most distinctive words of this Short. Edit them to say what you're really looking for — specific words find better Shorts.",
-    );
-    const warn = el("p", "ch-note warn", "");
-    const updateWarn = () => {
-      warn.textContent = vagueWarning(input.value);
-    };
-    input.oninput = () => {
-      queries.set(s.id, input.value);
+      // ---- On YouTube
+      const form = el("form", "ch-add-form");
+      const input = el("input") as HTMLInputElement;
+      input.value = queries.get(s.id) ?? suggestQuery(app, s);
+      input.placeholder = "Search words";
+      input.autocomplete = "off";
+      const go = btn(`Search · ~${COST.search} units`, () => {}, "btn sm primary");
+      go.type = "submit";
+      form.append(input, go);
+      body.append(form);
+      const hint = el(
+        "p",
+        "ch-note",
+        "These are the most distinctive words of this Short. Edit them to say what you're really looking for — specific words find better Shorts.",
+      );
+      const warn = el("p", "ch-note warn", "");
+      const updateWarn = () => {
+        warn.textContent = vagueWarning(input.value);
+      };
+      input.oninput = () => {
+        queries.set(s.id, input.value);
+        updateWarn();
+      };
       updateWarn();
-    };
-    updateWarn();
-    body.append(hint, warn);
+      body.append(hint, warn);
 
-    const resultsBox = el("div");
-    body.append(resultsBox);
+      const resultsBox = el("div");
+      body.append(resultsBox);
 
-    const runSearch = async (q: string) => {
-      if (searching) return; // double tap — one search is already on its way
-      if (!sync.isConnected()) {
-        app.toast("Log in first (Menu → Sync)");
+      const runSearch = async (q: string) => {
+        if (searching) return; // double tap — one search is already on its way
+        if (!sync.isConnected()) {
+          app.toast("Log in first (Menu → Sync)");
+          return;
+        }
+        searching = true;
+        try {
+          await doSearch(q);
+        } finally {
+          searching = false;
+        }
+      };
+      const doSearch = async (q: string) => {
+        const quota = await getQuota();
+        const past = quota ? similarPastSearch(q, quota.recent) : null;
+        const free: { label: string; run: () => void }[] = [];
+        if (lib.length) free.push({ label: `${lib.length} similar Shorts from your own feed`, run: () => reopen("feed") });
+        const exact = !!past && past.norm === normQuery(q); // same words as a search from the last 7 days → free
+        if (past && !exact) {
+          free.push({ label: `Reuse your search "${past.q}" from ${app.ago(past.at)} (${past.n} results)`, run: () => runSearch(past.q) });
+        }
+        if (!exact) {
+          const ok = await confirmCost({
+            title: `Search YouTube for "${q}"`,
+            cost: COST.search,
+            alwaysAsk: true,
+            warning: vagueWarning(q) || undefined,
+            detail:
+              "Finds up to 25 Shorts on all of YouTube, mostly from channels you don't follow yet. Repeating this search within 7 days is free.",
+            free,
+          });
+          if (!ok) return;
+        }
+        go.disabled = true;
+        go.textContent = "Searching…";
+        try {
+          const r = await sync.call<SearchResponse>("/search-shorts", { method: "POST", body: JSON.stringify({ q }) });
+          searches.set(s.id, r);
+          noteSpend(r.units, `YouTube search "${q.slice(0, 60)}"`, r.quota);
+          app.toast(spendToast(r.units, r.quota, r.cached));
+          reopen("youtube");
+        } catch (e) {
+          app.toast(e instanceof Error ? e.message : "Search failed");
+          go.disabled = false;
+          go.textContent = `Search · ~${COST.search} units`;
+        }
+      };
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        if (input.value.trim()) runSearch(input.value.trim());
+      };
+
+      const res = searches.get(s.id);
+      if (!res) {
+        resultsBox.append(
+          el(
+            "p",
+            "ch-note",
+            `Nothing searched yet. Each new search costs ~${COST.search} of your daily units; the cost card shows your budget before anything is spent.`,
+          ),
+        );
         return;
       }
-      searching = true;
-      try {
-        await doSearch(q);
-      } finally {
-        searching = false;
-      }
-    };
-    const doSearch = async (q: string) => {
-      const quota = await getQuota();
-      const past = quota ? similarPastSearch(q, quota.recent) : null;
-      const free: { label: string; run: () => void }[] = [];
-      if (lib.length) free.push({ label: `${lib.length} similar Shorts from your own feed`, run: () => reopen("feed") });
-      const exact = !!past && past.norm === normQuery(q); // same words as a search from the last 7 days → free
-      if (past && !exact) {
-        free.push({ label: `Reuse your search "${past.q}" from ${app.ago(past.at)} (${past.n} results)`, run: () => runSearch(past.q) });
-      }
-      if (!exact) {
-        const ok = await confirmCost({
-          title: `Search YouTube for "${q}"`,
-          cost: COST.search,
-          alwaysAsk: true,
-          warning: vagueWarning(q) || undefined,
-          detail:
-            "Finds up to 25 Shorts on all of YouTube, mostly from channels you don't follow yet. Repeating this search within 7 days is free.",
-          free,
-        });
-        if (!ok) return;
-      }
-      go.disabled = true;
-      go.textContent = "Searching…";
-      try {
-        const r = await sync.call<SearchResponse>("/search-shorts", { method: "POST", body: JSON.stringify({ q }) });
-        searches.set(s.id, r);
-        noteSpend(r.units, `YouTube search "${q.slice(0, 60)}"`, r.quota);
-        app.toast(spendToast(r.units, r.quota, r.cached));
-        reopen("youtube");
-      } catch (e) {
-        app.toast(e instanceof Error ? e.message : "Search failed");
-        go.disabled = false;
-        go.textContent = `Search · ~${COST.search} units`;
-      }
-    };
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      if (input.value.trim()) runSearch(input.value.trim());
-    };
-
-    const res = searches.get(s.id);
-    if (!res) {
       resultsBox.append(
         el(
           "p",
           "ch-note",
-          `Nothing searched yet. Each new search costs ~${COST.search} of your daily units; the cost card shows your budget before anything is spent.`,
+          `${res.results.length} Shorts for "${res.q}" · ${res.cached ? "from cache, 0 units" : `${res.units} units`} · ${app.ago(res.fetchedAt)}`,
         ),
       );
-      return;
-    }
-    resultsBox.append(
-      el(
-        "p",
-        "ch-note",
-        `${res.results.length} Shorts for "${res.q}" · ${res.cached ? "from cache, 0 units" : `${res.units} units`} · ${app.ago(res.fetchedAt)}`,
-      ),
-    );
 
-    // channels found, most frequent first
-    const byCh = new Map<string, { ch: SearchResult["ch"]; n: number }>();
-    for (const r of res.results) {
-      const x = byCh.get(r.ch.id) ?? { ch: r.ch, n: 0 };
-      x.n++;
-      byCh.set(r.ch.id, x);
-    }
-    const chans = [...byCh.values()].sort((a, b) => b.n - a.n || b.ch.subs - a.ch.subs);
-    const chBox = el("div", "sim-chans");
-    chBox.append(el("div", "u-h", "Channels found"));
-    for (const { ch, n } of chans) {
-      const st = listStatus(ch.handle, ch.id);
-      const row = el("button", "sim-chan");
-      row.type = "button";
-      const a = el("img") as HTMLImageElement;
-      a.alt = "";
-      if (ch.thumb) a.src = ch.thumb;
-      const t = el("span", "sim-chan-name", ch.name || ch.handle);
-      const sub = el("span", "ch-note", `${n} Short${n === 1 ? "" : "s"} here · ${app.fmt(ch.subs)} subs`);
-      const tag = el(
-        "span",
-        `pill st-${st === "listed" ? "active" : st === "removed" ? "removed" : "pending"}`,
-        st === "listed" ? "In your list" : st === "removed" ? "Removed" : n >= 2 ? "Good candidate" : "New",
+      // channels found, most frequent first
+      const byCh = new Map<string, { ch: SearchResult["ch"]; n: number }>();
+      for (const r of res.results) {
+        const x = byCh.get(r.ch.id) ?? { ch: r.ch, n: 0 };
+        x.n++;
+        byCh.set(r.ch.id, x);
+      }
+      const chans = [...byCh.values()].sort((a, b) => b.n - a.n || b.ch.subs - a.ch.subs);
+      const chBox = el("div", "sim-chans");
+      chBox.append(el("div", "u-h", "Channels found"));
+      for (const { ch, n } of chans) {
+        const st = listStatus(ch.handle, ch.id);
+        const row = el("button", "sim-chan");
+        row.type = "button";
+        const a = el("img") as HTMLImageElement;
+        a.alt = "";
+        if (ch.thumb) a.src = ch.thumb;
+        const t = el("span", "sim-chan-name", ch.name || ch.handle);
+        const sub = el("span", "ch-note", `${n} Short${n === 1 ? "" : "s"} here · ${app.fmt(ch.subs)} subs`);
+        const tag = el(
+          "span",
+          `pill st-${st === "listed" ? "active" : st === "removed" ? "removed" : "pending"}`,
+          st === "listed" ? "In your list" : st === "removed" ? "Removed" : n >= 2 ? "Good candidate" : "New",
+        );
+        const txt2 = el("span", "sim-chan-txt");
+        txt2.append(t, sub);
+        row.append(a, txt2, tag);
+        row.onclick = () => openChannel(app, { info: ch });
+        chBox.append(row);
+      }
+      resultsBox.append(chBox);
+
+      const list: Short[] = res.results.map((r) => ({
+        id: r.id,
+        t: r.t,
+        p: r.p,
+        v: r.v,
+        l: r.l,
+        c: r.c,
+        o: 0,
+        e: 0,
+        tr: 0,
+        r: 0,
+        k: [],
+        lg: detectLang(r.t),
+        g: true,
+        ch: app.ensureChannel(r.ch),
+      }));
+      const play = (i: number) => app.playList(`YouTube: ${res.q}`, list, i, () => reopen("youtube"));
+      resultsBox.append(btn("▶ Play all", () => play(0), "btn sm primary"));
+      resultsBox.append(
+        shortGrid(app, list, play, {
+          showChannel: true,
+          badge: (sh) => (listStatus(app.ds.channels[sh.ch].h, app.ds.channels[sh.ch].id) === "listed" ? "" : "New channel"),
+        }),
       );
-      const txt2 = el("span", "sim-chan-txt");
-      txt2.append(t, sub);
-      row.append(a, txt2, tag);
-      row.onclick = () => openChannel(app, { info: ch });
-      chBox.append(row);
-    }
-    resultsBox.append(chBox);
-
-    const list: Short[] = res.results.map((r) => ({
-      id: r.id,
-      t: r.t,
-      p: r.p,
-      v: r.v,
-      l: r.l,
-      c: r.c,
-      o: 0,
-      e: 0,
-      tr: 0,
-      r: 0,
-      k: [],
-      lg: detectLang(r.t),
-      g: true,
-      ch: app.ensureChannel(r.ch),
-    }));
-    const play = (i: number) => app.playList(`YouTube: ${res.q}`, list, i, () => reopen("youtube"));
-    resultsBox.append(btn("▶ Play all", () => play(0), "btn sm primary"));
-    resultsBox.append(
-      shortGrid(app, list, play, {
-        showChannel: true,
-        badge: (sh) => (listStatus(app.ds.channels[sh.ch].h, app.ds.channels[sh.ch].id) === "listed" ? "" : "New channel"),
-      }),
-    );
-  });
+    },
+    { k: "similar", id: s.id },
+  );
 }

@@ -2,6 +2,7 @@
  * Player controls: play/pause, 10 s skip, the progress bar (drag to jump), speed, sound
  * (mute + volume), save, share, and refresh / "Get newer".
  */
+import { shareLink } from "./router";
 import { videoCats } from "./rank";
 import { act, learn, persist, state } from "./store";
 import { undoable } from "./backup";
@@ -235,7 +236,7 @@ async function shareCurrent() {
   const cur = feed.cur;
   if (!cur) return;
   const ch = feed.ds.channels[cur.ch];
-  const url = `https://youtube.com/shorts/${cur.id}`;
+  const url = shareLink(cur.id); // opens this Short in the app (anyone can open it)
   if (navigator.share) {
     try {
       await navigator.share({ title: cur.t, text: `${cur.t} — ${ch?.n ?? ""}`, url });

@@ -1,5 +1,6 @@
 /** What the feature modules (explore, similar) can ask the main app to do. */
 import type { CatId } from "./categories";
+import type { Route } from "./router";
 import type { Dataset, Short } from "./types";
 
 export interface ExternalChannelInfo {
@@ -18,7 +19,7 @@ export interface AppApi {
   fmt(n: number): string;
   thumb(img: HTMLImageElement, id: string): void;
   /** Full-screen page over the feed (channel page, More like this). */
-  openPage(title: string, render: (body: HTMLElement) => void): void;
+  openPage(title: string, render: (body: HTMLElement) => void, route?: Route): void;
   closePage(): void;
   /** Swipe through a list of Shorts; "← Back" returns to the main feed and then calls onBack. */
   playList(title: string, items: Short[], start: number, onBack?: () => void): void;

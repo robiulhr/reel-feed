@@ -6,6 +6,7 @@
  *  3. Update check: a tiny meta.json tells whether newer data was published. New data is
  *     downloaded in the background and offered with a "New Shorts available" banner.
  */
+import { BASE } from "./router";
 import { CAT_IDS, type CatId, detectLang, isCat, LANG_CODES, type Lang, normCats } from "./categories";
 import type { Channel, Dataset } from "./types";
 
@@ -142,13 +143,13 @@ export async function loadInitial(
 
   // First visit (or storage cleared): starter first, full in the background.
   try {
-    const starter = await getRetry<RawData>("data/starter.json", 6000);
+    const starter = await getRetry<RawData>(`${BASE}data/starter.json`, 6000);
     fetchFull(starter.generatedAt, onFull, onStatus);
     return { ds: parse(starter), source: "starter" };
   } catch {
     // no starter (old build) — fall back to the full file
     try {
-      const full = await getRetry<RawData>("data/shorts.json", 15000);
+      const full = await getRetry<RawData>(`${BASE}data/shorts.json`, 15000);
       idbSet(KEY, full);
       return { ds: parse(full), source: "full" };
     } catch {
@@ -162,7 +163,7 @@ async function fetchFull(baseVersion: number, onFull: (ds: Dataset, sameVersion:
   if (fetching) return;
   fetching = true;
   try {
-    const full = await getRetry<RawData>("data/shorts.json", 20000, 4);
+    const full = await getRetry<RawData>(`${BASE}data/shorts.json`, 20000, 4);
     await idbSet(KEY, full);
     onFull(parse(full), full.generatedAt === baseVersion);
   } catch {
@@ -178,9 +179,9 @@ async function fetchFull(baseVersion: number, onFull: (ds: Dataset, sameVersion:
  */
 export async function checkForUpdate(current: number, onNew: (ds: Dataset) => void): Promise<"new" | "same" | "offline"> {
   try {
-    const meta = await get<{ generatedAt: number }>("data/meta.json", 6000);
+    const meta = await get<{ generatedAt: number }>(`${BASE}data/meta.json`, 6000);
     if (meta.generatedAt <= current) return "same";
-    const full = await getRetry<RawData>("data/shorts.json", 20000, 3);
+    const full = await getRetry<RawData>(`${BASE}data/shorts.json`, 20000, 3);
     await idbSet(KEY, full);
     onNew(parse(full));
     return "new";

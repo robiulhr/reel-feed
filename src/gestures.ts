@@ -7,7 +7,7 @@ import { state } from "./store";
 import { anyModalOpen, reducedMotion } from "./a11y";
 import { els } from "./view";
 import { playback, pool } from "./player";
-import { exitList, exploreCurrent, feed, next, prev, upcoming } from "./feed";
+import { leaveList, exploreCurrent, feed, next, prev, upcoming } from "./feed";
 import { fasterRate, refreshFeed, setRate, setVolume, showVolume, skip, slowerRate, toggleMute, togglePlay, toggleSave } from "./controls";
 import { maybeAutoFull, toggleFull } from "./fullscreen";
 
@@ -201,7 +201,7 @@ function bindKeys() {
     // Space/Enter on a focused button presses that button, not play/pause
     const onControl = target.tagName === "BUTTON" || target.tagName === "A" || target.getAttribute("role") === "slider";
     if (e.key === "Escape" && feed.ctx) {
-      exitList();
+      leaveList();
       return;
     }
     switch (e.key) {

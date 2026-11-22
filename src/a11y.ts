@@ -6,6 +6,7 @@
  *  - announce(): tells screen readers about changes that aren't focused (e.g. the next Short).
  *  - reducedMotion(): respects the phone's "reduce motion" setting.
  */
+import { pushLayer } from "./router";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -139,6 +140,7 @@ export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)"
  * and put focus back where it was when it closes. Returns the cleanup function.
  */
 export function holdFocus(overlay: HTMLElement, box: HTMLElement, label: string, onEscape: () => void): () => void {
+  const closed = pushLayer(onEscape); // Back closes the dialog, like Esc
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-modal", "true");
   box.setAttribute("aria-label", label);
@@ -153,6 +155,7 @@ export function holdFocus(overlay: HTMLElement, box: HTMLElement, label: string,
   };
   document.addEventListener("keydown", onKey, true);
   return () => {
+    closed();
     document.removeEventListener("keydown", onKey, true);
     if (returnTo?.isConnected && !returnTo.closest("[hidden]")) returnTo.focus({ preventScroll: true });
   };
