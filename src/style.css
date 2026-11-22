@@ -278,6 +278,10 @@ h2 {
 .fb-slot.on {
   visibility: visible;
 }
+/* Facebook sets "visibility: visible" on its own frame, which would show through a hidden slot */
+.fb-slot:not(.on) iframe {
+  visibility: hidden !important;
+}
 .fb-wrap {
   max-height: 100%;
   overflow: hidden;

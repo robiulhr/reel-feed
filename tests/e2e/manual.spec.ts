@@ -13,6 +13,7 @@ const FAKE_FB = `
         var box = el.querySelector('.fb-video');
         var f = document.createElement('iframe');
         f.src = 'about:blank';
+        f.style.visibility = 'visible'; // like Facebook's own frame
         f.dataset.href = box.dataset.href;
         box.append(f);
         var subs = {};
@@ -20,7 +21,7 @@ const FAKE_FB = `
           href: box.dataset.href, playing: false, muted: true, t: 0,
           subscribe: function (n, fn) { (subs[n] = subs[n] || []).push(fn); return { release: function () {} }; },
           emit: function (n) { (subs[n] || []).forEach(function (fn) { fn(); }); },
-          play: function () { this.playing = true; this.emit('startedPlaying'); },
+          play: function () { var self = this; this.playing = true; this.emit('startedPlaying'); this.emit('startedBuffering'); setTimeout(function () { self.emit('finishedBuffering'); }, 50); },
           pause: function () { this.playing = false; this.emit('paused'); },
           mute: function () { this.muted = true; }, unmute: function () { this.muted = false; },
           setVolume: function () {}, seek: function (t) { this.t = t; },
@@ -88,6 +89,7 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator("#chName")).toHaveText("Boost Marketing");
     await expect(page.locator(".fb-slot.on iframe")).toHaveAttribute("data-href", META.url);
     await expect.poll(() => page.evaluate(() => (window as any).__fb.players.at(-1).playing)).toBe(true);
+    await expect(page.locator("#spinner")).toBeHidden(); // buffering finished: no spinner left over the video
     await page.locator("#tap").click({ position: { x: 150, y: 300 } });
     await expect.poll(() => page.evaluate(() => (window as any).__fb.players.at(-1).playing)).toBe(false);
     await expect(page.locator("#meta")).toContainText("f Facebook");
@@ -148,6 +150,26 @@ test.describe("Facebook videos you add by link", () => {
     await expect(show).toHaveText(/^Show 1 Shorts?$/);
     await show.click();
     await expect(page.locator(".fb-slot.on iframe")).toHaveAttribute("data-href", META.url);
+  });
+
+  test("moving on from a Facebook video hides its player", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#moreBtn").click();
+    await page.getByRole("button", { name: "＋ Add a Facebook video" }).click();
+    const dlg = page.locator(".dlg");
+    await dlg.getByLabel("Facebook video link").fill("https://www.facebook.com/reel/1141407915517139/");
+    await dlg.getByLabel("Facebook video link").press("Enter");
+    await expect(dlg).toContainText("Found: Boost Marketing");
+    const sales = dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ });
+    if ((await sales.getAttribute("aria-pressed")) !== "true") await sales.click();
+    await dlg.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dlg).toBeHidden();
+    await page.goto("/v/fb1141407915517139");
+    const frame = page.locator(".fb-slot iframe");
+    await expect(frame).toBeVisible();
+    await page.keyboard.press("ArrowDown");
+    await expect(page).not.toHaveURL(/fb1141407915517139/);
+    await expect(frame).toBeHidden();
   });
 
   test("a Facebook page has its own screen with its videos and a link to Facebook", async ({ app: page }) => {

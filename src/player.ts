@@ -44,8 +44,9 @@ export const pool = new PlayerPool(
   els.players,
   {
     onPlaying() {
+      // (again after buffering: keep counting from when it started)
+      if (!playback.playing || !playback.watch.since) playback.watch.since = performance.now();
       playback.playing = true;
-      playback.watch.since = performance.now();
       els.poster.classList.add("gone");
       els.centerIcon.className = "center-icon";
       showSpinner(false);

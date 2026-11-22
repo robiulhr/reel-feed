@@ -132,6 +132,8 @@ export class FbPlayer {
       });
       on("paused", () => this.ev.onPaused());
       on("startedBuffering", () => this.ev.onBuffering());
+      // Facebook says when buffering ends (YouTube says "playing" again): take the spinner away
+      on("finishedBuffering", () => this.started && this.ev.onPlaying());
       on("finishedPlaying", () => this.ev.onEnded());
       on("error", () => this.ev.onError(-2));
       if (!this.active) return;
