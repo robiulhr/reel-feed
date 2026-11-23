@@ -95,26 +95,48 @@ describe("the activity log (what happened, in words)", () => {
 describe("syncing your changes", () => {
   type Reply = { status?: number; json?: unknown };
   let puts: any[];
-  let script: { put: (n: number) => Reply; get: () => Reply };
+  /** What the pretend cloud answers. `old`: a server from before the pass-through addresses (they answer 404 "Not found"). */
+  let script: { put: (n: number) => Reply; get: () => Reply; old: boolean };
+  const text = (data: unknown) => Buffer.from(JSON.stringify(data), "utf8").toString("base64");
+  const untext = (b64: string) => JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubEnv("VITE_SYNC_URL", "http://sync.test");
     puts = [];
-    script = { put: () => ({ json: { sha: "s1" } }), get: () => ({ json: { data: null, sha: null } }) };
+    script = { put: () => ({ json: { sha: "s1" } }), get: () => ({ json: { data: null, sha: null } }), old: false };
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init: RequestInit = {}) => {
         const path = new URL(url).pathname;
+        const method = init.method ?? "GET";
         const reply = (r: Reply) =>
           new Response(JSON.stringify(r.json ?? {}), { status: r.status ?? 200, headers: { "Content-Type": "application/json" } });
         if (path === "/login") return reply({ json: { session: "x.y" } });
-        if (path === "/state" && (init.method ?? "GET") === "GET") return reply(script.get());
+        // the newer addresses: the data file passed through as base64 text
+        if (path === "/state2" || path === "/state/at2") {
+          if (script.old) return reply({ status: 404, json: { error: "Not found" } });
+          if (method === "GET") {
+            const r = script.get();
+            const j = r.json as { data?: unknown; sha?: string | null } | undefined;
+            return reply({
+              status: r.status,
+              json: r.status && r.status >= 400 ? r.json : { content: j?.data ? text(j.data) : null, sha: j?.sha ?? null },
+            });
+          }
+          const body = JSON.parse(String(init.body));
+          expect(typeof body.content).toBe("string"); // no parsed data sent to the server: just the encoded text
+          expect(body.data).toBeUndefined();
+          puts.push({ data: untext(body.content), sha: body.sha, message: body.message });
+          return reply(script.put(puts.length));
+        }
+        // the older addresses
+        if (path === "/state" && method === "GET") return reply(script.get());
         if (path === "/state") {
           puts.push(JSON.parse(String(init.body)));
           return reply(script.put(puts.length));
         }
-        return reply({ status: 404 });
+        return reply({ status: 404, json: { error: "Not found" } });
       }),
     );
   });
@@ -242,5 +264,57 @@ describe("syncing your changes", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(cloud.cloudState().kind).toBe("error");
     expect(cloud.cloudState().text).toContain("not saved yet");
+  });
+
+  it("the data file goes through the server as encoded text (the server never parses it)", async () => {
+    const { store } = await setup();
+    store.act({ t: "manAdd", v: { ...video("100000000030"), t: "দাম লুকালে সেল কমে" } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(puts.length).toBe(1);
+    expect(puts[0].data.manual[0].t).toBe("দাম লুকালে সেল কমে"); // non-English text survives the round trip
+    expect(puts[0].message).toMatch(/^Sync from (phone|computer) \(\d+ changes?\)$/);
+  });
+
+  it("reads what's already in the cloud (decoded in the browser) and keeps it when saving", async () => {
+    const existing = { v: 6, saved: ["fb100000000040"], manual: [{ ...video("100000000040"), t: "Already there" }], activity: [] };
+    script.get = () => ({ json: { data: existing, sha: "s0" } });
+    vi.resetModules();
+    const store = await import("../../src/store");
+    const sync = await import("../../src/sync");
+    sync.startSync(() => {});
+    await sync.connect("pw");
+    expect(store.state.manual.map((m) => m.id)).toEqual(["100000000040"]);
+    store.act({ t: "manAdd", v: video("100000000041") });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(puts.at(-1).sha).toBe("s0");
+    expect(
+      puts
+        .at(-1)
+        .data.manual.map((m: ManualVideo) => m.id)
+        .sort(),
+    ).toEqual(["100000000040", "100000000041"]);
+  });
+
+  it("an older server (without the pass-through addresses) still works, the old way", async () => {
+    script.old = true;
+    const { store, sync } = await setup();
+    store.act({ t: "hide", h: "@x" });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(puts.length).toBe(1);
+    expect(puts[0].data.hidden).toContain("@x"); // sent as parsed data, like before
+    expect(sync.status().lastError).toBe("");
+    expect(sync.status().unsaved).toBe(0);
+  });
+
+  it("restoring an earlier version reads it through the server too", async () => {
+    const sync = await (async () => {
+      vi.resetModules();
+      const m = await import("../../src/sync");
+      await import("../../src/store");
+      await m.connect("pw");
+      return m;
+    })();
+    script.get = () => ({ json: { data: { v: 6, saved: ["old"] }, sha: "x" } });
+    expect((await sync.readVersion("a".repeat(40))).saved).toEqual(["old"]);
   });
 });

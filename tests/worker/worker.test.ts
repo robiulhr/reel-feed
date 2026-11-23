@@ -249,6 +249,67 @@ describe("synced data (user-state.json)", () => {
   });
 });
 
+describe("synced data passed through untouched (/state2)", () => {
+  const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
+  const unb64 = (t: string) => Buffer.from(t, "base64").toString("utf8");
+
+  it("saves and loads the file as encoded text, and the old addresses still read the same file", async () => {
+    const f = setup();
+    const s = await login(f);
+    expect((await call(f, "GET", "/state2", { session: s })).body).toEqual({ content: null, sha: null });
+    const text = JSON.stringify({ v: 6, saved: ["a"], manual: [{ id: "1", t: "দাম লুকালে" }] });
+    const put = await call(f, "PUT", "/state2", {
+      session: s,
+      body: { content: b64(text), sha: null, message: "Sync from computer (1 change)" },
+    });
+    expect(put.status).toBe(200);
+    const got = await call(f, "GET", "/state2", { session: s });
+    expect(got.status).toBe(200);
+    expect(unb64(got.body.content)).toBe(text); // exactly what was saved
+    expect(got.body.sha).toBe(put.body.sha);
+    const old = await call(f, "GET", "/state", { session: s }); // an older app reads the same file
+    expect(old.body.data.manual[0].t).toBe("দাম লুকালে");
+    // and a file saved the old way reads back through the new address
+    const old2 = await call(f, "PUT", "/state", { session: s, body: { data: { v: 6, saved: ["z"] }, sha: put.body.sha } });
+    expect(JSON.parse(unb64((await call(f, "GET", "/state2", { session: s })).body.content)).saved).toEqual(["z"]);
+    expect(old2.status).toBe(200);
+  });
+
+  it("never opens the file: text that isn't even JSON goes through as it is (so the Worker does no parsing work)", async () => {
+    const f = setup();
+    const s = await login(f);
+    const odd = "not json at all   ".repeat(1000);
+    expect((await call(f, "PUT", "/state2", { session: s, body: { content: b64(odd), sha: null } })).status).toBe(200);
+    expect(unb64((await call(f, "GET", "/state2", { session: s })).body.content)).toBe(odd);
+  });
+
+  it("a stale save is a conflict (409), a missing file is refused (400), an oversized one is refused (413)", async () => {
+    const f = setup();
+    const s = await login(f);
+    const first = await call(f, "PUT", "/state2", { session: s, body: { content: b64("{}"), sha: null } });
+    expect((await call(f, "PUT", "/state2", { session: s, body: { content: b64('{"a":1}'), sha: "old" } })).status).toBe(409);
+    expect((await call(f, "PUT", "/state2", { session: s, body: { content: "", sha: first.body.sha } })).status).toBe(400);
+    expect((await call(f, "PUT", "/state2", { session: s, body: { sha: first.body.sha } })).status).toBe(400);
+    expect((await call(f, "PUT", "/state2", { session: s, body: { content: "A".repeat(7_000_001), sha: first.body.sha } })).status).toBe(
+      413,
+    );
+  });
+
+  it("needs a login, like everything else", async () => {
+    const f = setup();
+    expect((await call(f, "GET", "/state2")).status).toBe(401);
+    expect((await call(f, "PUT", "/state2", { body: { content: "e30=" } })).status).toBe(401);
+    expect((await call(f, "GET", "/state/at2?sha=" + "a".repeat(40))).status).toBe(401);
+  });
+
+  it("an earlier version is asked for by its commit id only", async () => {
+    const f = setup();
+    const s = await login(f);
+    expect((await call(f, "GET", "/state/at2?sha=nope", { session: s })).status).toBe(400);
+    expect((await call(f, "GET", "/state/at2", { session: s })).status).toBe(400);
+  });
+});
+
 describe("refresh", () => {
   it("starts the workflow and reports status", async () => {
     const f = setup();

@@ -103,6 +103,21 @@ export const test = base.extend<{ app: Page; sync: FakeSync }>({
         sync.versions.push({ sha: String(stateSha).padStart(40, "0"), at: Date.now(), msg: "Sync from test", data: state });
         return ok({ sha: `s${stateSha}` });
       }
+      // the same data file, passed through as encoded text (what the app uses now)
+      const enc = (d: unknown) => Buffer.from(JSON.stringify(d), "utf8").toString("base64");
+      if (path === "/state2" && method === "GET") return ok({ content: state ? enc(state) : null, sha: state ? `s${stateSha}` : null });
+      if (path === "/state2" && method === "PUT") {
+        const body = req.postDataJSON();
+        sync.statePuts++;
+        state = JSON.parse(Buffer.from(body.content, "base64").toString("utf8"));
+        stateSha++;
+        sync.versions.push({ sha: String(stateSha).padStart(40, "0"), at: Date.now(), msg: "Sync from test", data: state });
+        return ok({ sha: `s${stateSha}` });
+      }
+      if (path === "/state/at2" && method === "GET") {
+        const v = sync.versions.find((x) => x.sha === new URL(req.url()).searchParams.get("sha"));
+        return v ? ok({ content: enc(v.data) }) : route.fulfill({ status: 404, headers: cors, json: { error: "Unknown version" } });
+      }
       if (path === "/state/versions" && method === "GET")
         return ok({ versions: [...sync.versions].reverse().map(({ sha, at, msg }) => ({ sha, at, msg })) });
       if (path === "/state/at" && method === "GET") {
@@ -160,7 +175,7 @@ export const test = base.extend<{ app: Page; sync: FakeSync }>({
         });
       if (path === "/status") return ok({ run: null });
       if (path === "/refresh") return ok({ ok: true });
-      return route.fulfill({ status: 404, headers: cors, json: { error: "not found" } });
+      return route.fulfill({ status: 404, headers: cors, json: { error: "Not found" } });
     });
 
     await page.goto("/");

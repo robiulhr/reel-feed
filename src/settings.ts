@@ -310,7 +310,7 @@ function cloudRow(v: CloudVersion) {
   const restore = btn(`Restore`, async () => {
     restore.disabled = true;
     try {
-      const { data } = await sync.call<{ data: Partial<StateFile> }>(`/state/at?sha=${v.sha}`);
+      const data = (await sync.readVersion(v.sha)) as Partial<StateFile>;
       const version = snap(fromFile(data));
       const ok = await confirmDialog({
         title: "Restore this version?",

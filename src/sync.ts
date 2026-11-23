@@ -156,6 +156,74 @@ async function errorOf(r: Response) {
   return j.error ?? `Sync server error ${r.status}`;
 }
 
+// ---------- the data file, passed through the server untouched ----------
+// The sync server (Cloudflare's free plan) may use only ~10 ms of processor time per request. Decoding,
+// parsing and re-encoding the whole data file there took 50-100 ms once it held a few hundred videos, and
+// the request was cut off with a bare "500". So the browser does that work (no such limit) and the server
+// only passes the text through. An older server without these endpoints (404) is still understood.
+let raw = true;
+const toB64 = (text: string) => {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+const fromB64 = (b64: string) => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+};
+
+/** An older server doesn't know these addresses: it answers 404 "Not found" (a real "no such version" says more). */
+const unknownRoute = async (r: Response) =>
+  r.status === 404 &&
+  (
+    (await r
+      .clone()
+      .json()
+      .catch(() => ({}))) as { error?: string }
+  ).error === "Not found";
+
+/** The latest data file and its version (sha). */
+async function readRemote(): Promise<{ data: any; sha: string | null }> {
+  if (raw) {
+    const g = await api("/state2");
+    if (!(await unknownRoute(g))) {
+      if (!g.ok) throw new Error(await errorOf(g));
+      const j = (await g.json()) as { content: string | null; sha: string | null };
+      return { data: j.content ? JSON.parse(fromB64(j.content)) : null, sha: j.sha };
+    }
+    raw = false; // an older server: use the old way from now on
+  }
+  const g = await api("/state");
+  if (!g.ok) throw new Error(await errorOf(g));
+  return (await g.json()) as { data: any; sha: string | null };
+}
+
+/** Saves the data file. Returns the server's answer (409 = someone else saved first). */
+async function writeRemote(data: unknown, sha: string | null, message: string): Promise<Response> {
+  if (raw) {
+    const p = await api("/state2", { method: "PUT", body: JSON.stringify({ content: toB64(JSON.stringify(data)), sha, message }) });
+    if (!(await unknownRoute(p))) return p;
+    raw = false;
+  }
+  return api("/state", { method: "PUT", body: JSON.stringify({ data, sha, message }) });
+}
+
+/** An earlier version of the data file (for Menu → Backups → Show versions). */
+export async function readVersion(sha: string): Promise<any> {
+  if (raw) {
+    const g = await api(`/state/at2?sha=${encodeURIComponent(sha)}`);
+    if (!(await unknownRoute(g))) {
+      if (!g.ok) throw new Error(await errorOf(g));
+      return JSON.parse(fromB64(((await g.json()) as { content: string }).content));
+    }
+    raw = false;
+  }
+  return (await call<{ data: any }>(`/state/at?sha=${encodeURIComponent(sha)}`)).data;
+}
+
 const device = () => (/Mobi|Android|iPhone/i.test(navigator.userAgent) ? "phone" : "computer");
 
 /** Pull the latest file, replay this device's pending changes on top, push back. Retries on conflicts. */
@@ -167,9 +235,7 @@ export async function syncNow(): Promise<void> {
   let done = false;
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
-      const g = await api("/state");
-      if (!g.ok) throw new Error(await errorOf(g));
-      const remote = (await g.json()) as { data: any; sha: string | null };
+      const remote = await readRemote();
 
       const base = fromFile(remote.data);
       const needMerge = !cfg!.merged;
@@ -185,14 +251,7 @@ export async function syncNow(): Promise<void> {
         break;
       }
 
-      const p = await api("/state", {
-        method: "PUT",
-        body: JSON.stringify({
-          data: toFile(base),
-          sha: remote.sha,
-          message: `Sync from ${device()} (${ops.length} change${ops.length === 1 ? "" : "s"})`,
-        }),
-      });
+      const p = await writeRemote(toFile(base), remote.sha, `Sync from ${device()} (${ops.length} change${ops.length === 1 ? "" : "s"})`);
       if (p.status === 409) continue; // another device saved first — merge again
       if (!p.ok) throw new Error(await errorOf(p));
 

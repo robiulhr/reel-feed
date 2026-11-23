@@ -118,6 +118,13 @@ async function handle(route: string, req: Request, env: Env, cors: Cors): Promis
       return json(await readJsonFile(env, env.DATA_REPO, STATE_FILE), 200, cors);
     case "PUT /state":
       return await putState(req, env, cors);
+    // The same file, but passed through untouched (base64 as GitHub stores it). See readRawFile.
+    case "GET /state2":
+      return json(await readRawFile(env, env.DATA_REPO, STATE_FILE), 200, cors);
+    case "PUT /state2":
+      return await putStateRaw(req, env, cors);
+    case "GET /state/at2":
+      return json(await stateAtRaw(env, new URL(req.url)), 200, cors);
     case "GET /state/versions":
       return json(await stateVersions(env, new URL(req.url)), 200, cors);
     case "GET /state/at":
@@ -359,11 +366,41 @@ async function readJsonFile(env: Env, repo: string, path: string, ref = ""): Pro
   return { data: JSON.parse(b64decode(content)), sha: j.sha };
 }
 
+/**
+ * Reads a file WITHOUT opening it: returns GitHub's own base64 text and the sha, as is.
+ * Why: Cloudflare's free plan allows only ~10 ms of processor time per request. Decoding, parsing and
+ * re-encoding a big data file (hundreds of videos, notes, history) takes 50-100 ms, so the request was
+ * cut off with a bare "500". Passing the text through takes under a millisecond; the app (the browser,
+ * which has no such limit) does the decoding and encoding.
+ */
+async function readRawFile(env: Env, repo: string, path: string, ref = ""): Promise<{ content: string | null; sha: string | null }> {
+  const r = await gh(env, `/repos/${repo}/contents/${path}${ref ? `?ref=${ref}` : ""}`);
+  if (r.status === 404) {
+    const repoCheck = await gh(env, `/repos/${repo}`);
+    if (!repoCheck.ok) throw new HttpError(502, await githubError(repoCheck, `repo ${repo}`));
+    return { content: null, sha: null };
+  }
+  if (!r.ok) throw new HttpError(502, await githubError(r, `${repo}/${path}`));
+  const j = (await r.json()) as { content?: string; sha: string };
+  let content = j.content;
+  if (!content) {
+    // files over 1 MB come back without content — read the blob instead
+    const b = await gh(env, `/repos/${repo}/git/blobs/${j.sha}`);
+    if (!b.ok) throw new HttpError(502, await githubError(b, `${repo}/${path}`));
+    content = ((await b.json()) as { content: string }).content;
+  }
+  return { content: content.replace(/\s/g, ""), sha: j.sha };
+}
+
 /** Writes a file. Returns the new sha, or null if someone else changed it first (conflict). */
 async function writeFile(env: Env, repo: string, path: string, text: string, sha: string | null, message: string) {
+  return writeRaw(env, repo, path, b64encode(text), sha, message);
+}
+/** The same, with the content already base64-encoded. */
+async function writeRaw(env: Env, repo: string, path: string, base64: string, sha: string | null, message: string) {
   const r = await gh(env, `/repos/${repo}/contents/${path}`, {
     method: "PUT",
-    body: JSON.stringify({ message: message.slice(0, 200), content: b64encode(text), ...(sha ? { sha } : {}) }),
+    body: JSON.stringify({ message: message.slice(0, 200), content: base64, ...(sha ? { sha } : {}) }),
   });
   if (r.status === 409 || r.status === 422) return null;
   if (!r.ok) throw new HttpError(502, await githubError(r, `${repo}/${path}`));
@@ -378,6 +415,16 @@ async function putState(req: Request, env: Env, cors: Cors) {
   if (text.length > 5_000_000) return json({ error: "Data too large" }, 413, cors);
   const sha = await writeFile(env, env.DATA_REPO, STATE_FILE, text, body.sha ?? null, String(body.message ?? "Sync"));
   // conflict = another device saved first; the app re-reads and merges
+  if (!sha) return json({ error: "conflict" }, 409, cors);
+  return json({ sha }, 200, cors);
+}
+
+/** Saves the data file passed through untouched: { content: base64, sha, message } (see readRawFile). */
+async function putStateRaw(req: Request, env: Env, cors: Cors) {
+  const body = (await req.json()) as { content?: unknown; sha?: string | null; message?: string };
+  if (typeof body.content !== "string" || !body.content) return json({ error: "Missing data" }, 400, cors);
+  if (body.content.length > 7_000_000) return json({ error: "Data too large" }, 413, cors); // ~5 MB of text
+  const sha = await writeRaw(env, env.DATA_REPO, STATE_FILE, body.content, body.sha ?? null, String(body.message ?? "Sync"));
   if (!sha) return json({ error: "conflict" }, 409, cors);
   return json({ sha }, 200, cors);
 }
@@ -412,6 +459,13 @@ async function stateVersions(env: Env, url: URL) {
 }
 
 /** One earlier version of user-state.json (`sha` = a commit from /state/versions). */
+async function stateAtRaw(env: Env, url: URL) {
+  const sha = url.searchParams.get("sha") ?? "";
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new HttpError(400, "Unknown version");
+  const { content } = await readRawFile(env, env.DATA_REPO, STATE_FILE, sha);
+  if (!content) throw new HttpError(404, "That version has no saved data");
+  return { content };
+}
 async function stateAt(env: Env, url: URL) {
   const sha = url.searchParams.get("sha") ?? "";
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new HttpError(400, "Unknown version");
