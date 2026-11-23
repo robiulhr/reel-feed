@@ -61,7 +61,7 @@ export const wantsPage = (req: Request, url: URL) => {
   if (req.method !== "GET") return false;
   if (req.headers.get("Sec-Fetch-Dest") === "document" || (req.headers.get("Accept") ?? "").includes("text/html")) return true;
   const p = url.pathname;
-  return !p.startsWith("/api") && !p.startsWith("/gate/") && !p.startsWith("/assets/") && !p.startsWith("/data/") && !/.w+$/.test(p);
+  return !p.startsWith("/api") && !p.startsWith("/gate/") && !p.startsWith("/assets/") && !p.startsWith("/data/") && !/\.\w+$/.test(p);
 };
 
 export const loginPage = () =>
