@@ -1,7 +1,7 @@
 /**
  * The feed's filters, phone-first:
  * - top bar: [⚙ Filters] + one short row of quick chips (All · your active filters · the biggest main categories · More)
- * - Filters sheet: time range, language and every main category with its topics (with counts), applied with
+ * - Filters sheet: time range, views, language and every main category with its topics (with counts), applied with
  *   "Show N Shorts". Tapping a main category picks all its topics; each topic can also be picked on its own.
  */
 import { CATEGORIES, type CatId, catInfo, GROUPS, type GroupId, groupCats, groupOf, type Lang, PERSONAL_GROUP } from "./categories";
@@ -16,9 +16,19 @@ import { els } from "./view";
 
 export const WINS: [Win, string][] = [
   ["all", "All time"],
+  ["365", "1 year"],
+  ["90", "3 months"],
   ["30", "30 days"],
   ["7", "7 days"],
   ["1", "Today"],
+];
+/** "Fewest views" choices, as text (the filter stores the number). */
+export const VIEW_OPTS: [string, string][] = [
+  ["0", "Any views"],
+  ["1000", "1K+"],
+  ["10000", "10K+"],
+  ["100000", "100K+"],
+  ["1000000", "1M+"],
 ];
 export const LANG_OPTS: [Lang | "all", string][] = [
   ["all", "All"],
@@ -29,7 +39,7 @@ export const LANG_OPTS: [Lang | "all", string][] = [
 /** How many category chips sit in the top bar (the rest are one tap away under More). */
 const QUICK = 5;
 
-type Draft = { win: Win; lang: Lang | "all"; cats: CatId[]; list: string };
+type Draft = { win: Win; minV: number; lang: Lang | "all"; cats: CatId[]; list: string };
 const isIslamic = (c: CatId) => groupOf(c) === PERSONAL_GROUP;
 
 /** Islamic and other topics don't mix: picking one kind starts a fresh pick. */
@@ -50,9 +60,16 @@ export const groupState = (cats: CatId[], g: GroupId): "all" | "some" | "none" =
   return n === 0 ? "none" : n === groupCats(g).length ? "all" : "some";
 };
 
-/** Shorts per topic and per main category (any of the Short's categories) for a time range + language. */
-function counts(d: Pick<Draft, "win" | "lang" | "list">) {
-  const pass = feedFilter(feed.ds, { ...state, win: d.win, lang: d.lang, list: d.list, cats: [...CATEGORIES.map((c) => c.id)] });
+/** Shorts per topic and per main category (any of the Short's categories) for a time range + views + language. */
+function counts(d: Pick<Draft, "win" | "minV" | "lang" | "list">) {
+  const pass = feedFilter(feed.ds, {
+    ...state,
+    win: d.win,
+    minV: d.minV,
+    lang: d.lang,
+    list: d.list,
+    cats: [...CATEGORIES.map((c) => c.id)],
+  });
   const cat = new Map<CatId, number>();
   const group = new Map<GroupId, number>();
   for (const s of feed.ds.videos) {
@@ -66,10 +83,12 @@ function counts(d: Pick<Draft, "win" | "lang" | "list">) {
 
 const short = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}K` : String(n));
 const winLabel = (w: Win) => WINS.find(([k]) => k === w)![1];
+const viewsLabel = (n: number) => `${VIEW_OPTS.find(([k]) => k === String(n))?.[1] ?? short(n)} views`;
 const langLabel = (l: Lang | "all") => LANG_OPTS.find(([k]) => k === l)![1];
 
 function apply(d: Draft) {
   state.win = d.win;
+  state.minV = d.minV;
   state.lang = d.lang;
   state.cats = d.cats;
   state.list = d.list;
@@ -84,13 +103,18 @@ let quickOrder: GroupId[] = [];
 
 /** [⚙ Filters •n] + All · active time/language (✕) · what you picked · biggest main categories · More */
 export function renderFilterBar() {
-  const active = (state.win !== "all" ? 1 : 0) + (state.lang !== "all" ? 1 : 0) + (state.cats.length ? 1 : 0) + (state.list ? 1 : 0);
+  const active =
+    (state.win !== "all" ? 1 : 0) +
+    (state.minV ? 1 : 0) +
+    (state.lang !== "all" ? 1 : 0) +
+    (state.cats.length ? 1 : 0) +
+    (state.list ? 1 : 0);
   els.filtBtn.querySelector(".filt-n")!.textContent = active ? String(active) : "";
   els.filtBtn.setAttribute("aria-label", active ? `Filters, ${active} on` : "Filters");
   els.filtBtn.classList.toggle("on", active > 0);
 
   // biggest main categories for this time range + language (order only changes with those, so chips don't jump)
-  const key = `${feed.ds.generatedAt}|${state.win}|${state.lang}|${state.list}|${state.lists.map((l) => listSize(l)).join()}`;
+  const key = `${feed.ds.generatedAt}|${state.win}|${state.minV}|${state.lang}|${state.list}|${state.lists.map((l) => listSize(l)).join()}`;
   if (key !== countsKey) {
     countsKey = key;
     const n = counts(state).group;
@@ -112,6 +136,7 @@ export function renderFilterBar() {
   if (curList) out.push(chip(`${listLabel(curList)} ✕`, { list: "" }, true, `${curList.name} feed. Back to all channels`));
   for (const l of state.lists) if (l !== curList && listSize(l)) out.push(chip(listLabel(l), { list: l.id }, false, `${l.name} feed`));
   if (state.win !== "all") out.push(chip(`${winLabel(state.win)} ✕`, { clear: "win" }, true, `${winLabel(state.win)}. Remove`));
+  if (state.minV) out.push(chip(`${viewsLabel(state.minV)} ✕`, { clear: "minV" }, true, `${viewsLabel(state.minV)}. Remove`));
   if (state.lang !== "all") out.push(chip(`${langLabel(state.lang)} ✕`, { clear: "lang" }, true, `${langLabel(state.lang)}. Remove`));
   // what you picked: a whole main category shows as one chip, single topics as their own chips
   const pickedGroups: GroupId[] = [];
@@ -143,6 +168,7 @@ export function bindFilterBar() {
     if (b.dataset.more) return void openFilters(true);
     if (b.dataset.list !== undefined) return apply({ ...state, list: b.dataset.list });
     if (b.dataset.clear === "win") return apply({ ...state, win: "all" });
+    if (b.dataset.clear === "minV") return apply({ ...state, minV: 0 });
     if (b.dataset.clear === "lang") return apply({ ...state, lang: "all" });
     if (b.dataset.group) return apply({ ...state, cats: toggleGroup(state.cats, b.dataset.group as GroupId) });
     if (b.dataset.cat === undefined) return;
@@ -154,7 +180,7 @@ export function bindFilterBar() {
 
 // ---------- the Filters sheet ----------
 export async function openFilters(toTopics = false) {
-  const d: Draft = { win: state.win, lang: state.lang, cats: [...state.cats], list: state.list };
+  const d: Draft = { win: state.win, minV: state.minV, lang: state.lang, cats: [...state.cats], list: state.list };
   const box = el("div", "filt");
   let confirmBtn: HTMLButtonElement | null = null;
 
@@ -182,6 +208,12 @@ export async function openFilters(toTopics = false) {
     WINS,
     () => d.win,
     (v) => (d.win = v),
+  );
+  const views = seg(
+    "Views",
+    VIEW_OPTS,
+    () => String(d.minV),
+    (v) => (d.minV = Number(v)),
   );
   const lang = seg(
     "Language",
@@ -278,10 +310,10 @@ export async function openFilters(toTopics = false) {
   const reset = el("button", "filt-link", "Reset all");
   reset.type = "button";
   reset.onclick = () => {
-    Object.assign(d, { win: "all", lang: "all", cats: [], list: "" });
+    Object.assign(d, { win: "all", minV: 0, lang: "all", cats: [], list: "" });
     update();
   };
-  box.append(reset, lists, time.wrap, lang.wrap, topics);
+  box.append(reset, lists, time.wrap, views.wrap, lang.wrap, topics);
 
   function update() {
     listRow.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
@@ -289,7 +321,7 @@ export async function openFilters(toTopics = false) {
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", String(on));
     });
-    for (const s of [time, lang])
+    for (const s of [time, views, lang])
       s.row.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
         const on = b.dataset.v === s.get();
         b.classList.toggle("on", on);

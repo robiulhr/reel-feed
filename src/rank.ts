@@ -7,9 +7,9 @@ export const videoCats = (s: Short, st: Pick<Shared, "catFix">): CatId[] => st.c
 /** Still guessed? (your fix makes it certain) */
 export const isGuessed = (s: Short, st: Pick<Shared, "catFix">) => !st.catFix[s.id] && s.g;
 
-const WIN_DAYS: Record<string, number> = { all: Infinity, "30": 30, "7": 7, "1": 1 };
+const WIN_DAYS: Record<string, number> = { all: Infinity, "365": 365, "90": 90, "30": 30, "7": 7, "1": 1 };
 
-type FilterState = Pick<State, "win" | "lang" | "cats" | "hidden" | "bad" | "catFix"> & Partial<Pick<State, "list" | "lists">>;
+type FilterState = Pick<State, "win" | "lang" | "cats" | "hidden" | "bad" | "catFix"> & Partial<Pick<State, "list" | "lists" | "minV">>;
 /** Is this Short in a channel list? (its channel is, or — an added Facebook video — you put the video itself in it) */
 export const shortInList = (l: { id: string; ch: string[] }, s: Short, chHandle: string) =>
   !!s.fb?.lists.includes(l.id) || l.ch.some((c) => c.toLowerCase() === chHandle.toLowerCase());
@@ -17,6 +17,7 @@ export const shortInList = (l: { id: string; ch: string[] }, s: Short, chHandle:
 /** The feed's filters (channel list, time range, language, categories, hidden channels) as a test for one Short. */
 export function feedFilter(ds: Dataset, st: FilterState): (s: Short) => boolean {
   const maxAge = (WIN_DAYS[st.win] ?? Infinity) * 86400;
+  const minV = st.minV ?? 0;
   const now = Date.now() / 1000;
   const hidden = new Set(st.hidden);
   const bad = new Set(st.bad);
@@ -28,6 +29,7 @@ export function feedFilter(ds: Dataset, st: FilterState): (s: Short) => boolean 
     if (!ch || ch.st === "removed" || hidden.has(ch.h) || bad.has(s.id)) return false;
     if (inList && !inList.has(ch.h.toLowerCase()) && !s.fb?.lists.includes(st.list!)) return false;
     if (now - s.p > maxAge) return false;
+    if (minV && s.v < minV) return false;
     if (st.lang !== "all" && s.lg !== st.lang) return false;
     const cats = videoCats(s, st);
     if (picked.size) return cats.some((c) => picked.has(c));

@@ -163,6 +163,7 @@ export interface DevicePrefs {
   muted: boolean;
   tab: Tab;
   win: Win;
+  minV: number; // fewest views a Short must have (0 = any)
   cats: CatId[]; // categories picked in the top bar (none = All)
   list: string; // a channel list's feed (its id), "" = all channels
   lang: Lang | "all"; // language filter
@@ -247,6 +248,7 @@ const defaults = (): State => ({
   muted: true,
   tab: "foryou",
   win: "all",
+  minV: 0,
   cats: [],
   list: "",
   lang: "all",
@@ -277,6 +279,8 @@ function read<T>(key: string, fallback: T): T {
  *   LOCAL_VERSION — this device (localStorage).  FILE_VERSION — the synced user-state.json.
  */
 export const LOCAL_VERSION = 3;
+/** Choices for the "fewest views" filter (0 = any). */
+export const VIEW_MINS = [0, 1000, 10_000, 100_000, 1_000_000];
 export const FILE_VERSION = 5; // 3: channel lists. 4: added Facebook videos. 5: notes (older apps must not write the file and drop them)
 
 export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
@@ -302,6 +306,8 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
   adoptManualNotes(s);
   if (typeof s.list !== "string" || (s.list && !s.lists.some((l) => l.id === s.list))) s.list = "";
   if (!["all", "bn", "en", "hi"].includes(s.lang)) s.lang = "all";
+  if (!VIEW_MINS.includes(s.minV)) s.minV = 0;
+  if (!["all", "365", "90", "30", "7", "1"].includes(s.win)) s.win = "all";
   s.sv = LOCAL_VERSION;
   return s;
 }

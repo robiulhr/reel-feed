@@ -1,7 +1,7 @@
 import type { CatId, Lang } from "./categories";
 
 export type Tab = "foryou" | "trending" | "popular" | "top" | "newest";
-export type Win = "all" | "30" | "7" | "1";
+export type Win = "all" | "365" | "90" | "30" | "7" | "1";
 
 export interface Channel {
   h: string; // handle, e.g. "@TheAponAhsan"

@@ -284,6 +284,46 @@ test.describe("categories", () => {
     await expect(page.locator("#filtBtn")).toHaveAttribute("aria-label", "Filters, 1 on");
   });
 
+  test("Filters sheet: topic + views + time (3 months, 1 year…) all combine, show as chips, and stay set", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#filtBtn").click();
+    const sheet = page.getByRole("dialog", { name: "Filters" });
+    const show = sheet.locator(".btn.primary");
+    const shown = async () => Number(((await show.textContent()) ?? "").replace(/[^0-9]/g, ""));
+    // the new choices are there
+    for (const t of ["1 year", "3 months", "30 days", "7 days", "Today"])
+      await expect(sheet.getByRole("button", { name: t, exact: true })).toBeVisible();
+    for (const v of ["Any views", "1K+", "10K+", "100K+", "1M+"])
+      await expect(sheet.getByRole("button", { name: v, exact: true })).toBeVisible();
+
+    await sheet.getByRole("button", { name: /^Sales & Customers,/ }).click();
+    const topicOnly = await shown();
+    await sheet.getByRole("button", { name: "10K+", exact: true }).click();
+    const withViews = await shown();
+    expect(withViews).toBeLessThan(topicOnly); // fewer views than 10K are left out
+    await sheet.getByRole("button", { name: "3 months", exact: true }).click();
+    expect(await shown()).toBe(withViews); // (everything in the test library is recent)
+    await sheet.getByRole("button", { name: "Today", exact: true }).click();
+    expect(await shown()).toBeLessThanOrEqual(withViews);
+    await sheet.getByRole("button", { name: "3 months", exact: true }).click();
+    await show.click();
+
+    await expect(page.locator("#filtBtn")).toHaveAttribute("aria-label", "Filters, 3 on");
+    await expect(page.locator('#chips button[data-clear="win"]')).toContainText("3 months");
+    await expect(page.locator('#chips button[data-clear="minV"]')).toContainText("10K+ views");
+    await expect(page.locator('#chips button[data-cat="sales"]')).toHaveAttribute("aria-pressed", "true");
+
+    // they stay set when the sheet is opened again
+    await page.locator("#filtBtn").click();
+    await expect(sheet.getByRole("button", { name: "10K+", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(sheet.getByRole("button", { name: "3 months", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await sheet.getByRole("button", { name: "Cancel" }).click();
+
+    await page.locator('#chips button[data-clear="minV"]').click(); // ✕ takes off just the views
+    await expect(page.locator("#filtBtn")).toHaveAttribute("aria-label", "Filters, 2 on");
+    await expect(page.locator('#chips button[data-clear="win"]')).toContainText("3 months");
+  });
+
   test("⋯ → Wrong category? saves your pick and shows it", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#moreBtn").click();
