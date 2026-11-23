@@ -14,7 +14,7 @@ import { installErrorCatcher } from "./errors";
 installErrorCatcher(); // first: anything that breaks from here on is caught and reported
 
 import { loadApi } from "./pool";
-import { startVisit, state } from "./store";
+import { onOtherTab, onSaveFailed, startVisit, state } from "./store";
 import * as sync from "./sync";
 import { dailyBackup } from "./backup";
 import { initChannels } from "./channels";
@@ -71,6 +71,14 @@ async function boot() {
   pool.setRate(state.rate ?? 1);
   pool.setVolume(state.volume ?? 100);
   sync.startSync(onSyncUpdate);
+  onOtherTab(onSyncUpdate); // another Reel Feed tab saved something: show it here too
+  // the device refused to save (storage full or blocked): say so instead of losing changes quietly
+  onSaveFailed(() =>
+    banner(
+      "⚠️ This browser can't save your changes right now (its storage is full or blocked). Free some space or open Menu → Backups; changes since may be lost when you close the app.",
+      () => banner(null),
+    ),
+  );
   const opened = startRouter(showRoute); // the address the app was opened on (shared link, refresh)
   let wantShort = opened.k === "feed" ? opened.v : undefined;
   onNetworkChange(() => applyNetwork());

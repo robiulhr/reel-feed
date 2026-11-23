@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+import { asFile, makeDataset } from "../fixtures/data";
 import { closeTips, expect, goTo, test } from "./fixtures";
 /** Facebook's player SDK, faked: one controllable player per video (play, pause, sound, position). */
 const FAKE_FB = `
@@ -52,6 +54,66 @@ test.describe("Facebook videos you add by link", () => {
     await page.route("https://connect.facebook.net/**", (r) => r.fulfill({ contentType: "text/javascript", body: FAKE_FB }));
     await page.route("**/api/fb/meta**", (r) => r.fulfill({ json: META }));
     await page.route("**/api/fb/thumb/**", (r) => r.fulfill({ status: 404, body: "" }));
+  });
+
+  test("several Reel Feed tabs open at once: nothing one tab added is lost when another saves", async ({ app: page }) => {
+    const file = asFile(makeDataset());
+    // every tab answers lookups with the video number in the link
+    const routesFor = async (p: Page) => {
+      await p.route("**/data/meta.json", (r) => r.fulfill({ json: { generatedAt: file.generatedAt, videos: file.videos.length } }));
+      await p.route("**/data/starter.json", (r) => r.fulfill({ json: file }));
+      await p.route("**/data/shorts.json", (r) => r.fulfill({ json: file }));
+      await p.route("https://www.youtube.com/**", (r) => r.abort());
+      await p.route("https://fonts.googleapis.com/**", (r) => r.abort());
+      await p.route("**/api/fb/thumb/**", (r) => r.fulfill({ status: 404, body: "" }));
+      await p.route("**/api/fb/meta**", (r) => {
+        const id = /reel\/(\d+)/.exec(new URL(r.request().url()).searchParams.get("url") ?? "")?.[1] ?? "0";
+        return r.fulfill({ json: { ...META, id, url: `https://www.facebook.com/reel/${id}/`, title: `Reel ${id}` } });
+      });
+    };
+    const add = async (p: Page, id: string) => {
+      if (!(await p.locator("#closePanel").isVisible())) await p.locator("#menuBtn").click(); // (the Menu may still be open)
+      await p.locator('[data-p="added"]').click();
+      await p.locator("#panelBody").getByRole("button", { name: "＋ Add a Facebook video" }).click();
+      const dlg = p.locator(".dlg");
+      await dlg.getByLabel("Facebook video link").fill(`https://www.facebook.com/reel/${id}/`);
+      await dlg.getByLabel("Facebook video link").press("Enter");
+      await expect(dlg).toContainText("Found:");
+      const sales = dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ });
+      if ((await sales.getAttribute("aria-pressed")) !== "true") await sales.click();
+      await dlg.getByRole("button", { name: "Add", exact: true }).click();
+      await expect(dlg).toBeHidden();
+      await expect(p.locator(".fb-card").filter({ hasText: `Reel ${id}` })).toBeVisible();
+    };
+
+    await routesFor(page);
+    await closeTips(page);
+    // a second tab, opened while the first has nothing yet (so it never hears about the first one's video)
+    const tab2 = await page.context().newPage();
+    await routesFor(tab2);
+    await tab2.goto("/");
+    await expect(tab2.locator("#title")).not.toBeEmpty();
+    await closeTips(tab2);
+
+    await add(page, "1111111111"); // tab 1
+    await add(tab2, "2222222222"); // tab 2 (didn't know about the first)
+    await add(page, "3333333333"); // tab 1 again: used to save its old copy over tab 2's video
+
+    // tab 1 shows tab 2's video without a reload (the tabs tell each other)…
+    await expect(page.locator(".fb-card")).toHaveCount(3);
+    // …and a brand new tab has all three
+    const tab3 = await page.context().newPage();
+    await routesFor(tab3);
+    await tab3.goto("/");
+    await expect(tab3.locator("#title")).not.toBeEmpty();
+    await closeTips(tab3);
+    await tab3.locator("#menuBtn").click();
+    await tab3.locator('[data-p="added"]').click();
+    await expect(tab3.locator(".fb-card")).toHaveCount(3);
+    for (const id of ["1111111111", "2222222222", "3333333333"])
+      await expect(tab3.locator(".fb-card").filter({ hasText: `Reel ${id}` })).toBeVisible();
+    await tab2.close();
+    await tab3.close();
   });
 
   test("the app tells the browser extension which videos are added (add, delete, and when it says hello)", async ({ app: page }) => {

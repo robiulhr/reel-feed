@@ -163,6 +163,8 @@ Shown once (Swipe up/down, swipe left, double-tap, ⋯, ↻). About → *Show th
 | GitHub token (for the data repo) | Cloudflare Worker secret `GITHUB_TOKEN` only | – |
 | App password | Cloudflare Worker secret `APP_PASSWORD` only | – |
 
+**Several tabs at once** (`src/store.ts`): every tab keeps its own copy of your data and saves all of it to the same place in the browser (`localStorage`). The browser extension opens a new Reel Feed tab for each batch of videos, so tabs overlap often. Saving therefore **never overwrites**: before a tab saves, it takes in whatever another tab saved since it last looked (a union — nothing is removed; the other tab's unsent changes, such as a delete, are applied too), and tabs hear about each other's saves at once (the `storage` event), so a video added in one tab appears in the others without a reload. If the browser refuses to save (storage full or blocked) the app first drops the least useful data (old "seen" marks, watch history, API log) and retries, and if it still can't it shows a ⚠️ banner instead of failing silently. Tests: `tests/unit/tabs.test.ts` (several tabs as separate copies of the store) and an e2e with three real tabs. Before this (until the fix of 24 Nov 2026) the last tab to save wiped the others' additions — hundreds of videos could vanish.
+
 Note: because playback uses YouTube's player, YouTube counts the view, and if you're logged into YouTube in that browser it may appear in your YouTube watch history. Saves/hides/skips are **not** YouTube likes/subscriptions.
 
 ---

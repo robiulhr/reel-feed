@@ -335,18 +335,124 @@ export function capPending(list: Op[], max = MAX_PENDING) {
 let timer: number | undefined;
 let dirty = false;
 
+// ---------- several tabs at once ----------
+// Each tab holds its own copy of your data and saves all of it to the same place on the device. Without
+// care the last tab to save would wipe what the others added (the browser extension opens a new tab for
+// every batch of videos). So: before saving, a tab takes in whatever another tab saved since it last
+// looked (nothing is ever removed by this), and tabs hear about each other's saves at once.
+const rawOf = (key: string) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+/** What this tab last read from, or wrote to, the device — a different text there means another tab saved. */
+let lastState = rawOf(STORAGE_KEY);
+let lastPending = rawOf(PENDING_KEY);
+const otherTabListeners: (() => void)[] = [];
+/** Called (after a moment) when something from another tab was added to this one, so the screen can refresh. */
+export function onOtherTab(fn: () => void) {
+  otherTabListeners.push(fn);
+}
+const sizes = (s: State) =>
+  [s.saved, s.hidden, s.bad, s.hist, s.manual, s.lists, s.fbPages].map((a) => a.length).join() +
+  [s.seen, s.notes, s.catFix, s.affCh].map((o) => Object.keys(o).length).join();
+
+/** Adds what other tabs saved since this one last looked. Returns true if it added anything. */
+function takeInOtherTabs(): boolean {
+  const before = `${sizes(state)}|${pending.length}`;
+  try {
+    const rawState = rawOf(STORAGE_KEY);
+    if (rawState && rawState !== lastState) {
+      lastState = rawState;
+      mergeInto(state, sharedOf(migrateLocal(JSON.parse(rawState)))); // union: adds what's missing
+    }
+    const rawPending = rawOf(PENDING_KEY);
+    if (rawPending && rawPending !== lastPending) {
+      lastPending = rawPending;
+      const ops = JSON.parse(rawPending);
+      if (Array.isArray(ops)) {
+        // changes the other tab made that this one hasn't seen (a delete, for instance): do them here too and keep them to upload
+        const known = new Set(pending.map((o) => JSON.stringify(o)));
+        for (const op of ops as Op[]) {
+          const k = JSON.stringify(op);
+          if (known.has(k)) continue;
+          known.add(k);
+          applyOp(state, op);
+          pending.push(op);
+        }
+      }
+    }
+  } catch {
+    /* unreadable: leave things as they are */
+  }
+  return `${sizes(state)}|${pending.length}` !== before;
+}
+
+let adoptTimer: number | undefined;
+function tellOtherTabListeners() {
+  window.setTimeout(() => {
+    for (const fn of otherTabListeners) fn();
+  }, 0);
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key !== null && e.key !== STORAGE_KEY && e.key !== PENDING_KEY) return;
+    clearTimeout(adoptTimer); // the two keys are written one after the other: look once, after both
+    adoptTimer = window.setTimeout(() => {
+      if (takeInOtherTabs()) tellOtherTabListeners(); // (not written back: it's already on the device)
+    }, 0);
+  });
+}
+
+let saveFailedHook: (() => void) | undefined;
+let saveWarned = false;
+/** Called once when the device refuses to save (storage full or blocked), so the app can warn you. */
+export function onSaveFailed(fn: () => void) {
+  saveFailedHook = fn;
+}
+
+function writeToDevice() {
+  trimSeen(state);
+  const a = JSON.stringify(state);
+  const b = JSON.stringify(pending);
+  localStorage.setItem(STORAGE_KEY, a);
+  lastState = a;
+  localStorage.setItem(PENDING_KEY, b);
+  lastPending = b;
+  saveWarned = false;
+}
+
+/** Storage full: drop the least useful things (what you've seen, the watch history, the API log) to make room. */
+function makeRoom() {
+  const ids = Object.keys(state.seen).sort((x, y) => state.seen[y] - state.seen[x]);
+  for (const id of ids.slice(5000)) delete state.seen[id];
+  state.hist = state.hist.slice(0, 200);
+  state.apiLog = state.apiLog.slice(0, 50);
+}
+
 /** Write to the device now. */
 export function flushPersist() {
   clearTimeout(timer);
   if (!dirty) return;
   dirty = false;
+  const added = takeInOtherTabs(); // never wipe what another tab saved
   try {
-    trimSeen(state);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+    writeToDevice();
   } catch {
-    /* storage full/blocked — nothing more we can do */
+    try {
+      makeRoom();
+      writeToDevice();
+    } catch {
+      dirty = true; // try again at the next chance (the changes are still in memory)
+      if (!saveWarned) {
+        saveWarned = true;
+        saveFailedHook?.();
+      }
+    }
   }
+  if (added) tellOtherTabListeners();
 }
 
 /** Save soon (batched, so rapid changes cost one write). Flushed immediately when the app is closed or hidden. */
@@ -549,7 +655,8 @@ export function applyRestore(s: Shared, d: Snap, mode: "merge" | "replace") {
 /** Adds back Facebook videos and pages that are missing (keeps everything already there). */
 function mergeManual(s: Shared, from: Partial<Pick<Shared, "manual" | "fbPages">>) {
   for (const p of normPages(from.fbPages)) if (!s.fbPages.some((x) => x.key === p.key)) applyOp(s, { t: "pageSet", p });
-  for (const v of normManual(from.manual)) applyOp(s, { t: "manAdd", v });
+  const have = new Set(s.manual.map((m) => m.id));
+  for (const v of normManual(from.manual)) if (!have.has(v.id)) applyOp(s, { t: "manAdd", v });
 }
 
 /** Adds back lists and channels that are missing (keeps everything already there). */
