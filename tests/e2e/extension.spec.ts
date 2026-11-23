@@ -127,7 +127,7 @@ test.describe("extension side panel: which reels are already added", () => {
           },
         },
         windows: {},
-        runtime: { onMessage: { addListener() {} } },
+        runtime: { onMessage: { addListener() {} }, getManifest: () => ({ version: "9.9.9" }) },
       };
     }, IDS);
   });
@@ -184,6 +184,19 @@ test.describe("extension side panel: which reels are already added", () => {
     await expect(page.locator("#syncNote")).toContainText("Reel Feed says you've added 2 videos");
     // the marked ones really are the two sent
     await expect(page.locator("#list li.added")).toContainText(["Reel title 2", "Reel title 4"]);
+  });
+
+  test('"Marks not showing? Details" tells what the panel sees, with sample ids from both sides', async ({ page }) => {
+    await open(page, { appTabs: [{ id: 7 }], answers: true, ids: [IDS[1], IDS[3]] });
+    await expect(page.locator(".badge")).toHaveCount(2);
+    await page.getByText("Marks not showing? Details").click();
+    const text = page.locator("#diagText");
+    await expect(text).toContainText("Extension version: 9.9.9");
+    await expect(text).toContainText("Reel Feed tabs found: 1   (check: ok)");
+    await expect(text).toContainText("videos it reports: 2");
+    await expect(text).toContainText(`Reel Feed's ids (first 3): ${IDS[1]}, ${IDS[3]}`);
+    await expect(text).toContainText("Reels on this page: 5   · marked as added: 2");
+    await expect(text).toContainText(`This page's ids (first 3): ${IDS.slice(0, 3).join(", ")}`);
   });
 
   test("Select shown skips the added ones; Add sends only the new ones", async ({ page }) => {

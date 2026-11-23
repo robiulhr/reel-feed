@@ -45,6 +45,11 @@ the filters says what happened:
 If you just reloaded the extension (↻ on `chrome://extensions`), **close the side panel and open it again**:
 a panel that was already open keeps running the old code.
 
+**Marks not showing?** Open **Marks not showing? Details** under the filters. It lists the extension version,
+how many Reel Feed tabs it found, how many added videos Reel Feed reported (and the first few of their
+numbers), and the first few reel numbers on the page, so a mismatch is easy to see. "videos it reports: 0"
+means the Reel Feed in that browser has no added videos saved (or they haven't synced to it yet).
+
 ## What it reads and sends
 
 - It reads only the reel tiles on the Facebook tab you're looking at: link, view count, thumbnail.
@@ -80,3 +85,11 @@ reload the Facebook tab once.
 If Chrome's extension page still lists "Extension context invalidated" for a Facebook tab, that is the
 old copy from before an update: reload that Facebook tab (or close it), then use **Clear all** on
 the extension's Errors page.
+
+## Checking it for real (developers)
+
+`npm run check:extension` starts Microsoft Edge with a throwaway profile and this extension, opens Reel
+Feed with one added video, and checks the whole chain: the app's list reaches the extension, the panel
+connects to the open Reel Feed tab, and the panel marks the reel; then it reads a real Facebook Reels page
+and checks that a reel you "add" there is marked. Needs Edge (Chrome 137+ ignores `--load-extension`);
+`BROWSER=path` and `APP=address` change the browser and the Reel Feed address.

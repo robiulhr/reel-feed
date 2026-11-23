@@ -203,6 +203,16 @@ function draw() {
   $("openApp").hidden = !action;
   if (action) $("openApp").textContent = action;
   $("openApp").disabled = connecting; // (a check is already running)
+  // What the panel sees, in plain text, to read out when the marks don't match what you expect
+  const sample = (ids) => [...ids].slice(0, 3).join(", ") || "none";
+  $("diagText").textContent = [
+    `Extension version: ${chrome.runtime.getManifest().version}`,
+    `Reel Feed tabs found: ${appTabIds.length}   (check: ${link})`,
+    `Last list from Reel Feed: ${libraryAt ? ago(libraryAt) : "never"}   · videos it reports: ${added.size}`,
+    `Reel Feed's ids (first 3): ${sample(added)}`,
+    `Reels on this page: ${n}   · marked as added: ${nAdded}`,
+    `This page's ids (first 3): ${sample(data.reels.map((r) => r.id))}`,
+  ].join("\n");
   const list = shown();
   void fillInfo(list);
   const counts = () => `${list.length} shown · ${picked.size} selected`;
