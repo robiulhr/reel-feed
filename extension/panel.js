@@ -13,10 +13,33 @@ const picked = new Set();
 let info = {}; // id -> { t: title, d: rest of the caption } (kept on this computer)
 let fetching = false;
 
-chrome.storage.local.get("info").then((s) => {
+let added = new Set(); // numbers of the reels you've already added in Reel Feed (the app sends them)
+let libraryAt = 0; // when the app last sent that list (ms); 0 = never
+
+function setLibrary(lib) {
+  added = new Set(Array.isArray(lib?.ids) ? lib.ids : []);
+  libraryAt = lib?.at || 0;
+  for (const id of added) picked.delete(id); // can't add what you already have
+}
+chrome.storage.local.get(["info", "library"]).then((s) => {
   info = s.info || {};
+  setLibrary(s.library);
   draw();
 });
+// The app (open in any tab) sends the list again whenever it changes: marks update at once.
+chrome.storage.onChanged.addListener((ch, area) => {
+  if (area !== "local" || !ch.library) return;
+  setLibrary(ch.library.newValue);
+  draw();
+});
+
+function ago(ms) {
+  const m = Math.round((Date.now() - ms) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
 /** Watch a reel here, at the top of the panel: Facebook's player, shown through a small page on Reel
  *  Feed's own site (Facebook's player doesn't take to sitting directly in an extension page). */
 let watching = null;
@@ -90,7 +113,13 @@ function shown() {
   if (!data) return [];
   const q = $("search").value.trim().toLowerCase();
   const min = parseNum($("minViews").value);
-  const list = data.reels.filter((r) => r.views >= min && (!q || r.id.includes(q) || textOf(r.id).toLowerCase().includes(q)));
+  const show = $("show").value;
+  const list = data.reels.filter(
+    (r) =>
+      r.views >= min &&
+      (show === "all" || (show === "added") === added.has(r.id)) &&
+      (!q || r.id.includes(q) || textOf(r.id).toLowerCase().includes(q)),
+  );
   const sort = $("sort").value;
   if (sort === "most") list.sort((a, b) => b.views - a.views);
   else if (sort === "least") list.sort((a, b) => a.views - b.views);
@@ -122,26 +151,37 @@ function draw() {
     return;
   }
   const n = data.reels.length;
+  const nAdded = data.reels.filter((r) => added.has(r.id)).length;
+  const linked = libraryAt > 0;
   $("status").textContent = data.running
-    ? `Scrolling slowly… ${n} reels so far`
+    ? `Scrolling slowly… ${n} reels so far${linked ? ` · ${nAdded} already added` : ""}`
     : n
-      ? `${n} reels found${n >= data.cap ? ` (the most it collects: ${data.cap})` : ""}. Scroll the page (or "Keep scrolling") to find more.`
+      ? `${n} reels found${n >= data.cap ? ` (the most it collects: ${data.cap})` : ""}${linked ? ` · ${nAdded} already added · ${n - nAdded} not added yet` : ""}. Scroll the page (or "Keep scrolling") to find more.`
       : "No reels found yet. Scroll the page a little (or click Keep scrolling).";
+  // Where the "already added" marks come from
+  const stale = linked && Date.now() - libraryAt > 24 * 3600 * 1000;
+  $("syncNote").textContent = linked
+    ? `✓ marks come from Reel Feed (updated ${ago(libraryAt)})${stale ? ". Open Reel Feed to refresh them." : "."}`
+    : "Open Reel Feed once so this panel can show which reels you've already added.";
+  $("openApp").hidden = linked && !stale;
   const list = shown();
   void fillInfo(list);
-  $("counts").textContent = `${list.length} shown · ${picked.size} selected`;
+  const counts = () => `${list.length} shown · ${picked.size} selected`;
+  $("counts").textContent = counts();
   const items = list.map((r) => {
+    const isAdded = added.has(r.id);
     const li = document.createElement("li");
-    li.className = picked.has(r.id) ? "on" : "";
+    li.className = isAdded ? "added" : picked.has(r.id) ? "on" : "";
     const label = document.createElement("label");
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.checked = picked.has(r.id);
+    box.checked = !isAdded && picked.has(r.id);
+    box.disabled = isAdded; // already in Reel Feed
     box.onchange = () => {
       if (box.checked) picked.add(r.id);
       else picked.delete(r.id);
       li.className = box.checked ? "on" : "";
-      $("counts").textContent = `${list.length} shown · ${picked.size} selected`;
+      $("counts").textContent = counts();
       updateSend();
     };
     const img = document.createElement("img");
@@ -166,7 +206,13 @@ function draw() {
       box2.append(desc);
     }
     box2.append(views);
-    box.setAttribute("aria-label", `Select ${known?.t || `reel ${r.id}`}, ${views.textContent}`);
+    if (isAdded) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "✓ Added";
+      views.append(" ", badge);
+    }
+    box.setAttribute("aria-label", `${isAdded ? "Already added: " : "Select "}${known?.t || `reel ${r.id}`}, ${views.textContent}`);
     label.append(box, img, box2);
     const play = document.createElement("button");
     play.type = "button";
@@ -257,11 +303,12 @@ chrome.tabs.onUpdated.addListener((id, info) => {
 });
 
 $("scrollBtn").onclick = () => void ask({ t: data?.running ? "stop" : "scroll" }).then(() => refresh());
-for (const id of ["search", "minViews", "sort"]) $(id).addEventListener("input", draw);
+for (const id of ["search", "minViews", "sort", "show"]) $(id).addEventListener("input", draw);
 $("allBtn").onclick = () => {
-  for (const r of shown()) picked.add(r.id);
+  for (const r of shown()) if (!added.has(r.id)) picked.add(r.id); // not the ones you already have
   draw();
 };
+$("openApp").onclick = () => chrome.tabs.create({ url: `${APP}added` });
 $("noneBtn").onclick = () => {
   picked.clear();
   draw();

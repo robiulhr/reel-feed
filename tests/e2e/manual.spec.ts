@@ -54,6 +54,41 @@ test.describe("Facebook videos you add by link", () => {
     await page.route("**/api/fb/thumb/**", (r) => r.fulfill({ status: 404, body: "" }));
   });
 
+  test("the app tells the browser extension which videos are added (add, delete, and when it says hello)", async ({ app: page }) => {
+    await closeTips(page);
+    // listen like the extension's bridge does
+    await page.evaluate(() => {
+      (window as any).__lib = [];
+      addEventListener("message", (e) => {
+        if (e.source === window && e.data?.source === "reel-feed-app" && e.data.t === "library") (window as any).__lib.push(e.data.ids);
+      });
+    });
+    const last = () => page.evaluate(() => (window as any).__lib.at(-1) ?? null);
+    const hello = () => page.evaluate(() => window.postMessage({ source: "reel-feed-ext", t: "hello" }, location.origin));
+
+    await hello(); // the extension was installed after the app opened
+    await expect.poll(last).toEqual([]);
+
+    await page.locator("#menuBtn").click();
+    await page.locator('[data-p="added"]').click();
+    await page.locator("#panelBody").getByRole("button", { name: "＋ Add a Facebook video" }).click();
+    const dlg = page.locator(".dlg");
+    await dlg.getByLabel("Facebook video link").fill(META.url);
+    await dlg.getByLabel("Facebook video link").press("Enter");
+    await expect(dlg).toContainText("Found: Boost Marketing");
+    const sales = dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ });
+    if ((await sales.getAttribute("aria-pressed")) !== "true") await sales.click();
+    await dlg.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dlg).toBeHidden();
+    await expect.poll(last).toEqual([META.id]); // sent right after adding, nothing asked for
+
+    await page.locator(".fb-card").getByRole("button", { name: "Delete" }).click();
+    await page.locator(".dlg").getByRole("button", { name: "Delete", exact: true }).click();
+    await expect.poll(last).toEqual([]);
+    // only the public video numbers are in the message
+    expect(JSON.stringify(await last())).not.toMatch(/Boost|note|http/i);
+  });
+
   test("paste a link → filled in → plays in the feed → save, unsave, edit, delete", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#menuBtn").click();

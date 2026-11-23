@@ -17,6 +17,7 @@ import type { AppApi, ExternalChannelInfo } from "./app";
 import { dismiss, go, inList, setFeed } from "./router";
 import type { Dataset, Short } from "./types";
 import { applyManual } from "./fbdata";
+import { announceAdded } from "./extbridge";
 
 export const feed = {
   ds: { generatedAt: 0, units: 0, usage: [], channels: [], videos: [] } as Dataset,
@@ -376,6 +377,7 @@ export function setData(d: Dataset, keepExternal: boolean) {
 // ---------- Facebook videos you added ----------
 /** Your added Facebook videos changed (added, edited, deleted, synced): put the new copies in the library. */
 export function refreshManual(redraw = true) {
+  announceAdded(); // the browser extension marks the reels you already have
   const shorts = applyManual(feed.ds, state);
   const ids = new Set(shorts.map((s) => s.id));
   for (const [id, s] of feed.byId) if (s.fb && !ids.has(id)) feed.byId.delete(id);

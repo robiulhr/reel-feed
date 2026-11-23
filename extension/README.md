@@ -21,21 +21,33 @@ The side panel explains the steps itself ("How to use this"). After you change t
    click **Stop scrolling**. It never runs by itself or in the background.
 4. Narrow it down: **Min views** (e.g. `10K`, `1.5M`), **Sort** (page order, most or fewest views),
    **Search** (titles, captions, ids). Each reel shows its title and caption as they arrive.
-5. **▶** opens the reel in a small window next to the panel (Facebook's own reel page, where you're
-   signed in), so you can see what it is about. The next **▶** reuses that window.
-6. Tick the ones you want (**Select shown** ticks everything the filters show).
-7. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. There each one shows its
+5. **▶** plays the reel at the top of the panel so you can see what it is about (**↗ Open in a window**
+   shows it on Facebook in a window of its own if it won't play there).
+6. **Reels you've already added are marked.** Each one shows a green **✓ Added**, is dimmed and can't
+   be ticked, and the top line counts them ("12 already added · 48 not added yet"). **Show** lets you
+   see only the ones **not added yet** (or only the added ones). **Select shown** skips the added ones.
+   The marks update by themselves as soon as you add or delete videos in Reel Feed.
+7. Tick the ones you want (**Select shown** ticks everything the filters show that isn't added yet).
+8. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. There each one shows its
    title and caption, has **▶ Watch**, and its own **✎ Categories & lists** (starting from the
    guess). **Set categories & lists for all selected** sets them on many at once. Untick any you
    don't want, then **Add**. Ones you already have are left out.
 
 Reel Feed adds up to 60 at a time.
 
+**First time:** the marks need Reel Feed to have told the extension what you have. Open Reel Feed in
+a tab once (the panel's **Open Reel Feed** button does it); after that the extension remembers the
+list, and refreshes it whenever you use Reel Feed. The panel says when the list was last updated.
+
 ## What it reads and sends
 
 - It reads only the reel tiles on the Facebook tab you're looking at: link, view count, thumbnail.
 - It sends nothing by itself. **Add** opens Reel Feed with the picked reel ids in the address
   (`/added#add=id,id,…`); the app looks each one up the same way as adding one by link.
+- The "added" marks: Reel Feed (the app) posts the numbers of your added Facebook videos to its own page;
+  a small script (`bridge.js`) that runs **only on Reel Feed's own address** stores them in the
+  extension. Only those public video numbers travel, and only inside your browser. It doesn't read
+  Facebook or anything else on the app's page.
 - Titles and captions come from Reel Feed's own lookup (`/api/fb/meta`), two at a time, only for
   the reels the panel shows. They're kept in the extension's storage on this computer (up to
   3,000), so they aren't looked up again.
@@ -43,10 +55,12 @@ Reel Feed adds up to 60 at a time.
 ## Files
 
 - `manifest.json`: Manifest V3; permissions are the side panel, its own storage, putting its script
-  into a tab (`scripting`), and access to facebook.com and Reel Feed's address. It has no content
-  scripts: nothing is loaded into Facebook pages by itself.
+  into a tab (`scripting`), and access to facebook.com and Reel Feed's address. Its only
+  content script is `bridge.js`, on Reel Feed's own address; nothing is loaded into Facebook pages
+  by itself.
 - `content.js`: the panel puts it into a Facebook tab only when you open the panel on a page's Reels
   tab. It collects the tiles (and does the slow scroll) and does nothing on any other page.
+- `bridge.js`: runs on Reel Feed's own site; keeps the list of videos you've added for the panel's marks.
 - `panel.html`, `panel.css`, `panel.js`: the side panel.
 - `background.js`: opens the side panel when you click the button.
 

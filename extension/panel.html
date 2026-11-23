@@ -40,9 +40,22 @@
         </label>
       </div>
       <div class="row">
+        <label>Show
+          <select id="show">
+            <option value="all">All reels</option>
+            <option value="new">Not added yet</option>
+            <option value="added">Already added</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
         <button id="allBtn" type="button">Select shown</button>
         <button id="noneBtn" type="button">Unselect all</button>
         <span id="counts" class="note"></span>
+      </div>
+      <div class="row">
+        <p id="syncNote" class="note"></p>
+        <button id="openApp" type="button" hidden>Open Reel Feed</button>
       </div>
     </section>
 

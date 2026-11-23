@@ -45,6 +45,7 @@ import { currentPanelTab, initPanels, renderControls, renderPanel, showTipsIfNew
 import { applyNetwork } from "./network";
 import { applyCurrent, startRouter } from "./router";
 import { playLinked, showRoute } from "./routes";
+import { startExtBridge } from "./extbridge";
 import { openBulkAdd } from "./manual"; // Facebook videos you added: the Add dialog, the Added page, a page's screen
 
 /** Background sync brought changes from another device. */
@@ -111,6 +112,7 @@ async function boot() {
   }
   if (opened.k !== "feed") applyCurrent(); // opened on a menu page / channel / More like this
   if (addAtStart.length) void openBulkAdd(addAtStart); // opened from the browser extension
+  startExtBridge(); // tells the extension which Facebook videos you already have (and answers its hello)
   window.addEventListener("hashchange", openAddLink);
   console.info(`First video in ${Math.round(performance.now() - t0)} ms (from ${first.source})`);
 
