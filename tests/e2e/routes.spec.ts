@@ -115,7 +115,7 @@ test.describe("page addresses and Back", () => {
     expect(path(page)).toBe("/saved");
   });
 
-  test("Share gives a link to this Short in the app", async ({ app: page }) => {
+  test("Share offers two links: this Short in the app, and the video's own YouTube address", async ({ app: page }) => {
     await page.addInitScript(() => {
       (window as unknown as { shared: string[] }).shared = [];
       navigator.share = async (d?: ShareData) => {
@@ -124,10 +124,13 @@ test.describe("page addresses and Back", () => {
     });
     await reload(page);
     await closeTips(page);
-    await page.locator("#shareBtn").click();
     const id = path(page).split("/")[2];
-    await expect
-      .poll(() => page.evaluate(() => (window as unknown as { shared: string[] }).shared[0]))
-      .toBe(new URL(`/v/${id}`, page.url()).href);
+    const shared = (n: number) => page.evaluate((i) => (window as unknown as { shared: string[] }).shared[i], n);
+    await page.locator("#shareBtn").click();
+    await page.getByRole("button", { name: /^Ecomgy link/ }).click();
+    await expect.poll(() => shared(0)).toBe(new URL(`/v/${id}`, page.url()).href);
+    await page.locator("#shareBtn").click();
+    await page.getByRole("button", { name: /^Original YouTube link/ }).click();
+    await expect.poll(() => shared(1)).toBe(`https://www.youtube.com/shorts/${id}`);
   });
 });

@@ -57,7 +57,7 @@ Phone / laptop ── password login ──► /api on the site ──► Cloudf
   - `/` feed · `/v/VIDEO_ID` the feed on that Short · `/saved`, `/history`, `/channels`, `/sorting`, `/hidden`, `/sync`, `/usage`, `/backups`, `/about` · `/channel/handle` (no @) · `/similar/VIDEO_ID`.
   - **Back** (Android back swipe, browser ←) closes the top thing: a dialog or sheet, then a list you're swiping through (the page it came from comes back), then a page, then the menu. ✕ / Esc / tapping outside do exactly the same. Switching menu tabs and swiping through Shorts add no Back steps; the address just follows along, so a **refresh keeps your place**.
   - Opened straight on a deeper address (a link, a refresh on `/saved`): the feed is put underneath, so Back goes to the feed, not out of the app.
-  - **Share** (↗) sends `…/v/VIDEO_ID` — opens that Short in the app for anyone, then the feed carries on (`playLinked`). ⋯ → *Open on YouTube* still opens YouTube.
+  - **Share** (↗) asks which link: the **Ecomgy link** `…/v/VIDEO_ID` (preview card in chats; people with the password open it in the app, everyone else is sent to the video on YouTube or Facebook) or the **original YouTube / Facebook link**. ⋯ → *Open on YouTube* still opens YouTube.
   - **Link previews**: WhatsApp, Facebook/Messenger, Telegram, X, Slack, Discord, LinkedIn… show that Short's **thumbnail, title and channel** (`worker/src/app.ts`: for those apps only, it asks YouTube's free oEmbed — no key, no quota — and writes the `og:`/`twitter:` tags into the page). People opening the link get the normal app straight away. Other pages show the app's general preview.
   - Files are loaded from absolute paths (`base: "/"`); the GitHub Pages copy is built with `BASE_PATH=/reel-feed/` and a `404.html` copy of the app so its deep links work too.
 - **Works offline / installable**: `public/sw.js` keeps the app files on the device; `manifest.webmanifest` makes it installable (browser menu → *Add to Home screen* / *Install app*). Offline you still get History, Saved, lists; videos need a connection.
@@ -546,7 +546,7 @@ Tech: Vite + TypeScript (no UI framework), YouTube Data API v3, YouTube IFrame P
 - **Remove is a soft delete** (`"status": "removed"`), restorable forever; permanent Delete only from Removed — the user explicitly wanted a second, deliberate deletion.
 - **RSS-first new-upload detection + age-based stats refresh**: cut API use per refresh ~35×.
 - **Name search only on request**: it costs 100 units vs 2–3 for a handle/link.
-- **Share uses the native share sheet / copy link** with the public `youtube.com/shorts/…` link (works for anyone, no app needed).
+- **Share uses the native share sheet / copy link**, with a choice of the Ecomgy link or the video's own public `youtube.com/shorts/…` (or Facebook) link.
 - **"More like this" in two layers**: YouTube removed its related-videos API in 2023, so similarity is computed from your own library (free) and, on request, by a keyword search (~103 units).
 - **Quota guard with a server-side lock**: app warnings can be bypassed by bugs or old devices, so the Worker enforces the budget itself (Cloudflare KV counter); a fixed reserve keeps automatic refreshes safe.
 - **Explore any channel, but keep only best 150 + recent**: deep history wasn't needed; previews load the newest ≤200 Shorts.

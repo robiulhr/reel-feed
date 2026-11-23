@@ -34,7 +34,9 @@ export default {
       if (video && req.method === "GET") {
         // a shared Short: preview cards for chat apps; people without the password go to YouTube
         if (isPreviewBot(req.headers.get("User-Agent") ?? "")) return preview(video, url, env);
-        return Response.redirect(`https://www.youtube.com/shorts/${video}`, 302);
+        // a Facebook video you added (fb + its number) goes to Facebook, a Short to YouTube
+        const fb = /^fb(\d{6,25})$/.exec(video)?.[1];
+        return Response.redirect(fb ? `https://www.facebook.com/reel/${fb}/` : `https://www.youtube.com/shorts/${video}`, 302);
       }
       if (OPEN_FILES.has(url.pathname)) return env.ASSETS.fetch(req);
       if (wantsPage(req, url)) return loginPage();

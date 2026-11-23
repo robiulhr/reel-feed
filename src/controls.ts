@@ -9,7 +9,7 @@ import { undoable } from "./backup";
 import * as sync from "./sync";
 import { checkForUpdate } from "./data";
 import { infoDialog, once, toast, toastError } from "./ui";
-import { ago, fmtTime } from "./dom";
+import { ago, el, fmtTime } from "./dom";
 import { els, flashIcon } from "./view";
 import { playback, playerHooks, pool } from "./player";
 import { applyData, feed, latestVersion, offerData, renderMeta, renderSave, resetFeed } from "./feed";
@@ -240,14 +240,38 @@ export function toggleSave(forceOn = false) {
   renderSave();
 }
 
-async function shareCurrent() {
+/** Share is a choice of two links: the Ecomgy one, or the video's own address on YouTube / Facebook. */
+function shareCurrent() {
   const cur = feed.cur;
   if (!cur) return;
   const ch = feed.ds.channels[cur.ch];
-  const url = shareLink(cur.id); // opens this Short in the app (anyone can open it)
+  const original = cur.fb ? cur.fb.url : `https://www.youtube.com/shorts/${cur.id}`;
+  const box = el("div", "share-opts");
+  const option = (title: string, hint: string, url: string) => {
+    const b = el("button", "share-opt");
+    b.type = "button";
+    b.append(el("strong", "", title), el("span", "", hint));
+    b.onclick = () => {
+      for (const x of document.querySelectorAll<HTMLButtonElement>(".dlg-overlay button")) if (x.textContent === "Close") x.click();
+      void sendLink(url, cur.t, `${cur.t} — ${ch?.n ?? ""}`);
+    };
+    return b;
+  };
+  box.append(
+    option(
+      "Ecomgy link",
+      "Shows a preview card in chats. People with the password open it in the app; everyone else goes to the video.",
+      shareLink(cur.id),
+    ),
+    option(cur.fb ? "Original Facebook link" : "Original YouTube link", "The video's own page. Works for anyone, no password.", original),
+  );
+  void infoDialog("Share this video", box);
+}
+
+async function sendLink(url: string, title: string, text: string) {
   if (navigator.share) {
     try {
-      await navigator.share({ title: cur.t, text: `${cur.t} — ${ch?.n ?? ""}`, url });
+      await navigator.share({ title, text, url });
       return;
     } catch (e) {
       if ((e as Error).name === "AbortError") return; // you closed the share sheet

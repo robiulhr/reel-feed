@@ -201,6 +201,8 @@ describe("password gate", () => {
     const person = await app.fetch(anon("/v/abcDEF12345"), e);
     expect(person.status).toBe(302);
     expect(person.headers.get("Location")).toBe("https://www.youtube.com/shorts/abcDEF12345");
+    const fb = await app.fetch(anon("/v/fb1141407915517139"), e); // a Facebook video you added
+    expect(fb.headers.get("Location")).toBe("https://www.facebook.com/reel/1141407915517139/");
   });
 
   it("signed in, the app and its files are served", async () => {
