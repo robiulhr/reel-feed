@@ -15,6 +15,8 @@ installErrorCatcher(); // first: anything that breaks from here on is caught and
 
 import { loadApi } from "./pool";
 import { onOtherTab, onSaveFailed, startVisit, state } from "./store";
+import { initCloudDot, onConnectRequest } from "./cloud";
+import { addLocalLog } from "./locallog";
 import * as sync from "./sync";
 import { dailyBackup } from "./backup";
 import { initChannels } from "./channels";
@@ -41,7 +43,7 @@ import {
 import { initControls, renderMute } from "./controls";
 import { initGestures } from "./gestures";
 import { initFullscreen } from "./fullscreen";
-import { currentPanelTab, initPanels, renderControls, renderPanel, showTipsIfNew } from "./panels";
+import { currentPanelTab, initPanels, openPanel, renderControls, renderPanel, showTipsIfNew } from "./panels";
 import { applyNetwork } from "./network";
 import { applyCurrent, startRouter } from "./router";
 import { playLinked, showRoute } from "./routes";
@@ -73,12 +75,20 @@ async function boot() {
   sync.startSync(onSyncUpdate);
   onOtherTab(onSyncUpdate); // another Reel Feed tab saved something: show it here too
   // the device refused to save (storage full or blocked): say so instead of losing changes quietly
-  onSaveFailed(() =>
+  onSaveFailed(() => {
+    addLocalLog("system", false, "The browser refused to save your changes (its storage is full or blocked)");
     banner(
       "⚠️ This browser can't save your changes right now (its storage is full or blocked). Free some space or open Menu → Backups; changes since may be lost when you close the app.",
       () => banner(null),
-    ),
+    );
+  });
+  // where your data stands: a dot on the Menu button, and a warning if sync isn't connected when you change something
+  onConnectRequest(() => openPanel("sync"));
+  sync.onUnprotected(() =>
+    // just after the normal confirmation ("Added ✓"), not instead of it
+    window.setTimeout(() => toast("⚠️ Not backed up: sync isn't connected", { label: "Connect", run: () => openPanel("sync") }, 9000), 2800),
   );
+  initCloudDot();
   const opened = startRouter(showRoute); // the address the app was opened on (shared link, refresh)
   let wantShort = opened.k === "feed" ? opened.v : undefined;
   onNetworkChange(() => applyNetwork());

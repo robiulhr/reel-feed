@@ -6,6 +6,7 @@
 import { type CatId, detectLang, GROUPS, type GroupId, groupOf, isCat } from "./categories";
 import { catChooser } from "./catpicker";
 import { clickable } from "./a11y";
+import { cloudLine } from "./cloud";
 import { ago, btn, compact, el, nowSec } from "./dom";
 import { fallbackTitle, fbIdFromLink, fbPagePicUrl, fbThumbUrl, pageHref, pageKey } from "./fbdata";
 import { app, feed, playList, refreshManual, renderSave } from "./feed";
@@ -468,10 +469,12 @@ let addedShown: { body: HTMLElement; rerender: () => void } | null = null;
 
 /** Everything you added (a Menu tab). `rerender` draws it again after a change. */
 export function renderAdded(body: HTMLElement, rerender: () => void) {
+  const cloud = cloudLine(); // saved to the cloud / saving / not backed up
   const f = addedFilter;
   addedShown = { body, rerender };
   body.append(btn("＋ Add a Facebook video", async () => (await fbVideoDialog()) && rerender(), "btn primary sv-play"));
   body.append(btn("＋ Add several at once", () => void openBulkAdd(), "btn sv-play"));
+  body.append(cloud);
   const all = state.manual;
   if (!all.length) {
     body.append(

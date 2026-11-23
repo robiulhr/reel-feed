@@ -3,6 +3,7 @@
  * silently freezing, and quietly reports it to the sync server so the cause can be found
  * (`npx wrangler tail`, or the last 50 reports kept in Cloudflare KV under "errlog").
  */
+import { addLocalLog } from "./locallog";
 import * as sync from "./sync";
 import { toastError } from "./ui";
 
@@ -19,6 +20,7 @@ export function report(msg: string, where: string, stack?: string) {
   const key = `${msg}|${where}`;
   if (seen.has(key)) return;
   seen.add(key);
+  addLocalLog("error", false, `${msg.slice(0, 200)} (${where})`);
   console.error("[reel-feed]", msg, where, stack ?? "");
   toastError("Something went wrong. If the app misbehaves, reload it.", () => location.reload());
   if (!sync.isConnected() || reportsThisSession >= 10) return;

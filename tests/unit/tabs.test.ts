@@ -39,7 +39,7 @@ describe("several tabs saving to the same device", () => {
     b.flushPersist();
     const reloaded = await open();
     expect(ids(reloaded)).toEqual(["100000000001", "100000000002"]);
-    expect(reloaded.pending.length).toBe(2); // and both are still waiting to sync
+    expect(reloaded.pending.filter((o) => o.t === "manAdd").length).toBe(2); // and both are still waiting to sync
   });
 
   it("many tabs, many videos: nothing is lost (the 500-video case)", async () => {

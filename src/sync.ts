@@ -5,7 +5,21 @@
  * and stores everything in user-state.json in a PRIVATE GitHub repo. Every sync is a commit,
  * so GitHub keeps the full history as a backup. Devices only keep a login session, never the token.
  */
-import { applyOp, fromFile, mergeInto, onChange, pending, persist, setShared, sharedOf, state, toFile } from "./store";
+import { addLocalLog } from "./locallog";
+import {
+  applyOp,
+  fromFile,
+  isImportantOp,
+  mergeInto,
+  onChange,
+  onImportant,
+  pending,
+  persist,
+  setShared,
+  sharedOf,
+  state,
+  toFile,
+} from "./store";
 
 /** Worker address, set at build time (VITE_SYNC_URL). Not a secret. */
 export const SYNC_URL = (import.meta.env.VITE_SYNC_URL as string | undefined)?.replace(/\/$/, "") ?? "";
@@ -13,6 +27,8 @@ export const SYNC_URL = (import.meta.env.VITE_SYNC_URL as string | undefined)?.r
 const CFG_KEY = "ecomgy-reel-feed.sync";
 const PUSH_DELAY_MS = 60_000; // batch changes for up to a minute
 const PULL_EVERY_MS = 5 * 60_000; // pick up other devices' changes
+const URGENT_DELAY_MS = 800; // your own changes (adding a video, a note, a delete…) go out almost at once
+const RETRY_MS = [3000, 10_000, 30_000, 60_000, 120_000]; // when the cloud can't be reached: try again, less and less often
 
 interface Cfg {
   session: string;
@@ -41,10 +57,33 @@ let lastSync = 0;
 let lastError = "";
 let pushTimer: number | undefined;
 let onUpdated: () => void = () => {};
+let failures = 0;
+let retryTimer: number | undefined;
+let lastSha: string | null = null;
+let lastWarn = 0;
+let unprotectedHook: (() => void) | undefined;
+const statusListeners: (() => void)[] = [];
 
 export const isAvailable = () => !!SYNC_URL;
 export const isConnected = () => !!cfg && !!SYNC_URL;
-export const status = () => ({ lastSync, lastError, pending: pending.length, busy });
+/** Changes of yours waiting to reach the cloud (background bookkeeping like "seen" marks isn't counted). */
+export const unsaved = () => pending.filter(isImportantOp).length;
+export const status = () => ({ lastSync, lastError, pending: pending.length, unsaved: unsaved(), busy, connected: isConnected() });
+/** Called whenever the sync state changes (saving, saved, failed, a change waiting) — for the status display. */
+export function onStatus(fn: () => void): () => void {
+  statusListeners.push(fn);
+  return () => {
+    const i = statusListeners.indexOf(fn);
+    if (i >= 0) statusListeners.splice(i, 1);
+  };
+}
+const emit = () => {
+  for (const fn of statusListeners) fn();
+};
+/** Called (at most every 5 minutes) when you change something while sync isn't connected: it exists only in this browser. */
+export function onUnprotected(fn: () => void) {
+  unprotectedHook = fn;
+}
 
 class AuthError extends Error {}
 
@@ -124,6 +163,8 @@ export async function syncNow(): Promise<void> {
   if (!isConnected() || busy) return;
   busy = true;
   onUpdated();
+  emit();
+  let done = false;
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
       const g = await api("/state");
@@ -137,7 +178,10 @@ export async function syncNow(): Promise<void> {
       for (const op of ops) applyOp(base, op);
 
       if (remote.sha && !ops.length && !needMerge) {
+        if (lastSha && remote.sha !== lastSha) addLocalLog("sync", true, "Received changes from another device or tab");
+        lastSha = remote.sha;
         setShared(base); // nothing to upload — just take the latest
+        done = true;
         break;
       }
 
@@ -157,16 +201,36 @@ export async function syncNow(): Promise<void> {
       cfg!.merged = true;
       saveCfg(cfg);
       setShared(base);
+      const mine = ops.filter(isImportantOp).length;
+      addLocalLog(
+        "sync",
+        true,
+        mine ? `Saved ${mine} change${mine === 1 ? "" : "s"} to the cloud` : "Saved background changes to the cloud",
+      );
+      done = true;
       break;
     }
+    // Four conflicts in a row used to end quietly as if all was well. Say so and try again.
+    if (!done) throw new Error("Another device or tab saved at the same moment — trying again shortly");
+    failures = 0;
+    clearTimeout(retryTimer);
     lastSync = Date.now();
     lastError = "";
   } catch (e) {
+    failures++;
     lastError = e instanceof Error ? e.message : "Couldn't reach the sync server";
+    addLocalLog("sync", false, `Couldn't save to the cloud: ${lastError}`);
+    // keep trying while something of yours is waiting (not after a log-out: it needs you to log in again)
+    if (isConnected() && pending.length) {
+      clearTimeout(retryTimer);
+      retryTimer = window.setTimeout(() => void syncNow(), RETRY_MS[Math.min(failures - 1, RETRY_MS.length - 1)]);
+    }
   } finally {
     busy = false;
     persist();
     onUpdated();
+    emit();
+    if (!lastError && unsaved() > 0) pushSoon(); // changes made while this one was uploading
   }
 }
 
@@ -202,10 +266,33 @@ function schedulePush() {
   }, PUSH_DELAY_MS);
 }
 
+/** Sends your changes to the cloud in a moment (changes made together are sent together). */
+function pushSoon() {
+  if (!isConnected()) return;
+  clearTimeout(pushTimer);
+  pushTimer = window.setTimeout(() => {
+    pushTimer = undefined;
+    void syncNow();
+  }, URGENT_DELAY_MS);
+}
+
+function warnUnprotected() {
+  if (!isAvailable() || Date.now() - lastWarn < 5 * 60_000) return;
+  lastWarn = Date.now();
+  unprotectedHook?.();
+}
+
 /** Start background syncing. `refresh` is called when data from another device arrives. */
 export function startSync(refresh: () => void) {
   onUpdated = refresh;
-  onChange(schedulePush);
+  onChange(() => {
+    schedulePush();
+    emit();
+  });
+  onImportant(() => {
+    if (isConnected()) pushSoon();
+    else warnUnprotected();
+  });
   syncNow(); // no-op until this device is logged in
   setInterval(() => {
     if (!pending.length) syncNow();

@@ -1,4 +1,4 @@
-import { type CatId, LEGACY, type Lang, normCats } from "./categories";
+import { type CatId, catLabel, LEGACY, type Lang, normCats } from "./categories";
 import type { Tab, Win } from "./types";
 
 /** The part of your data that syncs across devices (saved in the private GitHub repo). */
@@ -16,6 +16,38 @@ export interface Shared {
   manual: ManualVideo[]; // Facebook videos you added by link, newest first (the Added page)
   fbPages: FbPage[]; // the Facebook pages those videos come from
   notes: Record<string, Note>; // your notes, one per video (any Short or Facebook video), by its feed id
+  activity: ActivityEntry[]; // what happened to your data (newest first), from all your devices
+}
+
+/** One line of the activity log: something that happened to your data, from any device. */
+export type ActivityKind = "video" | "note" | "save" | "channel" | "list" | "category" | "backup";
+export interface ActivityEntry {
+  i: string; // unique id, so the same entry is never added twice
+  at: number; // unix seconds
+  d: "phone" | "computer"; // the device it happened on
+  k: ActivityKind;
+  v?: string; // what it's about: a video's feed id, a channel handle, a list id, a page key
+  x: string; // what happened, in words
+}
+export const MAX_ACTIVITY = 1500;
+const KINDS: ActivityKind[] = ["video", "note", "save", "channel", "list", "category", "backup"];
+export function normActivity(x: unknown): ActivityEntry[] {
+  if (!Array.isArray(x)) return [];
+  const seen = new Set<string>();
+  const out: ActivityEntry[] = [];
+  for (const e of x) {
+    if (!e || typeof e.i !== "string" || !e.i || seen.has(e.i) || typeof e.x !== "string" || !KINDS.includes(e.k)) continue;
+    seen.add(e.i);
+    out.push({
+      i: e.i.slice(0, 40),
+      at: Number(e.at) || 0,
+      d: e.d === "phone" ? "phone" : "computer",
+      k: e.k,
+      x: e.x.slice(0, 400),
+      ...(typeof e.v === "string" ? { v: e.v.slice(0, 80) } : {}),
+    });
+  }
+  return out.sort((a, b) => b.at - a.at).slice(0, MAX_ACTIVITY);
 }
 
 /** Your note on one video. */
@@ -205,6 +237,7 @@ export type Op =
   | { t: "manEdit"; v: ManualVideo }
   | { t: "manDel"; id: string } // also takes it out of Saved
   | { t: "pageSet"; p: FbPage } // add or change a Facebook page
+  | { t: "activity"; e: ActivityEntry } // a line of the activity log
   | { t: "note"; id: string; x: string; at: number; ti?: string } // write a note on a video (empty text = delete it)
   | { t: "restore"; data: Snap; mode: "merge" | "replace" }; // undo an erase / restore a backup
 
@@ -225,6 +258,7 @@ export const SHARED_KEYS = [
   "manual",
   "fbPages",
   "notes",
+  "activity",
 ] as const;
 
 export const emptyShared = (): Shared => ({
@@ -241,6 +275,7 @@ export const emptyShared = (): Shared => ({
   manual: [],
   fbPages: [],
   notes: {},
+  activity: [],
 });
 
 const defaults = (): State => ({
@@ -281,7 +316,7 @@ function read<T>(key: string, fallback: T): T {
 export const LOCAL_VERSION = 3;
 /** Choices for the "fewest views" filter (0 = any). */
 export const VIEW_MINS = [0, 1000, 10_000, 100_000, 1_000_000];
-export const FILE_VERSION = 5; // 3: channel lists. 4: added Facebook videos. 5: notes (older apps must not write the file and drop them)
+export const FILE_VERSION = 6; // 3: channel lists. 4: added Facebook videos. 5: notes. 6: activity log (older apps must not write the file and drop them)
 
 export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
   const s = { ...defaults(), ...raw } as State;
@@ -303,6 +338,7 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
   s.manual = normManual(raw.manual);
   s.fbPages = normPages(raw.fbPages);
   s.notes = normNotes(raw.notes);
+  s.activity = normActivity(raw.activity);
   adoptManualNotes(s);
   if (typeof s.list !== "string" || (s.list && !s.lists.some((l) => l.id === s.list))) s.list = "";
   if (!["all", "bn", "en", "hi"].includes(s.lang)) s.lang = "all";
@@ -323,7 +359,7 @@ const MAX_PENDING = 5000;
 /** Keeps the upload queue bounded after long offline periods: drops the least important changes first. */
 export function capPending(list: Op[], max = MAX_PENDING) {
   if (list.length <= max) return;
-  for (const kind of ["seen", "learn", "api"] as const) {
+  for (const kind of ["seen", "learn", "api", "activity"] as const) {
     for (let i = 0; i < list.length && list.length > max; ) {
       if (list[i].t === kind) list.splice(i, 1);
       else i++;
@@ -580,6 +616,9 @@ export function applyOp(s: Shared, op: Op) {
     case "restore":
       applyRestore(s, op.data, op.mode);
       break;
+    case "activity":
+      if (!s.activity.some((x) => x.i === op.e.i)) s.activity = [op.e, ...s.activity].sort((a, b) => b.at - a.at).slice(0, MAX_ACTIVITY);
+      break;
     case "api":
       if (!s.apiLog.some((x) => x.at === op.at && x.what === op.what)) {
         s.apiLog = [{ at: op.at, units: op.units, what: op.what }, ...s.apiLog].sort((a, b) => b.at - a.at).slice(0, MAX_API_LOG);
@@ -674,13 +713,95 @@ export function onChange(fn: Listener) {
   listeners.push(fn);
 }
 
-/** Make a change: apply it now, remember it for the next sync. */
-export function act(op: Op) {
+// ---------- the activity log ----------
+const device = (): "phone" | "computer" =>
+  typeof navigator !== "undefined" && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? "phone" : "computer";
+let entrySeq = 0;
+function entry(k: ActivityKind, x: string, v?: string): ActivityEntry {
+  const i = `${Date.now().toString(36)}${(entrySeq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return { i, at: Math.floor(Date.now() / 1000), d: device(), k, x, ...(v ? { v } : {}) };
+}
+const quoted = (t?: string) => (t?.trim() ? ` “${t.trim().slice(0, 90)}”` : "");
+
+/** What a change means in words, worked out BEFORE it's applied (so a delete still knows the title). */
+export function describeOp(op: Op, s: Shared): ActivityEntry | null {
+  const list = (id: string) => s.lists.find((l) => l.id === id)?.name ?? "";
+  switch (op.t) {
+    case "manAdd":
+      return s.manual.some((m) => m.id === op.v.id) ? null : entry("video", `Added a Facebook video${quoted(op.v.t)}`, fbShortId(op.v.id));
+    case "manEdit":
+      return entry("video", `Edited a Facebook video${quoted(op.v.t)}`, fbShortId(op.v.id));
+    case "manDel":
+      return entry("video", `Deleted a Facebook video${quoted(s.manual.find((m) => m.id === op.id)?.t)}`, fbShortId(op.id));
+    case "pageSet":
+      return entry(
+        "video",
+        `${s.fbPages.some((p) => p.key === op.p.key) ? "Updated" : "Added"} the Facebook page${quoted(op.p.name)}`,
+        op.p.key,
+      );
+    case "note":
+      return entry("note", `${op.x.trim() ? "Wrote a note" : "Deleted a note"}${op.ti ? ` on${quoted(op.ti)}` : ""}`, op.id);
+    case "save":
+      return entry("save", "Saved a video", op.id);
+    case "unsave":
+      return entry("save", "Took a video out of Saved", op.id);
+    case "hide":
+      return entry("channel", `Hid the channel ${op.h}`, op.h);
+    case "unhide":
+      return entry("channel", `Showed the channel ${op.h} again`, op.h);
+    case "catFix":
+      return entry(
+        "category",
+        op.cats.length
+          ? `Changed a video's categories to ${op.cats.map(catLabel).join(", ")}`
+          : "Set a video's categories back to automatic",
+        op.id,
+      );
+    case "listNew":
+      return entry("list", `Created the list${quoted(op.name)}`, op.id);
+    case "listEdit":
+      return entry("list", `Changed the list${quoted(op.name)}`, op.id);
+    case "listDrop":
+      return entry("list", `Deleted the list${quoted(list(op.id))}`, op.id);
+    case "listAdd":
+      return entry("list", `Put the channel ${op.h} in the list${quoted(list(op.id))}`, op.id);
+    case "listRemove":
+      return entry("list", `Took the channel ${op.h} out of the list${quoted(list(op.id))}`, op.id);
+    case "restore":
+      return entry("backup", op.mode === "replace" ? "Restored a backup (replaced the data)" : "Put back what an erase had removed");
+    default:
+      return null;
+  }
+}
+
+/** Background bookkeeping (not your own choices): it syncs in the normal minute, not at once. */
+const MINOR_OPS = new Set<string>(["seen", "learn", "resetLearn", "clearSeen", "api", "watch", "histDel", "histClear", "activity", "bad"]);
+export const isImportantOp = (op: Op) => !MINOR_OPS.has(op.t);
+const importantListeners: ((op: Op) => void)[] = [];
+/** Called after each change that should reach the cloud right away. */
+export function onImportant(fn: (op: Op) => void) {
+  importantListeners.push(fn);
+}
+
+/** Make a change: apply it now, remember it for the next sync, and write it down in the activity log. */
+export function act(op: Op, opts: { quiet?: boolean } = {}) {
+  const e = opts.quiet ? null : describeOp(op, state);
   applyOp(state, op);
   pending.push(op);
+  if (e) {
+    const a: Op = { t: "activity", e };
+    applyOp(state, a);
+    pending.push(a);
+  }
   capPending(pending);
   persist();
   for (const fn of listeners) fn();
+  if (isImportantOp(op)) for (const fn of importantListeners) fn(op);
+}
+
+/** A line in the activity log that isn't one change (for example "Added 60 videos at once"). */
+export function logActivity(k: ActivityKind, x: string, v?: string) {
+  act({ t: "activity", e: entry(k, x, v) });
 }
 
 /** Works out where "NEW since your last visit" starts. A gap of 30+ minutes counts as a new visit. */
@@ -714,6 +835,7 @@ export interface StateFile {
   manual?: ManualVideo[];
   fbPages?: FbPage[];
   notes?: Record<string, Note>;
+  activity?: ActivityEntry[];
 }
 
 export function toFile(s: Shared): StateFile {
@@ -735,6 +857,7 @@ export function toFile(s: Shared): StateFile {
     manual: s.manual,
     fbPages: s.fbPages,
     notes: s.notes,
+    activity: s.activity,
   };
 }
 
@@ -765,6 +888,7 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
   s.manual = normManual(f.manual);
   s.fbPages = normPages(f.fbPages);
   s.notes = normNotes(f.notes);
+  s.activity = normActivity(f.activity);
   adoptManualNotes(s); // notes written in the old place (version 4 files)
   (f.seen ?? []).forEach((id, i) => {
     s.seen[id] = i + 1;
@@ -786,6 +910,9 @@ export function mergeInto(base: Shared, local: Shared) {
   mergeLists(base, local.lists ?? []);
   mergeManual(base, local);
   for (const [id, n] of Object.entries(local.notes ?? {})) applyOp(base, { t: "note", id, x: n.x, at: n.at, ti: n.ti });
+  const have = new Set(base.activity.map((e) => e.i));
+  const more = (local.activity ?? []).filter((e) => !have.has(e.i));
+  if (more.length) base.activity = [...more, ...base.activity].sort((a, b) => b.at - a.at).slice(0, MAX_ACTIVITY);
 }
 
 export function sharedOf(s: State): Shared {
@@ -803,6 +930,7 @@ export function sharedOf(s: State): Shared {
     manual: s.manual ?? [],
     fbPages: s.fbPages ?? [],
     notes: s.notes ?? {},
+    activity: s.activity ?? [],
   });
 }
 

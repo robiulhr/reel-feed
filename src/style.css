@@ -2869,3 +2869,96 @@ button[aria-busy="true"] {
   padding: 1px 5px;
   border-radius: 6px;
 }
+
+/* ---------- where your data stands (cloud line, Menu button dot) ---------- */
+.cloud-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: 13px;
+}
+.cloud-line[hidden] {
+  display: none;
+}
+.cloud-local,
+.cloud-error {
+  background: rgba(255, 159, 67, 0.16);
+  border: 1px solid #ff9f43;
+}
+.cloud-ok {
+  color: var(--muted);
+}
+#menuBtn {
+  position: relative;
+}
+#menuBtn[data-cloud="local"]::after,
+#menuBtn[data-cloud="error"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff9f43;
+  border: 2px solid var(--bg, #0b0b0f);
+}
+
+/* ---------- Menu → Activity ---------- */
+.act-chips {
+  margin: 8px 0;
+}
+.act-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0;
+}
+.act-day {
+  margin: 14px 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.act-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 7px 6px;
+  border-radius: 8px;
+}
+.act-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.act-row.bad {
+  background: rgba(255, 159, 67, 0.14);
+}
+.act-icon {
+  text-align: center;
+}
+.act-what {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.act-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.act-when {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.act-cloud {
+  margin: 12px 0;
+}
+.act-cloud summary {
+  cursor: pointer;
+  font-weight: 600;
+}

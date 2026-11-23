@@ -12,7 +12,7 @@ import { fbIdFromLink, fbThumbUrl } from "./fbdata";
 import { refreshManual } from "./feed";
 import { listLabel, LISTS_EVENT } from "./lists";
 import { type FbMeta, lookupFb, savePage } from "./manual";
-import { act, fbShortId, type ManualVideo, state } from "./store";
+import { act, fbShortId, logActivity, type ManualVideo, state } from "./store";
 import { confirmDialog, toast } from "./ui";
 
 const MAX = 60;
@@ -391,9 +391,19 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
       v: m?.views ?? 0,
       l: m?.reactions ?? 0,
     };
-    act({ t: "manAdd", v });
+    act({ t: "manAdd", v }, { quiet: true }); // one line in the activity log for the whole batch (below)
     added++;
   });
+  if (added) {
+    const names = go
+      .slice(0, 3)
+      .map((r) => r.meta?.title?.trim())
+      .filter(Boolean);
+    logActivity(
+      "video",
+      `Added ${added} Facebook video${added === 1 ? "" : "s"} at once${names.length ? ` (${names.map((n) => `“${n!.slice(0, 50)}”`).join(", ")}${added > names.length ? ", …" : ""})` : ""}`,
+    );
+  }
   refreshManual();
   window.dispatchEvent(new Event(LISTS_EVENT));
   const skipped = rows.filter((r) => r.state === "dup").length;

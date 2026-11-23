@@ -144,6 +144,10 @@ export function renderPanel() {
     void import("./notes").then((m) => {
       if (panelTab === "notes" && body.isConnected) m.renderNotesPage(body, () => openPanel("notes"));
     });
+  else if (panelTab === "activity")
+    void import("./activity").then((m) => {
+      if (panelTab === "activity" && body.isConnected) m.renderActivity(body, () => openPanel("activity"), feed.byId);
+    });
   else if (panelTab === "hidden") renderHidden(body);
   else if (panelTab === "sorting") renderSorting(body, app, () => openPanel("sorting"));
   else if (panelTab === "api") renderUsagePanel(body, feed.ds, ago);
