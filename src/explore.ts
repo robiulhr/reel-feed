@@ -101,6 +101,7 @@ export function shortGrid(
     const b = opts.badge?.(s);
     if (b) card.append(el("span", "scard-badge", b));
     if (state.saved.includes(s.id)) card.append(el("span", "scard-saved", "♥"));
+    if (state.notes[s.id]) card.append(el("span", "scard-note", "📝")); // you wrote a note on this one
     const cap = el("span", "scard-cap", s.t);
     card.append(cap);
     if (opts.showChannel) card.append(el("span", "scard-ch", app.ds.channels[s.ch]?.n ?? ""));

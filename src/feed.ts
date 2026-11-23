@@ -4,7 +4,7 @@
  */
 import { catInfo, normCats } from "./categories";
 import { buildQueue, isGuessed, videoCats } from "./rank";
-import { act, learn, state } from "./store";
+import { act, learn, noteOf, state } from "./store";
 import { openChannel } from "./explore";
 import { historyShorts } from "./history";
 import { toast } from "./ui";
@@ -241,6 +241,7 @@ function show(s: Short) {
   els.title.textContent = s.t;
   renderMeta();
   renderSave();
+  renderNote();
   if (feed.ctx) renderCtxBar();
   setFeed(s.id); // the address follows the Short on screen (refresh / share keeps it)
   announce(`${ch?.n ? `${ch.n}: ` : ""}${s.t}`);
@@ -282,6 +283,21 @@ export function renderMeta() {
     if (cats.length) bits.push(`${cats.map((c) => catInfo(c)?.short ?? c).join(" / ")}${isGuessed(s, state) ? " ?" : ""}`);
   }
   els.meta.textContent = bits.join(" · ");
+}
+
+/** The amber note chip above the title: "Add note", or the start of the note you wrote. */
+export function renderNote() {
+  const b = els.noteBtn;
+  const cur = feed.cur;
+  b.hidden = !cur;
+  if (!cur) return;
+  const text = noteOf(cur.id).trim();
+  const has = !!text;
+  b.classList.toggle("has", has);
+  const shown = has ? text.replace(/\s+/g, " ").slice(0, 160) : "Add note";
+  b.querySelector(".note-txt")!.textContent = shown;
+  // the spoken name must contain the words that are shown (an accessibility rule)
+  b.setAttribute("aria-label", has ? `Note: ${shown} — tap to edit` : "Add note on this video");
 }
 
 export function renderSave() {

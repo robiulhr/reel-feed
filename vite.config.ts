@@ -72,10 +72,12 @@ function facebookLookupsInDev(): Plugin {
  *   (Their category guess runs on the server — the word lists stay out of the app.)
  * Vite 8 (Rolldown) bundles ~4 kB bigger than Vite 6 for the same code: 41.3 kB with sync on (Nov 2026).
  * Raised JS 54 → 56 with bulk add (the "Add several" button, "#add=" links, shared page saving): 54.6 kB.
+ * Raised JS 56 → 58 with notes (the note chip on every video, the synced notes data): 55.6 kB. Their sheet
+ * and the Notes page are loaded only when used.
  * Parts loaded only when used (like "Add several at once") don't slow the start: they don't count in
  * `js`, and each has its own limit, `lazy`.
  */
-export const BUDGET_KB = { js: 56, css: 10, lazy: 10 };
+export const BUDGET_KB = { js: 58, css: 10, lazy: 10 };
 
 function sizeBudget(): Plugin {
   return {

@@ -20,6 +20,7 @@ const PANEL_PATHS: Record<string, string> = {
   channels: "channels",
   history: "history",
   saved: "saved",
+  notes: "notes",
   added: "added",
   sorting: "sorting",
   hidden: "hidden",

@@ -8,7 +8,19 @@ import { anyModalOpen, reducedMotion } from "./a11y";
 import { els } from "./view";
 import { playback, pool } from "./player";
 import { leaveList, exploreCurrent, feed, next, prev, upcoming } from "./feed";
-import { fasterRate, refreshFeed, setRate, setVolume, showVolume, skip, slowerRate, toggleMute, togglePlay, toggleSave } from "./controls";
+import {
+  fasterRate,
+  noteCurrent,
+  refreshFeed,
+  setRate,
+  setVolume,
+  showVolume,
+  skip,
+  slowerRate,
+  toggleMute,
+  togglePlay,
+  toggleSave,
+} from "./controls";
 import { maybeAutoFull, toggleFull } from "./fullscreen";
 
 // ---------- slide animation ----------
@@ -257,6 +269,10 @@ function bindKeys() {
         break;
       case "s":
         toggleSave();
+        break;
+      case "n":
+        e.preventDefault(); // so the letter doesn't land in the note's text box
+        void noteCurrent();
         break;
       case "r":
         refreshFeed();

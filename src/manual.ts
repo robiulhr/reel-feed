@@ -12,7 +12,7 @@ import { app, feed, playList, refreshManual, renderSave } from "./feed";
 import { listLabel, LISTS_EVENT, pickLists } from "./lists";
 import { setFbPageOpener, shortGrid } from "./explore";
 import { BASE } from "./router";
-import { act, type FbPage, fbShortId, type ManualVideo, state } from "./store";
+import { act, type FbPage, fbShortId, type ManualVideo, noteOf, state, writeNote } from "./store";
 import type { Short } from "./types";
 import { confirmDialog, toast } from "./ui";
 import { undoable } from "./backup";
@@ -136,7 +136,7 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
   note.rows = 3;
   note.maxLength = 2000;
   note.placeholder = "Why you kept it, e.g. hook in the first 2 s — idea for our Black Friday reel";
-  note.value = ed?.note ?? "";
+  note.value = ed ? noteOf(fbShortId(ed.id)) : "";
   note.dataset.ownEnter = "1";
 
   const pageName = el("input", "ch-search");
@@ -399,7 +399,7 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
     id: meta.id,
     url: meta.url,
     t: title.value.trim(),
-    note: note.value.trim(),
+    note: "", // the note lives in your notes (written below)
     by,
     cats: cats.picked(),
     lists: state.lists.filter((l) => lists.has(l.id)).map((l) => l.id),
@@ -409,6 +409,7 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
     l: meta.reactions,
   };
   act(ed ? { t: "manEdit", v } : { t: "manAdd", v });
+  if (note.value.trim() !== noteOf(fbShortId(v.id)).trim()) writeNote(fbShortId(v.id), note.value.trim(), v.t);
   refreshManual();
   window.dispatchEvent(new Event(LISTS_EVENT)); // list feeds and chips may change
   toast(ed ? "Saved ✓" : "Added ✓ — it's in your feeds and on the Added page");
@@ -484,7 +485,7 @@ export function renderAdded(body: HTMLElement, rerender: () => void) {
   }
   const short = (m: ManualVideo) => feed.byId.get(fbShortId(m.id));
   const pageOf = (m: ManualVideo) => state.fbPages.find((p) => p.key === m.by);
-  const text = (m: ManualVideo) => `${m.t} ${m.note} ${pageOf(m)?.name ?? ""}`.toLowerCase();
+  const text = (m: ManualVideo) => `${m.t} ${noteOf(fbShortId(m.id))} ${pageOf(m)?.name ?? ""}`.toLowerCase();
   const inGroup = (m: ManualVideo, g: GroupId) => m.cats.some((c) => groupOf(c) === g);
   const inList = (m: ManualVideo, id: string) => {
     if (m.lists.includes(id)) return true;
@@ -604,7 +605,8 @@ export function renderAdded(body: HTMLElement, rerender: () => void) {
     const p = pageOf(m);
     const sub = [p?.name, m.v ? `${compact(m.v)} views` : "", `added ${ago(m.at)}`].filter(Boolean).join(" · ");
     info.append(el("div", "ch-note", sub));
-    if (m.note) info.append(el("div", "fb-card-note", m.note));
+    const note = noteOf(fbShortId(m.id));
+    if (note) info.append(el("div", "fb-card-note", `📝 ${note}`));
     play.append(img, info);
     const saved = state.saved.includes(fbShortId(m.id));
     const acts = el("div", "fb-card-acts");
@@ -676,7 +678,7 @@ function openFbPage(chIndex: number) {
         if (items.length)
           body.append(
             shortGrid(app, items, (i) => playList(ch.n, items, i, draw), {
-              badge: (s) => (s.fb?.note ? "✎" : ""),
+              badge: undefined,
             }),
           );
       },

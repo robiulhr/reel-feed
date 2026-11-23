@@ -140,6 +140,10 @@ export function renderPanel() {
   else if (panelTab === "history") renderHistory(body, app, feed.byId, () => openPanel("history"));
   else if (panelTab === "saved") renderSaved(body);
   else if (panelTab === "added") renderAdded(body, () => openPanel("added"));
+  else if (panelTab === "notes")
+    void import("./notes").then((m) => {
+      if (panelTab === "notes" && body.isConnected) m.renderNotesPage(body, () => openPanel("notes"));
+    });
   else if (panelTab === "hidden") renderHidden(body);
   else if (panelTab === "sorting") renderSorting(body, app, () => openPanel("sorting"));
   else if (panelTab === "api") renderUsagePanel(body, feed.ds, ago);

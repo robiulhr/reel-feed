@@ -343,8 +343,16 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **Added is separate from Saved.** Added lists everything you added, with search, a page filter, list and category chips, and ♡ Save, ✎ Edit, ↗ and Delete. ♡ works like on any Short. Saved has a **Source** row (YouTube / Facebook). Deleting a video also takes it out of Saved, and you can Undo.
 - **Thumbnails** come through `/api/fb/thumb/ID`, which redirects to Facebook's current image. Facebook's image links expire, so they're never stored.
 - **Pages:** pasting a page's link calls `/api/fb/page?url=LINK`, which returns its name, address, follower count and about text, and fills them in. Its picture comes through `/api/fb/pagepic?path=/address`, a redirect like the thumbnails. Opening ✎ Edit on a video with no page looks the page up again.
-- **Sync:** `manual` and `fbPages` in user-state.json, file version 4. Older apps refuse to write the file, so they can't drop the videos you added.
+- **Sync:** `manual` and `fbPages` in user-state.json (file version 4). Older apps refuse to write the file, so they can't drop the videos you added.
 - **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
+
+## 6g. Notes on videos — `src/notes.ts`, `store.ts` (`notes`)
+- **On every video** (any Short or Facebook video) there is an amber **📝 Add note** chip above the channel name, the most eye-catching thing on the screen. Tap it, or press **N**. Once you have a note, the chip shows its first words (outlined in amber) so you see it while watching.
+- **The note sheet** names the video and has a large box (up to 5,000 characters), **⏱ Add time** (puts the video's current time, like `[0:12]`, into the note), **Copy** and **Delete note** (with Undo). The video pauses while you write and plays on after. Closing it in any way (Save, Close, Esc, tapping outside) keeps what you typed, so a note is never thrown away by accident.
+- **Menu → 📝 Notes** (`/notes`) lists all your notes, newest first, with search, **▶ Play** (plays your noted videos one after another), **✎ Edit**, **Copy**, **Delete** (with Undo) and **Copy all notes**. Grids of videos (channel pages, More like this) mark videos that have a note with 📝, and the Added page shows the note on its card.
+- **Data:** `notes` is `{ feedId: { x: text, at: last changed, ti: the video's title then } }`, one per video. The title is kept so the Notes page still works if a video leaves the library. Changes are `note` operations; when two devices write on the same video, the newer one wins (an older delete can't remove a newer note). Notes are in backups and in the synced user-state.json, which is now **file version 5**, so an older app can't write the file and drop them.
+- **The Facebook video note** (the Note field when you add or edit a Facebook video) is now the same note: it is moved into `notes` once, and the field in the Add dialog reads and writes it.
+- **Size:** the sheet and the Notes page are a separate small file, downloaded the first time they're used.
 
 ## 6c. Channel explorer — `src/explore.ts`
 

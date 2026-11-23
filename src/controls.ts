@@ -318,10 +318,23 @@ async function fetchFromYouTubeNow() {
   }
 }
 
+/** Opens the note sheet for the video on screen (the notes code is only downloaded the first time). */
+export async function noteCurrent() {
+  const cur = feed.cur;
+  if (!cur) return;
+  try {
+    const m = await import("./notes");
+    await m.editNote(cur.id, cur.t);
+  } catch {
+    toast("Couldn't open notes — check your connection and try again");
+  }
+}
+
 export function initControls() {
   bindProgress();
   bindSound();
   els.saveBtn.onclick = () => toggleSave();
+  els.noteBtn.onclick = () => void noteCurrent();
   els.shareBtn.onclick = shareCurrent;
   els.refreshBtn.onclick = refreshFeed;
 }

@@ -15,6 +15,38 @@ export interface Shared {
   lists: ChList[]; // your channel lists (Competitors, Inspiration…), each with its own feed and Saved view
   manual: ManualVideo[]; // Facebook videos you added by link, newest first (the Added page)
   fbPages: FbPage[]; // the Facebook pages those videos come from
+  notes: Record<string, Note>; // your notes, one per video (any Short or Facebook video), by its feed id
+}
+
+/** Your note on one video. */
+export interface Note {
+  x: string; // the text
+  at: number; // last changed (unix seconds); the newer one wins when two devices both changed it
+  ti: string; // the video's title when you wrote it (so the Notes page works even if the video leaves the library)
+}
+export const MAX_NOTE = 5000; // characters in one note
+const MAX_NOTES = 5000;
+/** Cleans notes from any source (a file, a backup). Empty ones are dropped. */
+export function normNotes(x: unknown): Record<string, Note> {
+  const out: Record<string, Note> = {};
+  if (!x || typeof x !== "object" || Array.isArray(x)) return out;
+  const rows = Object.entries(x as Record<string, any>)
+    .filter(([id, n]) => id.length > 0 && id.length <= 40 && n && typeof n.x === "string" && n.x.trim())
+    .map(([id, n]) => [id, { x: n.x.slice(0, MAX_NOTE), at: Number(n.at) || 0, ti: String(n.ti ?? "").slice(0, 200) }] as [string, Note])
+    .sort((a, b) => b[1].at - a[1].at)
+    .slice(0, MAX_NOTES);
+  for (const [id, n] of rows) out[id] = n;
+  return out;
+}
+/** Moves the note field of added Facebook videos (the old place for notes) into the notes. Safe to repeat. */
+export function adoptManualNotes(s: Pick<Shared, "manual" | "notes">) {
+  for (const m of s.manual) {
+    const text = (m.note ?? "").trim();
+    if (!text) continue;
+    const id = fbShortId(m.id);
+    if (!s.notes[id]) s.notes[id] = { x: text.slice(0, MAX_NOTE), at: m.at, ti: m.t };
+    m.note = "";
+  }
 }
 
 /** A Facebook video you added by pasting its link. Plays in the feed like a Short (id "fb" + its number). */
@@ -22,7 +54,7 @@ export interface ManualVideo {
   id: string; // Facebook's video number
   url: string; // the video's Facebook address
   t: string; // title ("" = none)
-  note: string; // your private note
+  note: string; // (old place for the note — now in `notes`; kept empty)
   by: string; // who made it: a page key ("fb:…"), "" = not set
   cats: CatId[]; // main first
   lists: string[]; // channel lists this one video is in (its page's lists count too)
@@ -172,6 +204,7 @@ export type Op =
   | { t: "manEdit"; v: ManualVideo }
   | { t: "manDel"; id: string } // also takes it out of Saved
   | { t: "pageSet"; p: FbPage } // add or change a Facebook page
+  | { t: "note"; id: string; x: string; at: number; ti?: string } // write a note on a video (empty text = delete it)
   | { t: "restore"; data: Snap; mode: "merge" | "replace" }; // undo an erase / restore a backup
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
@@ -190,6 +223,7 @@ export const SHARED_KEYS = [
   "lists",
   "manual",
   "fbPages",
+  "notes",
 ] as const;
 
 export const emptyShared = (): Shared => ({
@@ -205,6 +239,7 @@ export const emptyShared = (): Shared => ({
   lists: defaultLists(),
   manual: [],
   fbPages: [],
+  notes: {},
 });
 
 const defaults = (): State => ({
@@ -242,7 +277,7 @@ function read<T>(key: string, fallback: T): T {
  *   LOCAL_VERSION — this device (localStorage).  FILE_VERSION — the synced user-state.json.
  */
 export const LOCAL_VERSION = 3;
-export const FILE_VERSION = 4; // 3: channel lists. 4: added Facebook videos (older apps must not write the file and drop them)
+export const FILE_VERSION = 5; // 3: channel lists. 4: added Facebook videos. 5: notes (older apps must not write the file and drop them)
 
 export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
   const s = { ...defaults(), ...raw } as State;
@@ -263,6 +298,8 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
   s.lists = normLists(raw.lists);
   s.manual = normManual(raw.manual);
   s.fbPages = normPages(raw.fbPages);
+  s.notes = normNotes(raw.notes);
+  adoptManualNotes(s);
   if (typeof s.list !== "string" || (s.list && !s.lists.some((l) => l.id === s.list))) s.list = "";
   if (!["all", "bn", "en", "hi"].includes(s.lang)) s.lang = "all";
   s.sv = LOCAL_VERSION;
@@ -419,6 +456,15 @@ export function applyOp(s: Shared, op: Op) {
       else s.fbPages.push(op.p);
       break;
     }
+    case "note": {
+      const old = s.notes[op.id];
+      if (old && old.at > op.at) break; // a newer note (from another device) stays
+      const x = op.x.slice(0, MAX_NOTE);
+      if (!x.trim()) delete s.notes[op.id];
+      else if (old || Object.keys(s.notes).length < MAX_NOTES)
+        s.notes[op.id] = { x, at: op.at, ti: (op.ti ?? old?.ti ?? "").slice(0, 200) };
+      break;
+    }
     case "restore":
       applyRestore(s, op.data, op.mode);
       break;
@@ -445,7 +491,20 @@ export function snap(s: Shared, keys: readonly (keyof Snap)[] = SNAP_KEYS): Snap
   }
   return out;
 }
-export const SNAP_KEYS = ["saved", "hidden", "seen", "bad", "affCh", "affCat", "hist", "catFix", "lists", "manual", "fbPages"] as const;
+export const SNAP_KEYS = [
+  "saved",
+  "hidden",
+  "seen",
+  "bad",
+  "affCh",
+  "affCat",
+  "hist",
+  "catFix",
+  "lists",
+  "manual",
+  "fbPages",
+  "notes",
+] as const;
 
 /**
  * replace = put those parts back exactly as they were (a backup restore, learning undo).
@@ -478,6 +537,7 @@ export function applyRestore(s: Shared, d: Snap, mode: "merge" | "replace") {
   for (const [id, cats] of Object.entries(d.catFix ?? {})) if (!(id in s.catFix)) s.catFix[id] = cats;
   if (d.lists) mergeLists(s, d.lists);
   mergeManual(s, d);
+  for (const [id, n] of Object.entries(normNotes(d.notes))) applyOp(s, { t: "note", id, x: n.x, at: n.at, ti: n.ti });
 }
 
 /** Adds back Facebook videos and pages that are missing (keeps everything already there). */
@@ -540,6 +600,7 @@ export interface StateFile {
   lists?: ChList[];
   manual?: ManualVideo[];
   fbPages?: FbPage[];
+  notes?: Record<string, Note>;
 }
 
 export function toFile(s: Shared): StateFile {
@@ -560,6 +621,7 @@ export function toFile(s: Shared): StateFile {
     lists: s.lists,
     manual: s.manual,
     fbPages: s.fbPages,
+    notes: s.notes,
   };
 }
 
@@ -589,6 +651,8 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
   s.lists = normLists(f.lists);
   s.manual = normManual(f.manual);
   s.fbPages = normPages(f.fbPages);
+  s.notes = normNotes(f.notes);
+  adoptManualNotes(s); // notes written in the old place (version 4 files)
   (f.seen ?? []).forEach((id, i) => {
     s.seen[id] = i + 1;
   }); // keeps order; real timestamps sort after these
@@ -608,6 +672,7 @@ export function mergeInto(base: Shared, local: Shared) {
   for (const [id, cats] of Object.entries(local.catFix ?? {})) if (!(id in base.catFix)) base.catFix[id] = cats;
   mergeLists(base, local.lists ?? []);
   mergeManual(base, local);
+  for (const [id, n] of Object.entries(local.notes ?? {})) applyOp(base, { t: "note", id, x: n.x, at: n.at, ti: n.ti });
 }
 
 export function sharedOf(s: State): Shared {
@@ -624,10 +689,19 @@ export function sharedOf(s: State): Shared {
     lists: s.lists ?? defaultLists(),
     manual: s.manual ?? [],
     fbPages: s.fbPages ?? [],
+    notes: s.notes ?? {},
   });
 }
 
 export function setShared(s: Shared) {
   for (const k of SHARED_KEYS) (state as any)[k] = s[k];
   persist();
+}
+
+// ---------- notes ----------
+/** Your note on a video (by its feed id), "" = none. */
+export const noteOf = (id: string): string => state.notes[id]?.x ?? "";
+/** Writes (or, with empty text, deletes) your note on a video. */
+export function writeNote(id: string, x: string, title: string) {
+  act({ t: "note", id, x, at: Math.floor(Date.now() / 1000), ti: title });
 }
