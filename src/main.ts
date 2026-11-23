@@ -45,7 +45,7 @@ import { currentPanelTab, initPanels, renderControls, renderPanel, showTipsIfNew
 import { applyNetwork } from "./network";
 import { applyCurrent, startRouter } from "./router";
 import { playLinked, showRoute } from "./routes";
-import "./manual"; // Facebook videos you added: the Add dialog, the Added page, a page's screen
+import { openBulkAdd } from "./manual"; // Facebook videos you added: the Add dialog, the Added page, a page's screen
 
 /** Background sync brought changes from another device. */
 function onSyncUpdate() {
@@ -109,6 +109,8 @@ async function boot() {
     }
   }
   if (opened.k !== "feed") applyCurrent(); // opened on a menu page / channel / More like this
+  openAddLink();
+  window.addEventListener("hashchange", openAddLink);
   console.info(`First video in ${Math.round(performance.now() - t0)} ms (from ${first.source})`);
 
   showTipsIfNew();
@@ -131,6 +133,19 @@ async function boot() {
   setInterval(() => {
     if (document.visibilityState === "visible") checkForUpdate(latestVersion(), offerData);
   }, 10 * 60_000);
+}
+
+/** "#add=id,id,…" (from the browser extension, or a shared link): add those Facebook videos. */
+function openAddLink() {
+  const m = /^#add=(.+)$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  const links = decodeURIComponent(m[1])
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map((x) => (/^\d+$/.test(x) ? `https://www.facebook.com/reel/${x}/` : x))
+    .filter((x) => /^https:\/\/([\w-]+\.)?(facebook\.com|fb\.watch)\//i.test(x));
+  if (links.length) void openBulkAdd(links);
 }
 
 // Keep the app on the device (opens instantly, works offline). Only in the built site.

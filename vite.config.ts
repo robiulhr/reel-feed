@@ -71,8 +71,11 @@ function facebookLookupsInDev(): Plugin {
  * Raised JS 48 → 54 with Facebook videos you add (Facebook player, Add dialog, Added page, page screen): 51.9 kB.
  *   (Their category guess runs on the server — the word lists stay out of the app.)
  * Vite 8 (Rolldown) bundles ~4 kB bigger than Vite 6 for the same code: 41.3 kB with sync on (Nov 2026).
+ * Raised JS 54 → 56 with bulk add (the "Add several" button, "#add=" links, shared page saving): 54.6 kB.
+ * Parts loaded only when used (like "Add several at once") don't slow the start: they don't count in
+ * `js`, and each has its own limit, `lazy`.
  */
-export const BUDGET_KB = { js: 54, css: 10 };
+export const BUDGET_KB = { js: 56, css: 10, lazy: 10 };
 
 function sizeBudget(): Plugin {
   return {
@@ -80,16 +83,26 @@ function sizeBudget(): Plugin {
     apply: "build",
     generateBundle(_opts, bundle) {
       const total = { js: 0, css: 0 };
+      const lazy: string[] = [];
       for (const f of Object.values(bundle)) {
         const kind = f.fileName.endsWith(".js") ? "js" : f.fileName.endsWith(".css") ? "css" : null;
         if (!kind) continue;
         const src = f.type === "chunk" ? f.code : f.source;
-        total[kind] += gzipSync(typeof src === "string" ? src : Buffer.from(src)).length / 1024;
+        const kb = gzipSync(typeof src === "string" ? src : Buffer.from(src)).length / 1024;
+        if (f.type === "chunk" && f.isDynamicEntry && !f.isEntry) {
+          if (kb > BUDGET_KB.lazy)
+            this.error(`Performance budget exceeded: ${f.fileName} is ${kb.toFixed(1)} kB of ${BUDGET_KB.lazy} kB (gzip).`);
+          lazy.push(`${f.name} ${kb.toFixed(1)} kB`);
+          continue;
+        }
+        total[kind] += kb;
       }
       const report = (k: "js" | "css") => `${k.toUpperCase()} ${total[k].toFixed(1)} kB of ${BUDGET_KB[k]} kB`;
       const over = (["js", "css"] as const).filter((k) => total[k] > BUDGET_KB[k]);
       if (over.length) this.error(`Performance budget exceeded: ${over.map(report).join(", ")} (gzip). See vite.config.ts.`);
-      this.info(`Performance budget OK: ${report("js")}, ${report("css")} (gzip)`);
+      this.info(
+        `Performance budget OK: ${report("js")}, ${report("css")} (gzip)${lazy.length ? `; loaded when used: ${lazy.join(", ")}` : ""}`,
+      );
     },
   };
 }

@@ -394,16 +394,7 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
   if (!ok || !meta || !cats.picked().length) return false;
 
   // who made it
-  const name = pageName.value.trim();
-  let by = "";
-  if (name) {
-    const url = pageUrl.value.trim();
-    const key = state.fbPages.find((p) => p.name.toLowerCase() === name.toLowerCase())?.key ?? pageKey(name, url);
-    const page: FbPage = { key, name, url: /^https:\/\/([\w-]+\.)?facebook\.com\//i.test(url) ? url : "", ch: linkCh.value };
-    const old = state.fbPages.find((p) => p.key === key);
-    if (!old || old.name !== page.name || old.url !== page.url || old.ch !== page.ch) act({ t: "pageSet", p: page });
-    by = key;
-  }
+  const by = savePage(pageName.value, pageUrl.value, linkCh.value);
   const v: ManualVideo = {
     id: meta.id,
     url: meta.url,
@@ -424,6 +415,26 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
   return true;
 }
 
+/**
+ * Saves who made a video (a page you have already is matched by name, then by address) and
+ * returns its key for ManualVideo.by — "" when there's no name. `ch` undefined = keep its link.
+ */
+export function savePage(nameIn: string, urlIn: string, ch?: string): string {
+  const name = nameIn.trim();
+  if (!name) return "";
+  const url = urlIn.trim();
+  const key = state.fbPages.find((p) => p.name.toLowerCase() === name.toLowerCase())?.key ?? pageKey(name, url);
+  const old = state.fbPages.find((p) => p.key === key);
+  const page: FbPage = {
+    key,
+    name,
+    url: /^https:\/\/([\w-]+\.)?facebook\.com\//i.test(url) ? url : (old?.url ?? ""),
+    ch: ch ?? old?.ch ?? "",
+  };
+  if (!old || old.name !== page.name || old.url !== page.url || old.ch !== page.ch) act({ t: "pageSet", p: page });
+  return key;
+}
+
 /** Delete an added video (also from Saved), with Undo. */
 export function deleteManual(m: ManualVideo, after: () => void) {
   const savedAt = state.saved.indexOf(fbShortId(m.id));
@@ -442,13 +453,24 @@ export function deleteManual(m: ManualVideo, after: () => void) {
 
 export const openOnFacebook = (url: string) => window.open(url, "_blank", "noopener");
 
+/** Add many Facebook videos at once (loaded only when used). Resolves true if any were added. */
+export async function openBulkAdd(links: string[] = []): Promise<boolean> {
+  const m = await import("./bulkadd");
+  const ok = await m.fbBulkDialog(links);
+  if (ok && addedShown?.body.isConnected) addedShown.rerender(); // the Added page is open: show them
+  return ok;
+}
+
 // ---------- the Added page ----------
 const addedFilter = { q: "", group: "" as GroupId | "", list: "", page: "" };
+let addedShown: { body: HTMLElement; rerender: () => void } | null = null;
 
 /** Everything you added (a Menu tab). `rerender` draws it again after a change. */
 export function renderAdded(body: HTMLElement, rerender: () => void) {
   const f = addedFilter;
+  addedShown = { body, rerender };
   body.append(btn("＋ Add a Facebook video", async () => (await fbVideoDialog()) && rerender(), "btn primary sv-play"));
+  body.append(btn("＋ Add several at once", () => void openBulkAdd(), "btn sv-play"));
   const all = state.manual;
   if (!all.length) {
     body.append(

@@ -2599,3 +2599,57 @@ button[aria-busy="true"] {
   gap: 6px;
   flex-wrap: wrap;
 }
+.fbbulk-tools {
+  display: flex;
+  gap: 6px;
+}
+.fbbulk-tools[hidden] {
+  display: none;
+}
+.fbbulk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fbbulk-row {
+  border: 1px solid var(--line, #333);
+  border-radius: 10px;
+}
+.fbbulk-row.on {
+  border-color: var(--accent, #4a8cff);
+}
+.fbbulk-row.st-dup,
+.fbbulk-row.st-err {
+  opacity: 0.6;
+}
+.fbbulk-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.fbbulk-pick input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.fbbulk-pick img {
+  flex: none;
+  width: 40px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #111;
+}
+.fbbulk-info {
+  min-width: 0;
+}
+.fbbulk-title {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Reel Feed — collect page reels",
+  "description": "Pick reels from a Facebook page's Reels tab and add them to Reel Feed in one go.",
+  "version": "1.0.0",
+  "action": { "default_title": "Open Reel Feed collector" },
+  "side_panel": { "default_path": "panel.html" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["sidePanel", "storage"],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://web.facebook.com/*",
+    "https://reel-feed.robiulhr2201.workers.dev/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

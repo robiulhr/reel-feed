@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Reel Feed collector</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header>
+      <h1 id="pageName">Reel Feed collector</h1>
+      <p id="status" class="note" aria-live="polite">Open a Facebook page's Reels tab.</p>
+      <div class="row">
+        <button id="scrollBtn" type="button" disabled>Keep scrolling</button>
+        <button id="captionsBtn" type="button" disabled title="Looks up each shown reel's caption (slowly) so you can search them">Get captions</button>
+      </div>
+    </header>
+
+    <section class="tools" aria-label="Filter and sort">
+      <input id="search" type="search" placeholder="Search captions or ids" aria-label="Search" />
+      <div class="row">
+        <label>Min views <input id="minViews" type="text" inputmode="decimal" placeholder="e.g. 10K" size="6" /></label>
+        <label>Sort
+          <select id="sort">
+            <option value="pos">Page order (newest)</option>
+            <option value="most">Most views</option>
+            <option value="least">Fewest views</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <button id="allBtn" type="button">Select shown</button>
+        <button id="noneBtn" type="button">Unselect all</button>
+        <span id="counts" class="note"></span>
+      </div>
+    </section>
+
+    <ul id="list" aria-label="Reels"></ul>
+
+    <footer>
+      <p id="footNote" class="note"></p>
+      <button id="sendBtn" type="button" class="primary" disabled>Add to Reel Feed</button>
+    </footer>
+    <script src="panel.js"></script>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+# Reel Feed collector (Chrome extension)
+
+Pick reels from a Facebook page's **Reels** tab and add them to Reel Feed in one go. Laptop/desktop
+Chrome (or Edge) only.
+
+## Install (once)
+
+1. Open `chrome://extensions` (Edge: `edge://extensions`).
+2. Turn on **Developer mode** (top right).
+3. Click **Load unpacked** and choose this `extension` folder.
+4. Pin it: puzzle-piece icon → pin **Reel Feed — collect page reels**.
+
+If a Facebook tab was already open, reload it once so the extension can read it.
+After you change these files, click the ↻ on the extension's card in `chrome://extensions`.
+
+## Use
+
+1. Open a Facebook page and its **Reels** tab (for example `facebook.com/nike/reels/`).
+2. Click the extension's button: the side panel opens and lists the reels on screen.
+3. Scroll the page to load more, or click **Keep scrolling**. It scrolls this one page slowly
+   (every 1.5–2.5 s), stops when nothing new comes 3 times in a row, at 300 reels, or when you
+   click **Stop scrolling**. It never runs by itself or in the background.
+4. Narrow it down: **Min views** (e.g. `10K`, `1.5M`), **Sort** (page order, most or fewest views),
+   **Search** (ids; captions after **Get captions**).
+5. Tick the ones you want (**Select shown** ticks everything the filters show).
+6. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. Pick categories and lists
+   there, untick any you don't want, then **Add**. Ones you already have are left out.
+
+Reel Feed adds up to 60 at a time.
+
+## What it reads and sends
+
+- It reads only the reel tiles on the Facebook tab you're looking at: link, view count, thumbnail.
+- It sends nothing by itself. **Add** opens Reel Feed with the picked reel ids in the address
+  (`/added#add=id,id,…`); the app looks each one up the same way as adding one by link.
+- **Get captions** asks Reel Feed's own lookup (`/api/fb/meta`), two at a time, for the reels
+  shown. Captions are kept in the extension's storage on this computer so searches work later.
+
+## Files
+
+- `manifest.json`: Manifest V3; permissions are the side panel, its own storage, and access to
+  facebook.com and Reel Feed's address.
+- `content.js`: runs on facebook.com and collects the tiles (and the slow scroll).
+- `panel.html`, `panel.css`, `panel.js`: the side panel.
+- `background.js`: opens the side panel when you click the button.

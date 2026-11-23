@@ -1,0 +1,127 @@
+:root {
+  color-scheme: dark;
+  --bg: #111;
+  --card: #1c1c1e;
+  --line: #333;
+  --text: #eee;
+  --muted: #999;
+  --accent: #4a8cff;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+header,
+.tools,
+footer {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+h1 {
+  font-size: 16px;
+  margin: 0;
+}
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  padding: 9px 12px;
+}
+input[type="search"] {
+  width: 100%;
+}
+#list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#list li label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+#list li.on label {
+  border-color: var(--accent);
+}
+#list input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+#list img {
+  width: 44px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #222;
+  flex: none;
+}
+.info {
+  min-width: 0;
+}
+.views {
+  font-weight: 600;
+}
+.cap {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
