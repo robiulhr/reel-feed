@@ -35,9 +35,15 @@ The side panel explains the steps itself ("How to use this"). After you change t
 
 Reel Feed adds up to 60 at a time.
 
-**First time:** the marks need Reel Feed to have told the extension what you have. Open Reel Feed in
-a tab once (the panel's **Open Reel Feed** button does it); after that the extension remembers the
-list, and refreshes it whenever you use Reel Feed. The panel says when the list was last updated.
+**How the panel finds Reel Feed:** when you open it, it looks for Reel Feed in your open tabs, puts its
+small bridge script into them (Chrome only adds it to tabs opened *after* the extension was installed or
+reloaded, so this also covers tabs that were already open) and waits for the app's answer. The note under
+the filters says what happened:
+- **✓ Reel Feed says you've added N videos (updated …)**: working; **↻ Refresh** asks again.
+- **Reel Feed isn't open in a tab**: press **Open Reel Feed**; the marks arrive by themselves once it loads.
+- **Reel Feed is open but didn't answer**: that tab is an older version of the app; press **Reload Reel Feed tab**.
+If you just reloaded the extension (↻ on `chrome://extensions`), **close the side panel and open it again**:
+a panel that was already open keeps running the old code.
 
 ## What it reads and sends
 

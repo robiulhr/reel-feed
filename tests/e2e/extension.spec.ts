@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { Page } from "@playwright/test";
 import { closeTips, expect, test } from "./fixtures";
 
 /**
@@ -9,21 +10,25 @@ import { closeTips, expect, test } from "./fixtures";
  */
 const BRIDGE = readFileSync(resolve("extension/bridge.js"), "utf8");
 const PANEL_URL = pathToFileURL(resolve("extension/panel.html")).href;
+const APP = "https://reel-feed.robiulhr2201.workers.dev/";
 
 const IDS = ["1000000000001", "1000000000002", "1000000000003", "1000000000004", "1000000000005"];
 
 test.describe("extension bridge (runs on Reel Feed's own site)", () => {
-  test("keeps the added video numbers the app sends, and ignores anything else", async ({ app: page }) => {
-    await closeTips(page);
-    await page.evaluate((code) => {
+  const install = (page: Page) =>
+    page.evaluate((code) => {
       const w = window as any;
-      w.__saved = [];
-      w.chrome = { storage: { local: { set: (o: unknown) => w.__saved.push(o) } } };
+      w.__saved ??= [];
+      w.chrome = { runtime: { id: "ext" }, storage: { local: { set: (o: unknown) => w.__saved.push(o) } } };
       new Function(code)();
     }, BRIDGE);
-    const saved = () => page.evaluate(() => (window as any).__saved.map((o: any) => o.library?.ids));
+  const saved = (page: Page) => page.evaluate(() => (window as any).__saved.map((o: any) => o.library?.ids));
+
+  test("keeps the added video numbers the app sends, and ignores anything else", async ({ app: page }) => {
+    await closeTips(page);
+    await install(page);
     // it said hello, the app answered with the (empty) list
-    await expect.poll(saved).toEqual([[]]);
+    await expect.poll(() => saved(page)).toEqual([[]]);
 
     await page.evaluate(() => {
       const post = (data: unknown) => window.postMessage(data, location.origin);
@@ -32,23 +37,48 @@ test.describe("extension bridge (runs on Reel Feed's own site)", () => {
       post({ source: "reel-feed-app", t: "other", ids: ["1141407915517141"] });
       post({ source: "reel-feed-app", t: "library", ids: "nope" });
     });
-    await expect.poll(saved).toEqual([[], ["1141407915517139"]]);
+    await expect.poll(() => saved(page)).toEqual([[], ["1141407915517139"]]);
+  });
+
+  test("put in twice (the panel does that for tabs that were already open): one listener, it just asks again", async ({ app: page }) => {
+    await closeTips(page);
+    await install(page);
+    await expect.poll(() => saved(page)).toEqual([[]]);
+    await install(page); // second copy: sees the first one is alive, only says hello again
+    await expect.poll(() => saved(page)).toEqual([[], []]); // the app answered the new hello once
+    await page.evaluate(() => window.postMessage({ source: "reel-feed-app", t: "library", ids: ["1141407915517139"] }, location.origin));
+    await expect.poll(() => saved(page)).toEqual([[], [], ["1141407915517139"]]); // stored once, not twice
+  });
+
+  test("a copy cut off from the extension (it was reloaded) stops quietly", async ({ app: page }) => {
+    await closeTips(page);
+    await install(page);
+    await expect.poll(() => saved(page)).toEqual([[]]);
+    await page.evaluate(() => {
+      (window as any).chrome = { runtime: {} }; // what a cut-off copy sees: no extension id
+      window.postMessage({ source: "reel-feed-app", t: "library", ids: ["1141407915517139"] }, location.origin);
+    });
+    await page.waitForTimeout(300);
+    expect(await saved(page)).toEqual([[]]); // nothing stored, no error
   });
 });
 
 test.describe("extension side panel: which reels are already added", () => {
   test.beforeEach(async ({ page }) => {
     // the panel looks up each reel's title; keep that off the network
-    await page.route("https://reel-feed.robiulhr2201.workers.dev/api/fb/meta**", (r) => {
+    await page.route(`${APP}api/fb/meta**`, (r) => {
       const url = new URL(r.request().url()).searchParams.get("url") ?? "";
       const id = /reel\/(\d+)/.exec(url)?.[1] ?? "0";
       return r.fulfill({ json: { title: `Reel title ${id.slice(-1)}`, caption: `Reel title ${id.slice(-1)}\nAbout it` } });
     });
     await page.addInitScript((ids) => {
       const w = window as any;
+      const opts = () => w.__opts ?? {}; // what the test says about Reel Feed's tabs
       const store: Record<string, unknown> = {};
       const listeners: ((ch: unknown, area: string) => void)[] = [];
       w.__created = [];
+      w.__injected = [];
+      w.__reloaded = [];
       const reels = ids.map((id: string, i: number) => ({ id, views: (i + 1) * 10_000, viewsText: "", thumb: "", pos: i }));
       const snapshot = {
         t: "reels",
@@ -57,6 +87,12 @@ test.describe("extension side panel: which reels are already added", () => {
         cap: 300,
         page: { name: "Nike", url: "https://www.facebook.com/nike/", reelsTab: true },
         reels,
+      };
+      /** What the app's message does: the bridge stores the list, the panel hears about the change. */
+      w.__setLibrary = (library: unknown) => {
+        const old = store.library;
+        store.library = library;
+        for (const f of listeners) f({ library: { oldValue: old, newValue: library } }, "local");
       };
       w.chrome = {
         storage: {
@@ -73,62 +109,96 @@ test.describe("extension side panel: which reels are already added", () => {
           onChanged: { addListener: (f: (ch: unknown, area: string) => void) => listeners.push(f) },
         },
         tabs: {
-          query: async () => [{ id: 1, url: "https://www.facebook.com/nike/reels/" }],
+          // Reel Feed's tabs when asked by address, otherwise the Facebook tab you're on
+          query: async (q?: { url?: string }) =>
+            q?.url ? (opts().appTabs ?? []) : [{ id: 1, url: "https://www.facebook.com/nike/reels/" }],
           sendMessage: async () => snapshot,
           create: (o: { url: string }) => w.__created.push(o.url),
+          reload: async (id: number) => w.__reloaded.push(id),
           onActivated: { addListener() {} },
           onUpdated: { addListener() {} },
         },
-        scripting: { executeScript: async () => [] },
+        scripting: {
+          executeScript: async (o: { target: { tabId: number } }) => {
+            w.__injected.push(o.target.tabId);
+            // an app that answers the bridge's hello
+            if (opts().answers) setTimeout(() => w.__setLibrary({ ids: opts().ids ?? [], at: Date.now() }), 100);
+            return [];
+          },
+        },
         windows: {},
         runtime: { onMessage: { addListener() {} } },
       };
-      /** What the app's message does: the bridge stores the list, the panel hears about the change. */
-      w.__setLibrary = (library: unknown) => {
-        const old = store.library;
-        store.library = library;
-        for (const f of listeners) f({ library: { oldValue: old, newValue: library } }, "local");
-      };
     }, IDS);
-    await page.goto(PANEL_URL);
-    await expect(page.locator("#list li")).toHaveCount(5);
   });
 
-  const setLibrary = (page: import("@playwright/test").Page, ids: string[], at = Date.now()) =>
+  /** Opens the panel; `opts` says what Reel Feed's tabs do (none open / open and answer / open, silent). */
+  const open = async (page: Page, opts: { appTabs?: { id: number }[]; answers?: boolean; ids?: string[] } = {}) => {
+    await page.addInitScript((o) => {
+      (window as any).__opts = o;
+    }, opts);
+    await page.goto(PANEL_URL);
+    await expect(page.locator("#list li")).toHaveCount(5);
+  };
+  const setLibrary = (page: Page, ids: string[], at = Date.now()) =>
     page.evaluate(([i, t]) => (window as any).__setLibrary({ ids: i, at: t }), [ids, at] as const);
 
-  test("before Reel Feed has told it anything: says so, no marks, nothing blocked", async ({ page }) => {
-    await expect(page.locator("#syncNote")).toContainText("Open Reel Feed once");
-    await expect(page.locator("#openApp")).toBeVisible();
+  test("Reel Feed isn't open: says so, offers to open it, marks nothing, blocks nothing", async ({ page }) => {
+    await open(page);
+    await expect(page.locator("#syncNote")).toContainText("Reel Feed isn't open in a tab");
+    await expect(page.locator("#openApp")).toHaveText("Open Reel Feed");
     await expect(page.locator(".badge")).toHaveCount(0);
     await page.getByRole("button", { name: "Select shown" }).click();
     await expect(page.locator("#sendBtn")).toHaveText("Add 5 to Reel Feed");
+    await page.locator("#openApp").click();
+    expect(await page.evaluate(() => (window as any).__created)).toEqual([`${APP}added`]);
+  });
+
+  test("a Reel Feed tab that was already open: the panel puts the bridge in and gets the marks by itself", async ({ page }) => {
+    await open(page, { appTabs: [{ id: 7 }], answers: true, ids: [IDS[1], IDS[3]] });
+    await expect(page.locator(".badge")).toHaveCount(2);
+    await expect(page.locator("#syncNote")).toContainText("Reel Feed says you've added 2 videos");
+    expect(await page.evaluate(() => (window as any).__injected)).toEqual([7]);
+    await expect(page.locator("#openApp")).toHaveText("↻ Refresh");
+    await expect(page.locator("#openApp")).toBeEnabled(); // the first check has finished
+    await page.locator("#openApp").click(); // asks again
+    await expect.poll(() => page.evaluate(() => (window as any).__injected)).toEqual([7, 7]);
+  });
+
+  test("a Reel Feed tab that doesn't answer (old version): says so and offers to reload it", async ({ page }) => {
+    await open(page, { appTabs: [{ id: 7 }] }); // open, but nobody answers the bridge
+    await expect(page.locator("#syncNote")).toContainText("didn't answer");
+    await expect(page.locator("#openApp")).toHaveText("Reload Reel Feed tab");
+    await page.locator("#openApp").click();
+    expect(await page.evaluate(() => (window as any).__reloaded)).toEqual([7]);
   });
 
   test("added reels get a green ✓ Added mark, are dimmed, can't be ticked, and are counted", async ({ page }) => {
+    await open(page);
     await setLibrary(page, [IDS[1], IDS[3]]);
     await expect(page.locator(".badge")).toHaveCount(2);
     await expect(page.locator(".badge").first()).toHaveText("✓ Added");
     await expect(page.locator("#list li.added")).toHaveCount(2);
     for (const li of await page.locator("#list li.added").all()) await expect(li.locator("input")).toBeDisabled();
     await expect(page.locator("#status")).toContainText("2 already added · 3 not added yet");
-    await expect(page.locator("#syncNote")).toContainText("marks come from Reel Feed");
-    await expect(page.locator("#openApp")).toBeHidden();
+    await expect(page.locator("#syncNote")).toContainText("Reel Feed says you've added 2 videos");
     // the marked ones really are the two sent
     await expect(page.locator("#list li.added")).toContainText(["Reel title 2", "Reel title 4"]);
   });
 
   test("Select shown skips the added ones; Add sends only the new ones", async ({ page }) => {
+    await open(page);
     await setLibrary(page, [IDS[1], IDS[3]]);
     await page.getByRole("button", { name: "Select shown" }).click();
     await expect(page.locator("#sendBtn")).toHaveText("Add 3 to Reel Feed");
     await page.locator("#sendBtn").click();
     const urls = await page.evaluate(() => (window as any).__created);
     expect(urls).toHaveLength(1);
-    expect(urls[0]).toBe(`https://reel-feed.robiulhr2201.workers.dev/added#add=${[IDS[0], IDS[2], IDS[4]].join(",")}`);
+    expect(urls[0]).toBe(`${APP}added#add=${[IDS[0], IDS[2], IDS[4]].join(",")}`);
   });
 
   test("the Show filter: all / not added yet / already added", async ({ page }) => {
+    await open(page);
     await setLibrary(page, [IDS[0], IDS[1]]);
     await page.locator("#show").selectOption("new");
     await expect(page.locator("#list li")).toHaveCount(3);
@@ -141,6 +211,7 @@ test.describe("extension side panel: which reels are already added", () => {
   });
 
   test("it updates the moment Reel Feed reports a change, even for a reel you had ticked", async ({ page }) => {
+    await open(page);
     await page.getByRole("button", { name: "Select shown" }).click();
     await expect(page.locator("#sendBtn")).toHaveText("Add 5 to Reel Feed");
     await setLibrary(page, [IDS[2]]); // you finished adding one in Reel Feed
@@ -148,13 +219,6 @@ test.describe("extension side panel: which reels are already added", () => {
     await expect(page.locator("#list li.added")).toHaveCount(1);
     await setLibrary(page, []); // …and deleted it there
     await expect(page.locator(".badge")).toHaveCount(0);
-  });
-
-  test("an old list is flagged and offers to open Reel Feed", async ({ page }) => {
-    await setLibrary(page, [IDS[0]], Date.now() - 3 * 24 * 3600 * 1000);
-    await expect(page.locator("#syncNote")).toContainText("Open Reel Feed to refresh them");
-    await expect(page.locator("#openApp")).toBeVisible();
-    await page.locator("#openApp").click();
-    expect(await page.evaluate(() => (window as any).__created)).toEqual(["https://reel-feed.robiulhr2201.workers.dev/added"]);
+    await expect(page.locator("#syncNote")).toContainText("added 0 videos");
   });
 });

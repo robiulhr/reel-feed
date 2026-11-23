@@ -21,15 +21,45 @@ function setLibrary(lib) {
   libraryAt = lib?.at || 0;
   for (const id of added) picked.delete(id); // can't add what you already have
 }
+let link = "unknown"; // Reel Feed: unknown | checking | ok (it answers) | closed (no tab) | silent (open, no answer)
+let appTabIds = [];
+let connecting = false;
+
+/** Gets in touch with Reel Feed: puts the bridge script into every open Reel Feed tab (Chrome only adds
+ *  it to tabs opened after the extension was installed or reloaded) and waits for the app's answer. */
+async function connect() {
+  if (connecting) return;
+  connecting = true;
+  link = "checking";
+  draw();
+  const before = libraryAt;
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: `${APP}*` });
+  } catch {}
+  appTabIds = tabs.map((t) => t.id);
+  for (const t of tabs) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["bridge.js"] });
+    } catch {}
+  }
+  if (tabs.length) await new Promise((r) => setTimeout(r, 1500));
+  link = !tabs.length ? "closed" : libraryAt > before ? "ok" : "silent";
+  connecting = false;
+  draw();
+}
+
 chrome.storage.local.get(["info", "library"]).then((s) => {
   info = s.info || {};
   setLibrary(s.library);
   draw();
+  void connect();
 });
 // The app (open in any tab) sends the list again whenever it changes: marks update at once.
 chrome.storage.onChanged.addListener((ch, area) => {
   if (area !== "local" || !ch.library) return;
   setLibrary(ch.library.newValue);
+  link = "ok"; // it just answered
   draw();
 });
 
@@ -158,12 +188,21 @@ function draw() {
     : n
       ? `${n} reels found${n >= data.cap ? ` (the most it collects: ${data.cap})` : ""}${linked ? ` · ${nAdded} already added · ${n - nAdded} not added yet` : ""}. Scroll the page (or "Keep scrolling") to find more.`
       : "No reels found yet. Scroll the page a little (or click Keep scrolling).";
-  // Where the "already added" marks come from
-  const stale = linked && Date.now() - libraryAt > 24 * 3600 * 1000;
-  $("syncNote").textContent = linked
-    ? `✓ marks come from Reel Feed (updated ${ago(libraryAt)})${stale ? ". Open Reel Feed to refresh them." : "."}`
-    : "Open Reel Feed once so this panel can show which reels you've already added.";
-  $("openApp").hidden = linked && !stale;
+  // Where the "already added" marks come from, and what to do when they can't
+  const since = linked ? ` (updated ${ago(libraryAt)})` : "";
+  const note = {
+    checking: "Checking Reel Feed…",
+    ok: `✓ Reel Feed says you've added ${added.size} video${added.size === 1 ? "" : "s"}${since}.`,
+    closed: linked
+      ? `Reel Feed isn't open in a tab, so these marks may be out of date${since}.`
+      : "Reel Feed isn't open in a tab, so I can't see what you've added yet. Open it:",
+    silent: "Reel Feed is open but didn't answer (it may be an older version). Reload that tab:",
+  };
+  $("syncNote").textContent = note[link] ?? "Looking for Reel Feed…";
+  const action = { ok: "↻ Refresh", closed: "Open Reel Feed", silent: "Reload Reel Feed tab" }[link];
+  $("openApp").hidden = !action;
+  if (action) $("openApp").textContent = action;
+  $("openApp").disabled = connecting; // (a check is already running)
   const list = shown();
   void fillInfo(list);
   const counts = () => `${list.length} shown · ${picked.size} selected`;
@@ -308,7 +347,15 @@ $("allBtn").onclick = () => {
   for (const r of shown()) if (!added.has(r.id)) picked.add(r.id); // not the ones you already have
   draw();
 };
-$("openApp").onclick = () => chrome.tabs.create({ url: `${APP}added` });
+$("openApp").onclick = async () => {
+  if (link === "closed") {
+    await chrome.tabs.create({ url: `${APP}added` }); // the bridge is put in when it loads and the marks arrive by themselves
+    setTimeout(connect, 4000);
+  } else if (link === "silent") {
+    for (const id of appTabIds) await chrome.tabs.reload(id);
+    setTimeout(connect, 4000);
+  } else void connect();
+};
 $("noneBtn").onclick = () => {
   picked.clear();
   draw();
