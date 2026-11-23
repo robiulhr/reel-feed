@@ -2570,3 +2570,32 @@ button[aria-busy="true"] {
   gap: 6px;
   margin-top: 6px;
 }
+.fb-dup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #f5b301;
+  background: rgba(245, 179, 1, 0.12);
+  color: var(--text, #fff);
+}
+.fb-dup[hidden] {
+  display: none;
+}
+.fb-dup strong {
+  color: #f5b301;
+}
+.fb-dup-what {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.fb-dup-acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}

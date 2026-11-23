@@ -251,16 +251,55 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
     check();
   };
 
+  // "Already added": a clear warning, with the video and a way to it (this dialog closes first)
+  const dupBox = el("div", "fb-dup");
+  dupBox.setAttribute("role", "alert");
+  dupBox.hidden = true;
+  const closeThen = (run: () => void) => {
+    box.closest(".dlg")?.querySelector<HTMLButtonElement>(".dlg-actions .btn:not(.primary)")?.click();
+    run(); // right away: what opens next takes over this dialog's Back step
+  };
+  const showDup = (m: ManualVideo) => {
+    const s = feed.byId.get(fbShortId(m.id));
+    const page = state.fbPages.find((p) => p.key === m.by);
+    const acts = el("div", "fb-dup-acts");
+    if (s) acts.append(btn("▶ Play it", () => closeThen(() => playList("Added", [s], 0)), "btn sm"));
+    acts.append(btn("✎ Edit it", () => closeThen(() => void fbVideoDialog({ edit: m })), "btn sm"));
+    dupBox.replaceChildren(
+      el("strong", "", "⚠ You already added this video"),
+      el("div", "fb-dup-what", [m.t || fallbackTitle(m), page?.name, `added ${ago(m.at)}`].filter(Boolean).join(" · ")),
+      acts,
+    );
+    dupBox.hidden = false;
+  };
+
   let looking = 0;
+  let looked = ""; // the link last looked up: Enter, paste and leaving the box ("change") each ask, once is enough
   const look = async () => {
     const v = link.value.trim();
-    if (ed || !v) return;
+    if (ed || !v || v === looked) return;
+    looked = v;
     const n = ++looking;
     const quick = fbIdFromLink(v);
+    dupBox.hidden = true;
+    // already added? (a direct link says at once; a share link after the lookup)
+    const isDup = (id: string | null) => {
+      const m = id ? state.manual.find((x) => x.id === id) : undefined;
+      if (!m) return false;
+      meta = null;
+      status.textContent = "";
+      preview.hidden = true;
+      showDup(m);
+      check();
+      return true;
+    };
+    if (isDup(quick)) return;
     status.textContent = "Looking it up…";
     const r = await lookupFb(v);
     if (n !== looking) return;
+    if (isDup("error" in r ? quick : r.id)) return;
     if ("error" in r) {
+      looked = ""; // let Enter try again
       if (quick) {
         meta = { id: quick, url: v.split("?")[0], views: 0, reactions: 0, caption: "" };
         status.textContent = `${r.error}. You can still add it — fill in the rest yourself.`;
@@ -297,11 +336,6 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
         }
       }
     }
-    const dup = meta && state.manual.find((m) => m.id === meta!.id);
-    if (dup) {
-      status.textContent = `You added this one ${ago(dup.at)} — find it on the Added page.`;
-      meta = null;
-    }
     showPreview();
     guess("cats" in r ? (r.cats ?? []) : []);
   };
@@ -314,7 +348,7 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
     }
   };
 
-  if (!ed) box.append(field("Facebook video link", link), status);
+  if (!ed) box.append(field("Facebook video link", link), status, dupBox);
   box.append(
     preview,
     field("Title", title, "Shown on the video. Paste the post's caption if you like."),

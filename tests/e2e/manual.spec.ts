@@ -183,6 +183,37 @@ test.describe("Facebook videos you add by link", () => {
     await expect(frame).toBeHidden();
   });
 
+  test("adding a video you already added: a clear warning, Add stays off, and a way to it", async ({ app: page }) => {
+    await closeTips(page);
+    const open = async (link: string) => {
+      await page.locator("#moreBtn").click();
+      await page.getByRole("button", { name: "＋ Add a Facebook video" }).click();
+      const dlg = page.locator(".dlg");
+      await dlg.getByLabel("Facebook video link").fill(link);
+      await dlg.getByLabel("Facebook video link").press("Enter");
+      return dlg;
+    };
+    let dlg = await open("https://www.facebook.com/reel/1141407915517139/");
+    await expect(dlg).toContainText("Found: Boost Marketing");
+    const sales = dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ });
+    if ((await sales.getAttribute("aria-pressed")) !== "true") await sales.click();
+    await dlg.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dlg).toBeHidden();
+
+    for (const link of ["https://www.facebook.com/reel/1141407915517139/?s=1", "https://www.facebook.com/share/v/1CwWegbMzR/"]) {
+      dlg = await open(link);
+      const warn = dlg.getByRole("alert");
+      await expect(warn).toContainText("You already added this video");
+      await expect(warn).toContainText("Boost Marketing");
+      await expect(dlg.getByRole("button", { name: "Add", exact: true })).toBeDisabled();
+      await dlg.getByRole("button", { name: "Cancel" }).click();
+      await expect(dlg).toBeHidden();
+    }
+    dlg = await open("https://www.facebook.com/reel/1141407915517139/");
+    await dlg.getByRole("alert").getByRole("button", { name: "✎ Edit it" }).click();
+    await expect(page.getByRole("dialog", { name: "Edit Facebook video" })).toBeVisible();
+  });
+
   test("a Facebook page has its own screen with its videos and a link to Facebook", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#moreBtn").click();
