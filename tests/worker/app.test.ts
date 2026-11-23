@@ -25,6 +25,15 @@ function env() {
     ASSETS: { fetch: async () => new Response(PAGE, { headers: { "Content-Type": "text/html" } }) } as unknown as Fetcher,
     SYNC: {
       fetch: async (r: Request) => {
+        const path = new URL(r.url).pathname;
+        if (path === "/session") {
+          // the sync Worker says whether the session in the cookie is still good
+          return r.headers.get("Authorization") === "Bearer good-token" ? Response.json({ ok: true }) : Response.json({}, { status: 401 });
+        }
+        if (path === "/login") {
+          const { password } = (await r.json()) as { password: string };
+          return password === "pw" ? Response.json({ session: "good-token" }) : Response.json({ error: "Wrong password" }, { status: 401 });
+        }
         sync.push(r);
         return Response.json({ ok: true });
       },
@@ -32,7 +41,10 @@ function env() {
   };
   return { e, sync };
 }
+/** A request from someone signed in (they have the cookie) unless headers say otherwise. */
 const get = (path: string, ua = CHROME, headers: Record<string, string> = {}) =>
+  new Request(`https://reel.test${path}`, { headers: { "User-Agent": ua, Cookie: "rf=good-token", ...headers } });
+const anon = (path: string, ua = CHROME, headers: Record<string, string> = {}) =>
   new Request(`https://reel.test${path}`, { headers: { "User-Agent": ua, ...headers } });
 
 function fakeOembed(body: unknown, status = 200) {
@@ -59,7 +71,7 @@ describe("link previews", () => {
   it("a shared Short shows its title, channel and thumbnail (the general tags are replaced)", async () => {
     const oembed = fakeOembed({ title: "Why brands win", author_name: "Ads Lab" });
     const { e } = env();
-    const r = await app.fetch(get("/v/abcDEF12345", WHATSAPP), e);
+    const r = await app.fetch(anon("/v/abcDEF12345", WHATSAPP), e);
     const html = await r.text();
     expect(String(oembed.mock.calls[0][0])).toContain(encodeURIComponent("https://www.youtube.com/shorts/abcDEF12345"));
     expect(html).toContain('<meta property="og:title" content="Why brands win" />');
@@ -81,12 +93,12 @@ describe("link previews", () => {
   it("if YouTube doesn't answer, the card still has the thumbnail and a general title", async () => {
     fakeOembed({ error: "Not Found" }, 404);
     const { e } = env();
-    const html = await (await app.fetch(get("/v/abcDEF12345", FACEBOOK), e)).text();
+    const html = await (await app.fetch(anon("/v/abcDEF12345", FACEBOOK), e)).text();
     expect(html).toContain('og:title" content="A Short on Ecomgy Reel Feed"');
     expect(html).toContain("hqdefault.jpg");
   });
 
-  it("people opening the link get the normal app, with no call to YouTube", async () => {
+  it("signed-in people opening the link get the normal app, with no call to YouTube", async () => {
     const oembed = fakeOembed({});
     const { e } = env();
     const html = await (await app.fetch(get("/v/abcDEF12345"), e)).text();
@@ -109,5 +121,81 @@ describe("/api → sync Worker", () => {
     const { e, sync } = env();
     await app.fetch(get("/api/state", CHROME, { Origin: "https://evil.example" }), e);
     expect(sync[0].headers.get("Origin")).toBe("https://evil.example");
+  });
+});
+
+describe("password gate", () => {
+  const PAGE_REQUEST = { Accept: "text/html,application/xhtml+xml", "Sec-Fetch-Dest": "document" };
+
+  it("without the password a browser gets only the login page (no app, no data)", async () => {
+    const { e, sync } = env();
+    const r = await app.fetch(anon("/", CHROME, PAGE_REQUEST), e);
+    expect(r.status).toBe(401);
+    expect(r.headers.get("Cache-Control")).toBe("no-store");
+    const html = await r.text();
+    expect(html).toContain("Enter the password");
+    expect(html).not.toBe(PAGE);
+    expect(sync).toHaveLength(0);
+  });
+
+  it("scripts, data and the API answer 401 without the password — nothing is served or passed on", async () => {
+    const { e, sync } = env();
+    for (const path of ["/assets/index-abc.js", "/data/cache.json", "/api/state2", "/api/fb/lookup?id=1", "/sw.js"]) {
+      const r = await app.fetch(anon(path), e);
+      expect(r.status, path).toBe(401);
+    }
+    expect(sync).toHaveLength(0);
+  });
+
+  it("a wrong or old cookie doesn't count", async () => {
+    const { e } = env();
+    for (const cookie of ["rf=forged.token", "rf=", "other=good-token"]) {
+      const r = await app.fetch(anon("/", CHROME, { ...PAGE_REQUEST, Cookie: cookie }), e);
+      expect(r.status, cookie).toBe(401);
+    }
+  });
+
+  it("the install icon and manifest stay open", async () => {
+    const { e } = env();
+    expect((await app.fetch(anon("/manifest.webmanifest"), e)).status).toBe(200);
+    expect((await app.fetch(anon("/icon.svg"), e)).status).toBe(200);
+  });
+
+  it("the right password sets a private cookie (HttpOnly, Secure) and hands back the session; a wrong one doesn't", async () => {
+    const { e } = env();
+    const login = (password: string) =>
+      app.fetch(new Request("https://reel.test/gate/login", { method: "POST", body: JSON.stringify({ password }) }), e);
+    const bad = await login("nope");
+    expect(bad.status).toBe(401);
+    expect(bad.headers.get("Set-Cookie")).toBeNull();
+    const good = await login("pw");
+    expect(good.status).toBe(200);
+    expect(await good.json()).toEqual({ session: "good-token" });
+    const cookie = good.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toContain("rf=good-token");
+    expect(cookie).toMatch(/HttpOnly/);
+    expect(cookie).toMatch(/Secure/);
+    expect(cookie).toMatch(/SameSite=Lax/);
+  });
+
+  it("signing out clears the cookie", async () => {
+    const { e } = env();
+    const r = await app.fetch(new Request("https://reel.test/gate/logout", { method: "POST" }), e);
+    expect(r.headers.get("Set-Cookie")).toMatch(/rf=; Max-Age=0/);
+  });
+
+  it("a shared Short: chat apps still get the preview card; people without the password go to YouTube", async () => {
+    fakeOembed({ title: "Why brands win", author_name: "Ads Lab" });
+    const { e } = env();
+    const bot = await app.fetch(anon("/v/abcDEF12345", WHATSAPP), e);
+    expect(await bot.text()).toContain("Why brands win");
+    const person = await app.fetch(anon("/v/abcDEF12345"), e);
+    expect(person.status).toBe(302);
+    expect(person.headers.get("Location")).toBe("https://www.youtube.com/shorts/abcDEF12345");
+  });
+
+  it("signed in, the app and its files are served", async () => {
+    const { e } = env();
+    expect(await (await app.fetch(get("/", CHROME, PAGE_REQUEST), e)).text()).toBe(PAGE);
   });
 });

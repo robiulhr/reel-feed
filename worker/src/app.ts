@@ -3,16 +3,17 @@
  * passes /api/* to the sync Worker ("reel-feed-sync") over a service binding — same address for the
  * app and its sync, so no cross-site requests.
  *
- * Static files are served by Cloudflare before this code runs; only /api/* and /v/* reach it
- * (run_worker_first). Unknown paths get index.html (single-page app), so every page link works.
+ * The whole site is private (worker/src/gate.ts): every request runs this code first and, without the
+ * password's cookie, gets only a login page. Unknown paths get index.html (single-page app) once signed in.
  *
  * Link previews: when WhatsApp, Facebook, Telegram, … fetch a shared /v/VIDEO_ID link, the page they
  * get carries that Short's title, channel and thumbnail (from YouTube's free oEmbed — no key, no
- * quota). People opening the link get the normal app, without waiting for that.
+ * quota). Signed-in people opening the link get the app; anyone else is sent to the Short on YouTube.
  *
  * /api/fb/* is answered here (worker/src/fb.ts): looking up Facebook videos you add by link.
  */
 import { handleFb } from "./fb";
+import { gateLogin, gateLogout, isSignedIn, loginPage, wantsPage } from "./gate";
 
 export interface AppEnv {
   ASSETS: Fetcher;
@@ -20,14 +21,27 @@ export interface AppEnv {
 }
 
 const VIDEO_PATH = /^\/v\/([\w-]{6,20})\/?$/;
+/** Files a browser fetches without the cookie, or that hold nothing private (install icon and manifest). */
+const OPEN_FILES = new Set(["/manifest.webmanifest", "/icon.svg"]);
 
 export default {
   async fetch(req: Request, env: AppEnv): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname === "/gate/login" && req.method === "POST") return gateLogin(req, url, env);
+    if (url.pathname === "/gate/logout" && req.method === "POST") return gateLogout();
+    const video = VIDEO_PATH.exec(url.pathname)?.[1];
+    if (!(await isSignedIn(req, url, env))) {
+      if (video && req.method === "GET") {
+        // a shared Short: preview cards for chat apps; people without the password go to YouTube
+        if (isPreviewBot(req.headers.get("User-Agent") ?? "")) return preview(video, url, env);
+        return Response.redirect(`https://www.youtube.com/shorts/${video}`, 302);
+      }
+      if (OPEN_FILES.has(url.pathname)) return env.ASSETS.fetch(req);
+      if (wantsPage(req)) return loginPage();
+      return Response.json({ error: "Please sign in" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    }
     if (url.pathname.startsWith("/api/fb/")) return handleFb(req, url);
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return toSync(req, url, env);
-    const video = VIDEO_PATH.exec(url.pathname)?.[1];
-    if (video && req.method === "GET" && isPreviewBot(req.headers.get("User-Agent") ?? "")) return preview(video, url, env);
     return env.ASSETS.fetch(req);
   },
 } satisfies ExportedHandler<AppEnv>;

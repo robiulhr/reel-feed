@@ -128,6 +128,7 @@ async function api(path: string, init: RequestInit = {}) {
       if (r.status === 401 && path !== "/login") {
         cfg = null;
         saveCfg(null);
+        if (guarded()) void lockApp(); // the password changed or the session ended: show the login page
         throw new AuthError("You were logged out (password changed or session expired). Log in again.");
       }
       if ([502, 503, 504].includes(r.status) && attempt < tries - 1) {
@@ -310,11 +311,27 @@ export async function connect(password: string): Promise<string | null> {
   return lastError || null;
 }
 
+/** On the live site the password also guards the app itself (a cookie, see worker/src/gate.ts). */
+const guarded = () => SYNC_URL === "/api";
+
+/** Back to the login page: forgets the cookie and the app copy saved for offline use, then reloads. */
+async function lockApp() {
+  try {
+    await fetch("/gate/logout", { method: "POST" });
+    for (const k of await caches.keys()) await caches.delete(k);
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+  } catch {
+    /* offline: the cookie stays until the next try */
+  }
+  location.reload();
+}
+
 /** Log this device out. Data stays in GitHub and in this browser. */
 export function disconnect() {
   cfg = null;
   saveCfg(null);
   onUpdated();
+  if (guarded()) void lockApp();
 }
 
 function schedulePush() {

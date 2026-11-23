@@ -122,8 +122,9 @@ describe("/api/fb", () => {
     fakeFacebook();
     const sync = vi.fn(async () => Response.json({ ok: true }));
     const env = { ASSETS: { fetch: async () => new Response("") }, SYNC: { fetch: sync } } as unknown as AppEnv;
-    const r = await app.fetch(new Request("https://reel.test/api/fb/thumb/1141407915517139"), env);
+    const r = await app.fetch(new Request("https://reel.test/api/fb/thumb/1141407915517139", { headers: { Cookie: "rf=t" } }), env);
     expect(r.status).toBe(302);
-    expect(sync).not.toHaveBeenCalled();
+    // the only thing asked of the sync Worker is whether the cookie's session is good
+    expect(sync.mock.calls.map(([q]) => new URL((q as unknown as Request).url).pathname)).toEqual(["/session"]);
   });
 });
