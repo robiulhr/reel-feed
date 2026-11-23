@@ -1,9 +1,12 @@
 /**
- * Runs on facebook.com. Reads the reel tiles that are on screen (a page's Reels tab) as you scroll:
+ * Put into a Facebook tab by the side panel, and only when that tab is a page's Reels tab (it is never
+ * loaded on other pages). Reads the reel tiles that are on screen as you scroll:
  * link, view count, thumbnail. Nothing is sent anywhere — the side panel asks for the list.
  * "Keep scrolling" scrolls this one page slowly, like a person would, and only when you click it.
  */
 (() => {
+  if (window.__reelFeedCollector) return; // already in this tab
+  window.__reelFeedCollector = true;
   const CAP = 300; // most reels collected from one page
   const reels = new Map(); // id -> { id, views, viewsText, thumb, pos }
   let key = "";
@@ -40,6 +43,7 @@
   }
 
   function collect() {
+    if (!isReelsTab()) return 0; // on any other Facebook page it does nothing
     const k = pageKey();
     if (k !== key) {
       key = k;
@@ -71,7 +75,7 @@
 
   let pending = 0;
   new MutationObserver(() => {
-    if (pending) return;
+    if (pending || !isReelsTab()) return;
     pending = window.setTimeout(() => {
       pending = 0;
       if (collect()) push();
@@ -87,7 +91,7 @@
     const k = key;
     push();
     let idle = 0;
-    while (running && key === k && idle < 3 && reels.size < CAP) {
+    while (running && isReelsTab() && key === k && idle < 3 && reels.size < CAP) {
       const before = reels.size;
       window.scrollBy({ top: Math.round(window.innerHeight * (0.6 + Math.random() * 0.4)), behavior: "smooth" });
       await sleep(1500 + Math.random() * 1000);

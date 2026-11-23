@@ -68,12 +68,23 @@ function shown() {
   return list;
 }
 
+let guideFolded = false; // folded once by itself (after that it stays as you left it)
+
 function draw() {
   const ul = $("list");
   const page = data?.page;
   $("pageName").textContent = page?.name || "Reel Feed collector";
   $("scrollBtn").disabled = !data;
   $("scrollBtn").textContent = data?.running ? "Stop scrolling" : "Keep scrolling";
+  // With nothing to list the guide is open and the rest is hidden; once reels appear it folds away
+  // (open it again any time with "How to use this").
+  const empty = !data || !data.reels.length;
+  document.body.classList.toggle("empty", empty);
+  if (empty) $("guide").open = true;
+  else if (!guideFolded) {
+    $("guide").open = false;
+    guideFolded = true;
+  }
   if (!data) {
     ul.replaceChildren();
     $("counts").textContent = "";
@@ -85,9 +96,7 @@ function draw() {
     ? `Scrolling slowly… ${n} reels so far`
     : n
       ? `${n} reels found${n >= data.cap ? ` (the most it collects: ${data.cap})` : ""}. Scroll the page (or "Keep scrolling") to find more.`
-      : page?.reelsTab
-        ? "No reels yet — scroll the page a little."
-        : "Open this page's Reels tab to collect its reels.";
+      : "No reels found yet. Scroll the page a little (or click Keep scrolling).";
   const list = shown();
   void fillInfo(list);
   $("counts").textContent = `${list.length} shown · ${picked.size} selected`;
@@ -164,17 +173,45 @@ async function ask(msg) {
   }
 }
 
+/** Where the current tab is: a page's Reels tab, some other Facebook page, or not Facebook. */
+function placeOf(url) {
+  let u;
+  try {
+    u = new URL(url || "");
+  } catch {
+    return "other";
+  }
+  if (!/^(www|web)\.facebook\.com$/.test(u.hostname) || u.protocol !== "https:") return "other";
+  return /\/reels\/?$/.test(u.pathname) || u.searchParams.get("sk") === "reels_tab" ? "reels" : "facebook";
+}
+
+const WHERE = {
+  other: "This tab isn't Facebook. Open a Facebook page, then click its Reels tab.",
+  facebook: "You're on Facebook, but not on a page's Reels tab. Open the page and click its “Reels” tab.",
+  reels: "Couldn't read this tab. Reload it once, then open this panel again.",
+};
+
 async function refresh() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const changed = tab?.id !== tabId;
   tabId = tab?.id ?? null;
-  const isFb = /^https:\/\/(www|web)\.facebook\.com\//.test(tab?.url || "");
-  const snap = isFb ? await ask({ t: "get" }) : null;
+  const place = placeOf(tab?.url);
+  let snap = null;
+  if (place === "reels") {
+    // The collector is put into the tab only now, and only on a Reels tab — never on other pages.
+    snap = await ask({ t: "get" });
+    if (!snap) {
+      try {
+        await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+        snap = await ask({ t: "get" });
+      } catch {}
+    }
+  }
   if (snap && data && snap.key !== data.key) picked.clear();
   if (changed && !snap) picked.clear();
   data = snap;
   draw();
-  if (!snap) $("status").textContent = isFb ? "Reload this Facebook tab once so the extension can read it." : "Open a Facebook page's Reels tab.";
+  if (!snap) $("status").textContent = WHERE[place];
 }
 
 chrome.runtime.onMessage.addListener((msg, sender) => {

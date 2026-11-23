@@ -175,3 +175,28 @@ footer {
   border-radius: 8px;
   background: #000;
 }
+#guide {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+#guide summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+#guide ol {
+  margin: 8px 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#guide .note {
+  margin-top: 6px;
+}
+/* nothing to show yet: just the guide */
+body.empty .tools,
+body.empty #list,
+body.empty footer {
+  display: none;
+}

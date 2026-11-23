@@ -10,8 +10,7 @@ Chrome (or Edge) only.
 3. Click **Load unpacked** and choose this `extension` folder.
 4. Pin it: puzzle-piece icon → pin **Reel Feed — collect page reels**.
 
-If a Facebook tab was already open, reload it once so the extension can read it.
-After you change these files, click the ↻ on the extension's card in `chrome://extensions`.
+The side panel explains the steps itself ("How to use this"). After you change these files, click the ↻ on the extension's card in `chrome://extensions`.
 
 ## Use
 
@@ -43,8 +42,10 @@ Reel Feed adds up to 60 at a time.
 
 ## Files
 
-- `manifest.json`: Manifest V3; permissions are the side panel, its own storage, and access to
-  facebook.com and Reel Feed's address.
-- `content.js`: runs on facebook.com and collects the tiles (and the slow scroll).
+- `manifest.json`: Manifest V3; permissions are the side panel, its own storage, putting its script
+  into a tab (`scripting`), and access to facebook.com and Reel Feed's address. It has no content
+  scripts: nothing is loaded into Facebook pages by itself.
+- `content.js`: the panel puts it into a Facebook tab only when you open the panel on a page's Reels
+  tab. It collects the tiles (and does the slow scroll) and does nothing on any other page.
 - `panel.html`, `panel.css`, `panel.js`: the side panel.
 - `background.js`: opens the side panel when you click the button.
