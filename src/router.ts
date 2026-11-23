@@ -17,6 +17,7 @@ export type Route = { k: "feed"; v?: string } | { k: "panel"; tab: string } | { 
 
 /** Menu tabs and their addresses ("api" can't be /api — that's the sync server). */
 const PANEL_PATHS: Record<string, string> = {
+  home: "menu",
   channels: "channels",
   history: "history",
   saved: "saved",
@@ -55,7 +56,7 @@ export function parse(pathname: string, base = BASE): Route {
 export function toPath(r: Route, base = BASE): string {
   const enc = encodeURIComponent;
   if (r.k === "feed") return r.v ? `${base}v/${enc(r.v)}` : base;
-  if (r.k === "panel") return `${base}${PANEL_PATHS[r.tab] ?? "history"}`;
+  if (r.k === "panel") return `${base}${PANEL_PATHS[r.tab] ?? "menu"}`;
   // no "@": Cloudflare redirects /channel/@x to /channel/%40x — an extra round trip and an ugly link
   if (r.k === "channel") return `${base}channel/${enc(r.h.replace(/^@/, ""))}`;
   return `${base}similar/${enc(r.id)}`;

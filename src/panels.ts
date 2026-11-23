@@ -41,6 +41,7 @@ import { fbPageOf } from "./fbdata";
 import { deleteManual, fbVideoDialog, openOnFacebook, renderAdded } from "./manual";
 import { shortInList } from "./rank";
 import type { Short, Tab, Win } from "./types";
+import { PAGE_TITLES, renderHome } from "./menuhome";
 import { dismiss, go, pushLayer, type Route, toPath } from "./router";
 
 // ---------- overlays ----------
@@ -49,7 +50,7 @@ const pageModal = modal(els.page, { label: "Page", onRequestClose: () => dismiss
 const panelModal = modal(els.panel, {
   label: "Menu",
   onRequestClose: () => dismiss(),
-  focus: () => els.ptabs.querySelector<HTMLElement>("button.on"),
+  focus: () => els.panelTitle,
 });
 const sheetModal = layered(modal(els.moreSheet, { label: "More options", onRequestClose: () => sheetModal.close() }));
 const tipsModal = layered(modal(els.tips, { label: "Quick tips", onRequestClose: () => closeTips(), focus: () => els.tipsOk }), () =>
@@ -107,11 +108,11 @@ export function closeOverlaysForPlayback() {
 }
 
 // ---------- menu panel ----------
-let panelTab = "history";
+let panelTab = "home"; // the Menu opens on its home screen; each page has a back arrow to it
 export const currentPanelTab = () => panelTab;
 export const panelOpen = () => panelModal.isOpen();
 
-export function openPanel(tab = panelTab) {
+export function openPanel(tab = "home") {
   const wasOpen = panelModal.isOpen();
   panelTab = tab;
   if (playback.playing) pool.pause();
@@ -128,15 +129,15 @@ export function closePanel() {
 }
 
 export function renderPanel() {
-  els.ptabs.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
-    const on = b.dataset.p === panelTab;
-    b.classList.toggle("on", on);
-    b.setAttribute("aria-pressed", String(on));
-  });
+  els.panelTitle.textContent = PAGE_TITLES[panelTab] ?? "Menu";
+  els.panelBack.hidden = panelTab === "home";
   const body = els.panelBody;
   body.replaceChildren();
+  body.classList.toggle("mh", panelTab === "home");
+  body.scrollTop = 0;
 
-  if (panelTab === "channels") renderChannelsPanel(body, channelsCtx());
+  if (panelTab === "home") renderHome(body, (t) => openPanel(t));
+  else if (panelTab === "channels") renderChannelsPanel(body, channelsCtx());
   else if (panelTab === "history") renderHistory(body, app, feed.byId, () => openPanel("history"));
   else if (panelTab === "saved") renderSaved(body);
   else if (panelTab === "added") renderAdded(body, () => openPanel("added"));
@@ -146,7 +147,7 @@ export function renderPanel() {
     });
   else if (panelTab === "activity")
     void import("./activity").then((m) => {
-      if (panelTab === "activity" && body.isConnected) m.renderActivity(body, () => openPanel("activity"), feed.byId);
+      if (panelTab === "activity" && body.isConnected) m.renderActivity(body, () => openPanel("activity"), feed.byId, app);
     });
   else if (panelTab === "hidden") renderHidden(body);
   else if (panelTab === "sorting") renderSorting(body, app, () => openPanel("sorting"));
@@ -612,7 +613,6 @@ export function initPanels() {
   window.addEventListener(LISTS_EVENT, afterListsChange);
   scrollArrows(els.tabs);
   scrollArrows(els.chips);
-  scrollArrows(els.ptabs);
   els.pageClose.onclick = dismiss;
   els.page.addEventListener("click", (e) => {
     if (e.target === els.page) dismiss();
@@ -623,10 +623,7 @@ export function initPanels() {
   els.panel.addEventListener("click", (e) => {
     if (e.target === els.panel) dismiss();
   });
-  els.ptabs.addEventListener("click", (e) => {
-    const p = (e.target as HTMLElement).closest("button")?.dataset.p;
-    if (p) openPanel(p);
-  });
+  els.panelBack.onclick = () => openPanel("home");
   els.tipsOk.onclick = closeTips;
   els.chName.addEventListener("click", (e) => {
     e.preventDefault();

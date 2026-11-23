@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { makeDataset } from "../fixtures/data";
-import { closeTips, expect, login, player, reload, swipe, test } from "./fixtures";
+import { closeTips, expect, login, menuPage, player, reload, swipe, test } from "./fixtures";
 
 test.describe("layout", () => {
   test("fits the screen: no sideways scrolling, ↻ and ☰ always reachable", async ({ app: page }) => {
@@ -134,7 +134,7 @@ test.describe("menus", () => {
     await page.waitForTimeout(1300); // watch a little
     await swipe(page, "up");
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="history"]').click();
+    await menuPage(page, "history");
     await expect(page.locator("#panelBody .h-row").first()).toContainText(first!.slice(0, 15));
   });
 
@@ -156,7 +156,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("Add: triple tap → exactly one save", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await page.locator('[data-p="channels"]').click();
+    await menuPage(page, "channels");
     await page.getByRole("button", { name: "+ Add channel" }).click();
     await page.locator(".ch-add-form input").fill("@pricinglab");
     await page.locator(".ch-add-form button[type=submit]").click();
@@ -172,7 +172,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("a channel in the list: open it in the app (Back returns), on YouTube, or add it to a list", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="channels"]').click();
+    await menuPage(page, "channels");
     const row = page.locator(".ch-item").first();
     const name = (await row.locator(".ch-title a").textContent())!.trim();
     await expect(row.getByRole("link", { name: `Open ${name} on YouTube` })).toHaveAttribute("href", /^https:\/\/www\.youtube\.com\//);
@@ -205,7 +205,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("Remove: triple tap on the full list → one save, and never touches the next channel", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await page.locator('[data-p="channels"]').click();
+    await menuPage(page, "channels");
     await expect(page.locator(".ch-item")).toHaveCount(3);
     const first = page.locator(".ch-item").first();
     const name = (await first.locator(".ch-title a").textContent())!.trim();
@@ -225,7 +225,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("Delete asks first with the app's own dialog", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await page.locator('[data-p="channels"]').click();
+    await menuPage(page, "channels");
     await page.locator(".ch-search").fill("Ads");
     await page.locator(".ch-item", { hasText: "Ads Lab" }).getByRole("button", { name: "Remove" }).click();
     await expect(page.locator("#toast")).toContainText("Removed Ads Lab");
@@ -341,7 +341,7 @@ test.describe("categories", () => {
   test("Menu → Sorting lists the guessed Shorts; ✓ Right takes one off the list", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="sorting"]').click();
+    await menuPage(page, "sorting");
     const body = page.locator("#panelBody");
     await expect(body).toContainText("9 of 30 Shorts");
     await expect(body.locator(".sort-row")).toHaveCount(9);
@@ -375,7 +375,7 @@ test.describe("saved, undo and backups", () => {
   test("Saved: main category and topic chips, search, and Play these", async ({ app: page }) => {
     const n = await saveAll(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     const body = page.locator("#panelBody");
     await expect(body.getByRole("button", { name: `▶ Play all saved (${n})` })).toBeVisible();
     await expect(body.locator(".grid .card")).toHaveCount(n);
@@ -397,7 +397,7 @@ test.describe("saved, undo and backups", () => {
   test("removing a saved Short can be undone, in the same place", async ({ app: page }) => {
     await saveAll(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     const body = page.locator("#panelBody");
     const second = await body.locator(".grid .card .cap").nth(1).textContent();
     await body
@@ -413,7 +413,7 @@ test.describe("saved, undo and backups", () => {
   test("Reset what the feed learned asks first, and Undo brings it back", async ({ app: page }) => {
     await withData(page, { affCh: { "@ads": 6 }, affCat: { ads: 3 } });
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="about"]').click();
+    await menuPage(page, "about");
     await page.getByRole("button", { name: "Reset what the feed learned" }).click();
     const dlg = page.getByRole("dialog", { name: "Reset what the feed learned?" });
     await dlg.getByRole("button", { name: "Cancel" }).click();
@@ -428,13 +428,13 @@ test.describe("saved, undo and backups", () => {
   test("Backups: back up now, then Restore puts everything back", async ({ app: page }) => {
     const n = await saveAll(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="backups"]').click();
+    await menuPage(page, "backups");
     const body = page.locator("#panelBody");
     await body.getByRole("button", { name: "Back up now" }).click();
     await expect(body.locator(".bk-row").first()).toContainText("Made by you");
     await expect(body.locator(".bk-row").first()).toContainText(`${n} saved`);
     // lose the saved list, then restore the backup
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     for (let i = 0; i < 3; i++)
       await body
         .locator(".grid .card")
@@ -442,11 +442,11 @@ test.describe("saved, undo and backups", () => {
         .getByRole("button", { name: /^Remove / })
         .click();
     await expect(body.locator(".grid .card")).toHaveCount(n - 3);
-    await page.locator('[data-p="backups"]').click();
+    await menuPage(page, "backups");
     await body.locator(".bk-row").filter({ hasText: "Made by you" }).getByRole("button", { name: "Restore" }).click();
     await page.getByRole("dialog", { name: "Restore this backup?" }).getByRole("button", { name: "Restore" }).click();
     await expect(page.locator("#toast")).toContainText("Restored");
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     await expect(body.locator(".grid .card")).toHaveCount(n);
   });
 
@@ -459,12 +459,12 @@ test.describe("saved, undo and backups", () => {
       data: { v: 2, updatedAt: "2026-11-01T10:00:00Z", saved: ids.slice(0, 2), hidden: [], seen: [], bad: [], affCh: {}, affCat: {} },
     });
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="backups"]').click();
+    await menuPage(page, "backups");
     const body = page.locator("#panelBody");
     await expect(body).toContainText("Turn on Sync");
     await page.locator("#closePanel").click();
     await login(page);
-    await page.locator('[data-p="backups"]').click();
+    await menuPage(page, "backups");
     await body.getByRole("button", { name: "Show versions" }).click();
     const row = body.locator(".bk-row").filter({ hasText: "Sync from phone" });
     await row.getByRole("button", { name: /^Restore the version from / }).click();
@@ -472,7 +472,7 @@ test.describe("saved, undo and backups", () => {
     await expect(dialog).toContainText("2 saved");
     await dialog.getByRole("button", { name: "Restore" }).click();
     await expect(page.locator("#toast")).toContainText("Restored");
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     await expect(body.locator(".grid .card")).toHaveCount(2);
   });
 });

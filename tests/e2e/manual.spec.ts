@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { asFile, makeDataset } from "../fixtures/data";
-import { closeTips, expect, goTo, test } from "./fixtures";
+import { closeTips, expect, goTo, menuPage, test } from "./fixtures";
 /** Facebook's player SDK, faked: one controllable player per video (play, pause, sound, position). */
 const FAKE_FB = `
 (function () {
@@ -73,7 +73,7 @@ test.describe("Facebook videos you add by link", () => {
     };
     const add = async (p: Page, id: string) => {
       if (!(await p.locator("#closePanel").isVisible())) await p.locator("#menuBtn").click(); // (the Menu may still be open)
-      await p.locator('[data-p="added"]').click();
+      await menuPage(p, "added");
       await p.locator("#panelBody").getByRole("button", { name: "＋ Add a Facebook video" }).click();
       const dlg = p.locator(".dlg");
       await dlg.getByLabel("Facebook video link").fill(`https://www.facebook.com/reel/${id}/`);
@@ -108,7 +108,7 @@ test.describe("Facebook videos you add by link", () => {
     await expect(tab3.locator("#title")).not.toBeEmpty();
     await closeTips(tab3);
     await tab3.locator("#menuBtn").click();
-    await tab3.locator('[data-p="added"]').click();
+    await menuPage(tab3, "added");
     await expect(tab3.locator(".fb-card")).toHaveCount(3);
     for (const id of ["1111111111", "2222222222", "3333333333"])
       await expect(tab3.locator(".fb-card").filter({ hasText: `Reel ${id}` })).toBeVisible();
@@ -132,7 +132,7 @@ test.describe("Facebook videos you add by link", () => {
     await expect.poll(last).toEqual([]);
 
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="added"]').click();
+    await menuPage(page, "added");
     await page.locator("#panelBody").getByRole("button", { name: "＋ Add a Facebook video" }).click();
     const dlg = page.locator(".dlg");
     await dlg.getByLabel("Facebook video link").fill(META.url);
@@ -154,7 +154,7 @@ test.describe("Facebook videos you add by link", () => {
   test("paste a link → filled in → plays in the feed → save, unsave, edit, delete", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="added"]').click();
+    await menuPage(page, "added");
     await expect(page).toHaveURL(/\/added$/);
     await page.locator("#panelBody").getByRole("button", { name: "＋ Add a Facebook video" }).click();
 
@@ -212,12 +212,12 @@ test.describe("Facebook videos you add by link", () => {
     await page.locator("#saveBtn").click();
     await page.locator("#ctxBack").click(); // ← leaves the "Added" list: the Added page comes back
     await expect(page.locator(".fb-card")).toHaveCount(1);
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     await expect(page.getByRole("group", { name: "Source" }).getByRole("button", { name: "f Facebook · 1" })).toBeVisible();
     await expect(page.getByRole("group", { name: "Channel list" }).getByRole("button", { name: "🎯 Competitors · 1" })).toBeVisible();
     await page.locator(".grid .card .x").click(); // unsave
     await expect(page.locator("#panelBody")).toContainText("No saved Shorts yet");
-    await page.locator('[data-p="added"]').click();
+    await menuPage(page, "added");
     await expect(page.locator(".fb-card")).toHaveCount(1); // still added
 
     // edit the note
@@ -231,7 +231,7 @@ test.describe("Facebook videos you add by link", () => {
     await page.locator(".fb-card").getByRole("button", { name: "Delete" }).click();
     await page.locator(".dlg").getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.locator(".fb-card")).toHaveCount(0);
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     await expect(page.locator("#panelBody")).toContainText("No saved Shorts yet");
   });
 
@@ -361,7 +361,7 @@ test.describe("Facebook videos you add by link", () => {
 
     // from the Added page: paste a message with one link in it
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="added"]').click();
+    await menuPage(page, "added");
     await page.locator("#panelBody").getByRole("button", { name: "＋ Add several at once" }).click();
     const dlg = page.locator(".dlg");
     await dlg.getByLabel("Facebook video links").fill("look at this https://www.facebook.com/reel/1111111111/ nice");

@@ -1,5 +1,5 @@
 import { makeDataset } from "../fixtures/data";
-import { closeTips, expect, goTo, reload, test } from "./fixtures";
+import { closeTips, expect, goTo, menuPage, reload, test } from "./fixtures";
 
 const path = (page: { url(): string }) => new URL(page.url()).pathname;
 const videos = makeDataset().videos;
@@ -16,9 +16,9 @@ test.describe("page addresses and Back", () => {
     await closeTips(page);
     const feedPath = path(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     await expect.poll(() => path(page)).toBe("/saved");
-    await page.locator('[data-p="api"]').click();
+    await menuPage(page, "api");
     await expect.poll(() => path(page)).toBe("/usage");
     await page.goBack();
     await expect(page.locator("#panel")).toBeHidden();
@@ -39,10 +39,11 @@ test.describe("page addresses and Back", () => {
   test("a refresh on a Menu page opens it again, and Back goes to the feed (not out of the app)", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="history"]').click();
+    await menuPage(page, "history");
     await reload(page);
     await expect(page.locator("#panel")).toBeVisible();
-    await expect(page.locator('[data-p="history"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#panelTitle")).toHaveText("Watch history"); // the page, with its back arrow
+    await expect(page.locator("#panelBack")).toBeVisible();
     await page.goBack();
     await expect(page.locator("#panel")).toBeHidden();
     await expect(page.locator("#title")).not.toBeEmpty();
@@ -73,7 +74,7 @@ test.describe("page addresses and Back", () => {
     expect(path(page)).toBe(feedPath);
     // a dialog inside the menu: Back closes the dialog, the menu stays
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="about"]').click();
+    await menuPage(page, "about");
     await page
       .locator("#panelBody")
       .getByRole("button", { name: /Reset what the feed learned/ })
@@ -104,7 +105,7 @@ test.describe("page addresses and Back", () => {
     await closeTips(page);
     await page.locator("#saveBtn").click();
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     await page.locator("#panelBody .grid .card .card-play").first().click();
     await expect(page.locator("#ctxBar")).toBeVisible();
     await expect(page.locator("#panel")).toBeHidden();

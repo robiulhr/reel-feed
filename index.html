@@ -112,20 +112,8 @@
     <div class="panel" id="panel" hidden>
       <div class="panel-inner">
         <div class="panel-head">
-          <nav class="ptabs" id="ptabs">
-            <button type="button" data-p="channels">Channels</button>
-            <button type="button" data-p="history">History</button>
-            <button type="button" data-p="saved">Saved</button>
-            <button type="button" data-p="notes">📝 Notes</button>
-            <button type="button" data-p="activity">🧾 Activity</button>
-            <button type="button" data-p="added">Added</button>
-            <button type="button" data-p="hidden">Hidden</button>
-            <button type="button" data-p="sorting">Sorting</button>
-            <button type="button" data-p="sync">Sync</button>
-            <button type="button" data-p="api">API usage</button>
-            <button type="button" data-p="backups">Backups</button>
-            <button type="button" data-p="about">About</button>
-          </nav>
+          <button class="icon-btn" id="panelBack" aria-label="Back to the menu" type="button" hidden>←</button>
+          <h2 class="panel-title" id="panelTitle" tabindex="-1">Menu</h2>
           <button class="icon-btn" id="closePanel" aria-label="Close menu" type="button">✕</button>
         </div>
         <div class="panel-body" id="panelBody"></div>

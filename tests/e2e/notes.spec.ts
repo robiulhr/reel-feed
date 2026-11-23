@@ -1,4 +1,4 @@
-import { closeTips, expect, player, reload, swipe, test } from "./fixtures";
+import { closeTips, expect, menuPage, player, reload, swipe, test } from "./fixtures";
 
 /** Notes: the amber chip on every video, the note sheet, and the Notes page in the Menu. */
 test.describe("notes on videos", () => {
@@ -65,7 +65,7 @@ test.describe("notes on videos", () => {
     await expect(dlg).toBeHidden();
 
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="notes"]').click();
+    await menuPage(page, "notes");
     await expect(page).toHaveURL(/\/notes$/);
     const card = page.locator(".note-card");
     await expect(card).toHaveCount(1);

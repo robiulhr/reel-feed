@@ -27,6 +27,7 @@ export interface ActivityEntry {
   d: "phone" | "computer"; // the device it happened on
   k: ActivityKind;
   v?: string; // what it's about: a video's feed id, a channel handle, a list id, a page key
+  ids?: string[]; // a batch (e.g. "Added 60 videos at once"): the feed ids of the videos in it
   x: string; // what happened, in words
 }
 export const MAX_ACTIVITY = 1500;
@@ -45,6 +46,14 @@ export function normActivity(x: unknown): ActivityEntry[] {
       k: e.k,
       x: e.x.slice(0, 400),
       ...(typeof e.v === "string" ? { v: e.v.slice(0, 80) } : {}),
+      ...(Array.isArray(e.ids) && e.ids.length
+        ? {
+            ids: e.ids
+              .filter((x: unknown) => typeof x === "string")
+              .map((x: string) => x.slice(0, 40))
+              .slice(0, 100),
+          }
+        : {}),
     });
   }
   return out.sort((a, b) => b.at - a.at).slice(0, MAX_ACTIVITY);
@@ -717,9 +726,17 @@ export function onChange(fn: Listener) {
 const device = (): "phone" | "computer" =>
   typeof navigator !== "undefined" && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? "phone" : "computer";
 let entrySeq = 0;
-function entry(k: ActivityKind, x: string, v?: string): ActivityEntry {
+function entry(k: ActivityKind, x: string, v?: string, ids?: string[]): ActivityEntry {
   const i = `${Date.now().toString(36)}${(entrySeq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  return { i, at: Math.floor(Date.now() / 1000), d: device(), k, x, ...(v ? { v } : {}) };
+  return {
+    i,
+    at: Math.floor(Date.now() / 1000),
+    d: device(),
+    k,
+    x,
+    ...(v ? { v } : {}),
+    ...(ids?.length ? { ids: ids.slice(0, 100) } : {}),
+  };
 }
 const quoted = (t?: string) => (t?.trim() ? ` “${t.trim().slice(0, 90)}”` : "");
 
@@ -800,8 +817,8 @@ export function act(op: Op, opts: { quiet?: boolean } = {}) {
 }
 
 /** A line in the activity log that isn't one change (for example "Added 60 videos at once"). */
-export function logActivity(k: ActivityKind, x: string, v?: string) {
-  act({ t: "activity", e: entry(k, x, v) });
+export function logActivity(k: ActivityKind, x: string, v?: string, ids?: string[]) {
+  act({ t: "activity", e: entry(k, x, v, ids) });
 }
 
 /** Works out where "NEW since your last visit" starts. A gap of 30+ minutes counts as a new visit. */

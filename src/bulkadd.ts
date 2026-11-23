@@ -402,6 +402,8 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
     logActivity(
       "video",
       `Added ${added} Facebook video${added === 1 ? "" : "s"} at once${names.length ? ` (${names.map((n) => `“${n!.slice(0, 50)}”`).join(", ")}${added > names.length ? ", …" : ""})` : ""}`,
+      undefined,
+      go.map((r) => fbShortId(r.id!)), // so the Activity page can list the videos in the batch
     );
   }
   refreshManual();

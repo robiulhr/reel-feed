@@ -1,4 +1,4 @@
-import { closeTips, expect, swipe, test } from "./fixtures";
+import { closeTips, expect, menuPage, swipe, test } from "./fixtures";
 
 test.describe("channel lists (Competitors, Inspiration…)", () => {
   test("mark a channel as a competitor → its own feed, and its own tab in Saved", async ({ app: page }) => {
@@ -34,7 +34,7 @@ test.describe("channel lists (Competitors, Inspiration…)", () => {
 
     // Saved: a tab per list
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="saved"]').click();
+    await menuPage(page, "saved");
     const lists = page.getByRole("group", { name: "Channel list" });
     await expect(lists.getByRole("button", { name: "🎯 Competitors · 1" })).toBeVisible();
     await expect(lists.getByRole("button", { name: "📋 Shopify experts · 1" })).toBeVisible();

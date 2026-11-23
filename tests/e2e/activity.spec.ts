@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { closeTips, expect, login, test } from "./fixtures";
+import { closeTips, expect, login, menuPage, test } from "./fixtures";
 
 const META = {
   id: "1141407915517139",
@@ -21,7 +21,7 @@ test.beforeEach(async ({ app: page }) => {
 /** Adds the video from the Added page (the menu is left open on it). */
 async function addVideo(page: Page) {
   if (!(await page.locator("#closePanel").isVisible())) await page.locator("#menuBtn").click();
-  await page.locator('[data-p="added"]').click();
+  await menuPage(page, "added");
   await page.locator("#panelBody").getByRole("button", { name: "＋ Add a Facebook video" }).click();
   const dlg = page.locator(".dlg");
   await dlg.getByLabel("Facebook video link").fill(META.url);
@@ -71,14 +71,18 @@ test.describe("Menu → Activity", () => {
     await page.locator(".fb-card").getByRole("button", { name: "♡ Save" }).click();
     await expect.poll(() => sync.statePuts, { timeout: 5000 }).toBeGreaterThan(0);
 
-    await page.locator('[data-p="activity"]').click();
+    await menuPage(page, "activity");
     const body = page.locator("#panelBody");
-    await expect(body).toContainText("Everything that happened");
+    await expect(body.locator(".act-summary")).toContainText("changes this week");
+    await expect(body.locator(".act-bars .act-fill")).toHaveCount(7); // a bar for each of the last 7 days
     await expect(body.locator(".cloud-line")).toBeVisible();
     await expect(body.locator(".act-row").filter({ hasText: "Added a Facebook video “Hide the price, lose the sale”" })).toBeVisible();
     await expect(body.locator(".act-row").filter({ hasText: "Saved a video" })).toBeVisible();
+    // each line says more than one sentence: who made it, views, categories
+    await expect(body.locator(".act-row").filter({ hasText: "Added a Facebook video" })).toContainText("Boost Marketing · 65K views");
+    await expect(body.locator(".act-badge", { hasText: "Added" }).first()).toBeVisible();
     await expect(body.locator(".act-row").filter({ hasText: "Saved a video" })).toContainText(/📱 phone|💻 computer/); // which device it happened on (these tests emulate a phone)
-    await expect(body.locator(".act-day").first()).toHaveText("Today");
+    await expect(body.locator(".act-day").first()).toContainText("Today");
 
     // filters
     await body.getByRole("button", { name: /^Sync · / }).click();
@@ -112,7 +116,7 @@ test.describe("Menu → Activity", () => {
     });
     await closeTips(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="added"]').click();
+    await menuPage(page, "added");
     await page.locator("#panelBody").getByRole("button", { name: "＋ Add several at once" }).click();
     const dlg = page.locator(".dlg");
     await dlg
@@ -122,17 +126,24 @@ test.describe("Menu → Activity", () => {
     await expect(dlg.locator(".fbbulk-row.st-ok")).toHaveCount(3);
     await dlg.getByRole("button", { name: "Add 3" }).click();
     await expect(dlg).toBeHidden();
-    await page.locator('[data-p="activity"]').click();
+    await menuPage(page, "activity");
     const rows = page.locator("#panelBody .act-row").filter({ hasText: "Added 3 Facebook videos at once" });
     await expect(rows).toHaveCount(1);
     await expect(rows).toContainText("Reel 1111111111");
+    // the batch opens into the videos in it
+    await expect(page.locator("#panelBody .act-mini").first()).toBeHidden();
+    await rows.getByRole("button", { name: "Show the 3 videos" }).click();
+    await expect(page.locator("#panelBody .act-mini")).toHaveCount(3);
+    await expect(page.locator("#panelBody .act-mini").first()).toContainText("Reel");
+    await rows.getByRole("button", { name: "Hide the videos" }).click();
+    await expect(page.locator("#panelBody .act-mini").first()).toBeHidden();
     await expect(page.locator("#panelBody .act-row").filter({ hasText: "Added a Facebook video" })).toHaveCount(0);
   });
 
   test("nothing yet: says so", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
-    await page.locator('[data-p="activity"]').click();
+    await menuPage(page, "activity");
     await expect(page.locator("#panelBody")).toContainText("Nothing yet");
   });
 });

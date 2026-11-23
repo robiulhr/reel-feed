@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { closeTips, expect, login, test } from "./fixtures";
+import { closeTips, expect, login, menuPage, test } from "./fixtures";
 
 /** Automated WCAG 2.1 A/AA check (axe-core). The YouTube player itself is YouTube's, so it's left out. */
 async function wcagProblems(page: Page) {
@@ -22,9 +22,14 @@ test.describe("accessibility", () => {
     const box = (await page.locator("#tap").boundingBox())!;
     await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
     await expect(page.locator("#saveBtn")).toHaveClass(/on/);
-    for (const tab of ["about", "history", "saved", "backups", "sync"]) {
-      await page.locator("#menuBtn").click();
-      await page.locator(`[data-p="${tab}"]`).click();
+    await page.locator("#menuBtn").click();
+    await expect(page.locator('#panelBody [data-p="saved"]')).toBeVisible();
+    await page.waitForTimeout(500); // let the menu finish opening: colours are measured on what is really painted
+    expect(await wcagProblems(page), "menu home").toEqual([]); // the new home screen too
+    await page.keyboard.press("Escape");
+    for (const tab of ["about", "history", "saved", "backups", "sync", "activity"]) {
+      await menuPage(page, tab);
+      await page.waitForTimeout(500);
       expect(await wcagProblems(page), `menu → ${tab}`).toEqual([]);
       await page.keyboard.press("Escape");
     }
@@ -50,7 +55,7 @@ test.describe("accessibility", () => {
   test("Enter on Cancel in a confirm dialog cancels (never confirms)", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await page.locator('[data-p="channels"]').click();
+    await menuPage(page, "channels");
     await page.locator(".ch-search").fill("Ads");
     await page.locator(".ch-item", { hasText: "Ads Lab" }).getByRole("button", { name: "Remove" }).click();
     await page.locator(".ch-controls select").nth(1).selectOption("removed");

@@ -219,9 +219,20 @@ export async function player(page: Page) {
   });
 }
 
+/**
+ * Opens a Menu page the way a person does: opens the Menu if it's closed, goes back to its home screen
+ * if a page is showing, then taps the page's card.
+ */
+export async function menuPage(page: Page, tab: string) {
+  if (!(await page.locator("#closePanel").isVisible())) await page.locator("#menuBtn").click();
+  const back = page.locator("#panelBack");
+  if (await back.isVisible()) await back.click();
+  await page.locator(`#panelBody [data-p="${tab}"]`).click();
+}
+
 export async function login(page: Page) {
   await page.locator("#menuBtn").click();
-  await page.locator('[data-p="sync"]').click();
+  await menuPage(page, "sync");
   await page.locator('#panelBody input[name="password"]').fill("pw");
   await page.locator("#panelBody form button[type=submit]").click();
   await expect(page.locator("#panelBody")).toContainText("This device is logged in");
