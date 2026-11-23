@@ -11,12 +11,12 @@
       <p id="status" class="note" aria-live="polite">Open a Facebook page's Reels tab.</p>
       <div class="row">
         <button id="scrollBtn" type="button" disabled>Keep scrolling</button>
-        <button id="captionsBtn" type="button" disabled title="Looks up each shown reel's caption (slowly) so you can search them">Get captions</button>
       </div>
     </header>
+    <div id="player" hidden></div>
 
     <section class="tools" aria-label="Filter and sort">
-      <input id="search" type="search" placeholder="Search captions or ids" aria-label="Search" />
+      <input id="search" type="search" placeholder="Search titles and captions" aria-label="Search" />
       <div class="row">
         <label>Min views <input id="minViews" type="text" inputmode="decimal" placeholder="e.g. 10K" size="6" /></label>
         <label>Sort

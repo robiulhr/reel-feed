@@ -1,10 +1,11 @@
 /**
  * Add many Facebook videos at once: paste links (one per line, or a whole message with links in it),
  * or come from the browser extension (the app opened at "#add=…"). Each link is looked up like a
- * single add; ones you already added are left out. Categories and lists are picked once for all.
+ * single add; ones you already added are left out. Each video shows its title and caption and has
+ * its own categories and lists (starting from the guess); "For all selected" sets them on many.
  * Loaded only when used (its own small file).
  */
-import { type CatId, detectLang, isCat } from "./categories";
+import { type CatId, catLabel, detectLang, isCat } from "./categories";
 import { catChooser } from "./catpicker";
 import { btn, compact, el, nowSec } from "./dom";
 import { fbIdFromLink, fbThumbUrl } from "./fbdata";
@@ -37,6 +38,13 @@ export function linksIn(text: string): string[] {
   return out;
 }
 
+/** The caption without the title it starts with (the title is shown above it). */
+function descOf(m: FbMeta): string {
+  const cap = (m.caption ?? "").trim();
+  const t = (m.title ?? "").trim();
+  return (t && cap.startsWith(t) ? cap.slice(t.length) : cap).trim();
+}
+
 interface Row {
   link: string;
   state: "wait" | "ok" | "dup" | "err";
@@ -44,7 +52,35 @@ interface Row {
   id?: string;
   error?: string;
   pick: boolean;
+  cats: CatId[];
+  lists: Set<string>;
+  open: boolean; // its own categories & lists editor is showing
   el: HTMLElement;
+}
+
+/** Toggle chips for your lists. */
+function listChips(on: Set<string>, label: string, onChange: () => void): HTMLElement {
+  const row = el("div", "catpick-chips");
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", label);
+  for (const l of state.lists) {
+    const b = btn(
+      listLabel(l),
+      () => {
+        if (on.has(l.id)) on.delete(l.id);
+        else on.add(l.id);
+        b.classList.toggle("on", on.has(l.id));
+        b.setAttribute("aria-pressed", String(on.has(l.id)));
+        onChange();
+      },
+      "chip",
+    );
+    b.classList.toggle("on", on.has(l.id));
+    b.setAttribute("aria-pressed", String(on.has(l.id)));
+    row.append(b);
+  }
+  if (!state.lists.length) row.append(el("span", "ch-note", "No lists yet"));
+  return row;
 }
 
 export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
@@ -60,70 +96,62 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
   status.setAttribute("aria-live", "polite");
 
   const tools = el("div", "fbbulk-tools");
-  const allBtn = btn("Select all", () => setAll(true));
-  const noneBtn = btn("Select none", () => setAll(false));
-  tools.append(allBtn, noneBtn);
+  tools.append(
+    btn("Select all", () => setAll(true)),
+    btn("Select none", () => setAll(false)),
+  );
   tools.hidden = true;
   const list = el("div", "fbbulk-list");
   list.setAttribute("role", "group");
   list.setAttribute("aria-label", "Videos to add");
 
-  const cats = catChooser({
-    current: [],
-    emptyLabel: "Nothing picked — each video goes in the categories guessed from its caption",
-    onChange: () => update(),
+  // For all selected: pick, then apply (each video can still be changed after)
+  const allBox = el("details", "fbbulk-all");
+  allBox.hidden = true;
+  let allCats: CatId[] = [];
+  const allLists = new Set<string>();
+  const allChooser = catChooser({ current: [], emptyLabel: "Nothing picked", onChange: (c) => (allCats = c) });
+  const applyBtn = btn("Apply to selected", () => {
+    const sel = rows.filter(addable);
+    if (!allCats.length && !allLists.size) return toast("Pick categories or lists above first");
+    for (const r of sel) {
+      if (allCats.length) r.cats = [...allCats];
+      for (const l of allLists) r.lists.add(l);
+      draw(r);
+    }
+    update();
+    toast(`Applied to ${sel.length} video${sel.length === 1 ? "" : "s"}`);
   });
-  const lists = new Set<string>();
-  const listRow = el("div", "catpick-chips");
-  listRow.setAttribute("role", "group");
-  listRow.setAttribute("aria-label", "Lists for these videos");
-  for (const l of state.lists) {
-    const b = btn(
-      listLabel(l),
-      () => {
-        if (lists.has(l.id)) lists.delete(l.id);
-        else lists.add(l.id);
-        b.classList.toggle("on", lists.has(l.id));
-        b.setAttribute("aria-pressed", String(lists.has(l.id)));
-      },
-      "chip",
-    );
-    b.setAttribute("aria-pressed", "false");
-    listRow.append(b);
-  }
-
-  box.append(
-    area,
-    lookBtn,
-    status,
-    tools,
-    list,
-    el("div", "fbf-label", "Categories (for all of them)"),
-    cats.box,
-    el("div", "fbf-label", "Lists (optional, for all of them)"),
-    listRow,
+  allBox.append(
+    el("summary", "fbf-label", "Set categories & lists for all selected"),
+    el("p", "ch-note", "Categories you pick here replace theirs; lists are added. Each video can still be changed on its own."),
+    allChooser.box,
+    listChips(allLists, "Lists for all selected", () => {}),
+    applyBtn,
   );
+
+  box.append(area, lookBtn, status, tools, allBox, list);
 
   let rows: Row[] = [];
   let saveBtn: HTMLButtonElement | null = null;
   let run = 0;
 
-  /** Categories a row would get: the ones you picked, else its own guess. */
-  const catsFor = (r: Row): CatId[] => (cats.picked().length ? cats.picked() : (r.meta?.cats ?? []).filter((c): c is CatId => isCat(c)));
   const addable = (r: Row) => r.pick && (r.state === "ok" || (r.state === "err" && !!r.id));
 
   function update() {
     const go = rows.filter(addable);
-    const noCat = go.filter((r) => !catsFor(r).length).length;
+    const noCat = go.filter((r) => !r.cats.length).length;
     const waiting = rows.filter((r) => r.state === "wait").length;
     const dups = rows.filter((r) => r.state === "dup").length;
     const bits = [
       waiting ? `Looking up ${waiting}…` : "",
       rows.length ? `${go.length} selected of ${rows.length}` : "",
       dups ? `${dups} already added` : "",
-      noCat ? `${noCat} need a category — pick one below` : "",
+      noCat ? `${noCat} need a category` : "",
     ].filter(Boolean);
     status.textContent = bits.join(" · ");
+    applyBtn.textContent = `Apply to ${go.length} selected`;
+    applyBtn.disabled = !go.length;
     if (saveBtn) {
       saveBtn.disabled = !go.length || noCat > 0 || waiting > 0;
       saveBtn.textContent = go.length ? `Add ${go.length}` : "Add";
@@ -159,6 +187,8 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
     img.onerror = () => img.removeAttribute("src");
     const info = el("div", "fbbulk-info");
     info.append(el("div", "fbbulk-title", title));
+    const desc = m ? descOf(m) : "";
+    if (desc) info.append(el("div", "fbbulk-desc", desc));
     const sub =
       r.state === "dup"
         ? "Already added"
@@ -173,6 +203,73 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
     const label = el("label", "fbbulk-pick");
     label.append(check, img, info);
     row.replaceChildren(label);
+    const watch = r.id ? watchBtn(r, title) : null;
+    if (r.state !== "ok" && !(r.state === "err" && r.id)) {
+      if (!watch) return;
+      const t = el("div", "fbbulk-tags");
+      t.append(watch);
+      row.append(t);
+      if (watching === r) row.append(playerOf(r));
+      return;
+    }
+
+    // its own categories and lists
+    const tags = el("div", "fbbulk-tags");
+    if (watch) tags.append(watch);
+    const names = [...r.cats.map(catLabel), ...state.lists.filter((l) => r.lists.has(l.id)).map(listLabel)];
+    tags.append(el("span", r.cats.length ? "ch-note" : "ch-note fbbulk-warn", names.length ? names.join(" · ") : "No category yet"));
+    const edit = btn(r.open ? "Done" : "✎ Categories & lists", () => {
+      r.open = !r.open;
+      draw(r);
+    });
+    edit.setAttribute("aria-expanded", String(r.open));
+    edit.setAttribute("aria-label", `${r.open ? "Done with" : "Change"} categories and lists for ${title}`);
+    tags.append(edit);
+    row.append(tags);
+    if (watching === r) row.append(playerOf(r));
+    if (r.open) {
+      const ed = el("div", "fbbulk-edit");
+      const cc = catChooser({
+        current: r.cats,
+        emptyLabel: "Pick at least one",
+        onChange: (c) => {
+          r.cats = c;
+          update();
+        },
+      });
+      ed.append(
+        cc.box,
+        el("div", "fbf-label", "Lists"),
+        listChips(r.lists, `Lists for ${title}`, () => {}),
+      );
+      row.append(ed);
+    }
+  }
+
+  // Watch one right here (Facebook's own embedded player), one at a time
+  let watching: Row | null = null;
+  function watchBtn(r: Row, title: string) {
+    const b = btn(watching === r ? "■ Stop" : "▶ Watch", () => {
+      const was = watching;
+      watching = watching === r ? null : r;
+      if (was && was !== r) draw(was);
+      draw(r);
+      if (watching === r) r.el.querySelector(".fbbulk-player")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    b.setAttribute("aria-label", `${watching === r ? "Stop" : "Watch"} ${title}`);
+    b.setAttribute("aria-expanded", String(watching === r));
+    return b;
+  }
+  function playerOf(r: Row): HTMLElement {
+    const box = el("div", "fbbulk-player");
+    const f = el("iframe");
+    const href = r.meta?.url ?? `https://www.facebook.com/reel/${r.id}/`;
+    f.src = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(href)}&show_text=false&autoplay=true&width=270`;
+    f.title = "Facebook video";
+    f.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+    f.setAttribute("allowfullscreen", "");
+    box.append(f);
+    return box;
   }
 
   async function lookOne(r: Row, n: number) {
@@ -185,6 +282,7 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
     } else {
       r.meta = res;
       r.id = res.id;
+      r.cats = (res.cats ?? []).filter((c): c is CatId => isCat(c)); // its guess; change it if you like
       const dup = state.manual.some((x) => x.id === res.id) || rows.some((o) => o !== r && o.id === res.id && o.state === "ok");
       r.state = dup ? "dup" : "ok";
       r.pick = !dup;
@@ -207,13 +305,23 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
     rows = links.slice(0, MAX).map((link) => {
       const id = fbIdFromLink(link) ?? undefined;
       const dup = !!id && state.manual.some((x) => x.id === id);
-      return { link, id, state: dup ? "dup" : "wait", pick: false, el: el("div", "fbbulk-row") } as Row;
+      return {
+        link,
+        id,
+        state: dup ? "dup" : "wait",
+        pick: false,
+        cats: [],
+        lists: new Set(),
+        open: false,
+        el: el("div", "fbbulk-row"),
+      } as Row;
     });
     for (const r of rows) {
       draw(r);
       list.append(r.el);
     }
     tools.hidden = false;
+    allBox.hidden = false;
     update();
     if (extra > 0) toast(`Only the first ${MAX} links — add the other ${extra} next time`);
     const queue = rows.filter((r) => r.state === "wait");
@@ -236,7 +344,7 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
     },
   });
   run++; // stop lookups still running
-  const go = rows.filter(addable).filter((r) => catsFor(r).length);
+  const go = rows.filter(addable).filter((r) => r.cats.length);
   if (!ok || !go.length) return false;
 
   const now = Math.floor(nowSec());
@@ -252,8 +360,8 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
       t: m?.title ?? "",
       note: "",
       by,
-      cats: catsFor(r),
-      lists: state.lists.filter((l) => lists.has(l.id)).map((l) => l.id),
+      cats: r.cats,
+      lists: state.lists.filter((l) => r.lists.has(l.id)).map((l) => l.id),
       lg: detectLang(`${m?.title ?? ""} ${m?.caption ?? ""}`),
       at: now - i, // keeps the order you saw them in (newest first)
       v: m?.views ?? 0,

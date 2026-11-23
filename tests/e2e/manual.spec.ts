@@ -251,12 +251,15 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator(".fb-slot.on iframe")).toHaveAttribute("data-href", META.url);
   });
 
-  test("add several at once: from a #add= link, ones you have are skipped, categories and lists for all", async ({ app: page }) => {
+  test("add several at once: title and caption on each, its own categories and lists, or set for all selected", async ({ app: page }) => {
     // each link looks up as its own video
     await page.route("**/api/fb/meta**", (r) => {
       const link = new URL(r.request().url()).searchParams.get("url") ?? "";
       const id = link.split("/reel/")[1]?.split("/")[0] ?? "0";
-      return r.fulfill({ json: { ...META, id, url: `https://www.facebook.com/reel/${id}/`, title: `Reel ${id}`, cats: [] } });
+      const title = `Reel ${id}`;
+      return r.fulfill({
+        json: { ...META, id, url: `https://www.facebook.com/reel/${id}/`, title, caption: `${title}\nAbout ${id}`, cats: [] },
+      });
     });
     await closeTips(page);
 
@@ -267,11 +270,15 @@ test.describe("Facebook videos you add by link", () => {
     const dlg = page.locator(".dlg");
     await dlg.getByLabel("Facebook video links").fill("look at this https://www.facebook.com/reel/1111111111/ nice");
     await dlg.getByRole("button", { name: "Look them up" }).click();
-    await expect(dlg.locator(".fbbulk-row")).toHaveCount(1);
-    await expect(dlg.locator(".fbbulk-row")).toContainText("Reel 1111111111");
-    // no guess for its category: one must be picked
+    const row1 = dlg.locator(".fbbulk-row");
+    await expect(row1).toHaveCount(1);
+    await expect(row1.locator(".fbbulk-title")).toHaveText("Reel 1111111111");
+    await expect(row1.locator(".fbbulk-desc")).toHaveText("About 1111111111"); // the caption, without the title again
+    await expect(row1).toContainText("No category yet");
     await expect(dlg.getByRole("button", { name: "Add 1" })).toBeDisabled();
-    await dlg
+    // its own category
+    await row1.getByRole("button", { name: "Change categories and lists for Reel 1111111111" }).click();
+    await row1
       .locator(".catpick")
       .getByRole("button", { name: /^Sales & Customers/ })
       .click();
@@ -280,28 +287,56 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator(".fb-card")).toHaveCount(1);
 
     // the extension's hand-over: reel ids in the link
-    await page.goto("/added#add=1111111111,2222222222,3333333333");
+    await page.goto("/added#add=1111111111,2222222222,3333333333,4444444444");
     await expect(page).toHaveURL(/\/added$/); // the ids are taken out of the address
-    await expect(dlg.locator(".fbbulk-row")).toHaveCount(3);
+    await expect(dlg.locator(".fbbulk-row")).toHaveCount(4);
     await expect(dlg.locator(".fbbulk-row.st-dup")).toContainText("Already added");
-    await expect(dlg.locator(".fbbulk-row.st-ok")).toHaveCount(2);
+    await expect(dlg.locator(".fbbulk-row.st-ok")).toHaveCount(3);
     await expect(dlg.getByRole("checkbox", { name: "Add Reel 1111111111" })).toBeDisabled();
-    // leave one out
-    await dlg.getByRole("checkbox", { name: "Add Reel 3333333333" }).uncheck();
-    await dlg
+    await dlg.getByRole("checkbox", { name: "Add Reel 3333333333" }).uncheck(); // leave one out
+
+    // for all selected: a category and a list
+    const all = dlg.locator(".fbbulk-all");
+    await all.getByText("Set categories & lists for all selected").click();
+    await all
       .locator(".catpick")
       .getByRole("button", { name: /^Sales & Customers/ })
       .click();
-    await dlg.getByRole("button", { name: "🎯 Competitors" }).click();
-    await dlg.getByRole("button", { name: "Add 1" }).click();
+    await all.getByRole("button", { name: "🎯 Competitors" }).click();
+    await all.getByRole("button", { name: "Apply to 2 selected" }).click();
+    const row2 = dlg.locator(".fbbulk-row").filter({ hasText: "Reel 2222222222" });
+    const row4 = dlg.locator(".fbbulk-row").filter({ hasText: "Reel 4444444444" });
+    await expect(row2.locator(".fbbulk-tags")).toContainText("Competitors");
+    await expect(dlg.locator(".fbbulk-row").filter({ hasText: "Reel 3333333333" })).toContainText("No category yet");
+    // then one on its own: not on that list
+    await row4.getByRole("button", { name: "Change categories and lists for Reel 4444444444" }).click();
+    await row4.locator(".fbbulk-edit").getByRole("button", { name: "🎯 Competitors" }).click();
+    await row4.getByRole("button", { name: "Done with categories and lists for Reel 4444444444" }).click();
+    await expect(row4.locator(".fbbulk-tags")).not.toContainText("Competitors");
+    // watch one right here; watching another closes the first
+    await page.route("https://www.facebook.com/plugins/**", (r) => r.fulfill({ contentType: "text/html", body: "<p>video</p>" }));
+    await row2.getByRole("button", { name: "Watch Reel 2222222222" }).click();
+    await expect(row2.locator(".fbbulk-player iframe")).toHaveAttribute("src", /plugins\/video\.php\?href=.*2222222222/);
+    await row4.getByRole("button", { name: "Watch Reel 4444444444" }).click();
+    await expect(row4.locator(".fbbulk-player iframe")).toBeVisible();
+    await expect(dlg.locator(".fbbulk-player")).toHaveCount(1);
+    await row4.getByRole("button", { name: "Stop Reel 4444444444" }).click();
+    await expect(dlg.locator(".fbbulk-player")).toHaveCount(0);
+
+    await dlg.getByRole("button", { name: "Add 2" }).click();
     await expect(dlg).toBeHidden();
-    await expect(page.locator(".toast")).toContainText("Added 1 ✓ — 1 you had already");
-    await expect(page.locator(".fb-card")).toHaveCount(2);
-    await expect(page.locator(".fb-card").filter({ hasText: "Reel 2222222222" })).toBeVisible();
+    await expect(page.locator(".toast")).toContainText("Added 2 ✓ — 1 you had already");
+    await expect(page.locator(".fb-card")).toHaveCount(3);
     await expect(page.locator(".fb-card").filter({ hasText: "Reel 3333333333" })).toHaveCount(0);
-    // its category and list came from the picks for all
-    await page.locator(".fb-card").filter({ hasText: "Reel 2222222222" }).getByRole("button", { name: "✎ Edit" }).click();
-    await expect(dlg.getByRole("button", { name: "🎯 Competitors" })).toHaveAttribute("aria-pressed", "true");
-    await expect(dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ })).toHaveAttribute("aria-pressed", "true");
+    const listOf = async (title: string) => {
+      await page.locator(".fb-card").filter({ hasText: title }).getByRole("button", { name: "✎ Edit" }).click();
+      await expect(dlg.locator(".catpick").getByRole("button", { name: /^Sales & Customers/ })).toHaveAttribute("aria-pressed", "true");
+      const on = await dlg.getByRole("button", { name: "🎯 Competitors" }).getAttribute("aria-pressed");
+      await dlg.getByRole("button", { name: "Cancel" }).click();
+      await expect(dlg).toBeHidden();
+      return on;
+    };
+    expect(await listOf("Reel 2222222222")).toBe("true");
+    expect(await listOf("Reel 4444444444")).toBe("false");
   });
 });

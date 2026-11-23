@@ -10,13 +10,38 @@ const $ = (id) => document.getElementById(id);
 let tabId = null;
 let data = null; // the content script's snapshot
 const picked = new Set();
-let captions = {}; // id -> caption (kept on this computer, so searches work next time)
+let info = {}; // id -> { t: title, d: rest of the caption } (kept on this computer)
 let fetching = false;
 
-chrome.storage.local.get("captions").then((s) => {
-  captions = s.captions || {};
+chrome.storage.local.get("info").then((s) => {
+  info = s.info || {};
   draw();
 });
+
+/** Watch a reel at the top of the panel (Facebook's embedded player); null closes it. */
+let watching = null;
+function watch(id) {
+  watching = id;
+  const box = $("player");
+  box.hidden = !id;
+  box.replaceChildren();
+  if (id) {
+    const f = document.createElement("iframe");
+    f.src = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(`https://www.facebook.com/reel/${id}/`)}&show_text=false&autoplay=true&width=270`;
+    f.title = "Facebook reel";
+    f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    f.allowFullscreen = true;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "✕ Close";
+    close.onclick = () => watch(null);
+    box.append(f, close);
+    box.scrollIntoView({ block: "nearest" });
+  }
+  draw();
+}
+
+const textOf = (id) => (info[id] ? `${info[id].t} ${info[id].d}` : "");
 
 function parseNum(text) {
   const m = /^\s*([\d.]+)\s*([KMB])?\s*$/i.exec(text || "");
@@ -35,7 +60,7 @@ function shown() {
   if (!data) return [];
   const q = $("search").value.trim().toLowerCase();
   const min = parseNum($("minViews").value);
-  const list = data.reels.filter((r) => r.views >= min && (!q || r.id.includes(q) || (captions[r.id] || "").toLowerCase().includes(q)));
+  const list = data.reels.filter((r) => r.views >= min && (!q || r.id.includes(q) || textOf(r.id).toLowerCase().includes(q)));
   const sort = $("sort").value;
   if (sort === "most") list.sort((a, b) => b.views - a.views);
   else if (sort === "least") list.sort((a, b) => a.views - b.views);
@@ -64,7 +89,7 @@ function draw() {
         ? "No reels yet — scroll the page a little."
         : "Open this page's Reels tab to collect its reels.";
   const list = shown();
-  $("captionsBtn").disabled = fetching || !list.some((r) => !(r.id in captions));
+  void fillInfo(list);
   $("counts").textContent = `${list.length} shown · ${picked.size} selected`;
   const items = list.map((r) => {
     const li = document.createElement("li");
@@ -85,18 +110,32 @@ function draw() {
     img.loading = "lazy";
     img.referrerPolicy = "no-referrer";
     if (r.thumb) img.src = r.thumb;
-    const info = document.createElement("div");
-    info.className = "info";
+    const box2 = document.createElement("div");
+    box2.className = "info";
     const views = document.createElement("div");
     views.className = "views";
     views.textContent = r.views ? `${compact(r.views)} views` : r.viewsText || "views unknown";
-    const cap = document.createElement("div");
-    cap.className = "cap";
-    cap.textContent = captions[r.id] ?? `Reel ${r.id}`;
-    info.append(views, cap);
-    box.setAttribute("aria-label", `Select reel ${r.id}, ${views.textContent}`);
-    label.append(box, img, info);
-    li.append(label);
+    const known = info[r.id];
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = known?.t || (known || failed.has(r.id) ? `Reel ${r.id}` : "Getting its title…");
+    box2.append(title);
+    if (known?.d) {
+      const desc = document.createElement("div");
+      desc.className = "cap";
+      desc.textContent = known.d;
+      box2.append(desc);
+    }
+    box2.append(views);
+    box.setAttribute("aria-label", `Select ${known?.t || `reel ${r.id}`}, ${views.textContent}`);
+    label.append(box, img, box2);
+    const play = document.createElement("button");
+    play.type = "button";
+    play.className = "watch";
+    play.textContent = watching === r.id ? "■" : "▶";
+    play.setAttribute("aria-label", `${watching === r.id ? "Stop" : "Watch"} ${known?.t || `reel ${r.id}`}`);
+    play.onclick = () => watch(watching === r.id ? null : r.id);
+    li.append(label, play);
     return li;
   });
   ul.replaceChildren(...items);
@@ -160,33 +199,43 @@ $("noneBtn").onclick = () => {
   draw();
 };
 
-/** Look up captions for the shown reels that have none yet, 2 at a time, through Reel Feed. */
-$("captionsBtn").onclick = async () => {
+/** Look up the title and caption of the shown reels that have none yet, 2 at a time, through Reel
+ *  Feed's own lookup. Runs by itself as reels appear; saved on this computer. */
+const failed = new Set();
+let redraw = 0;
+async function fillInfo(list) {
+  if (fetching) return;
+  const queue = list.filter((r) => !info[r.id] && !failed.has(r.id));
+  if (!queue.length) return;
   fetching = true;
-  const todo = shown().filter((r) => !(r.id in captions)).slice(0, 60);
-  let done = 0;
-  $("captionsBtn").disabled = true;
   const one = async (r) => {
     try {
       const res = await fetch(`${APP}api/fb/meta?url=${encodeURIComponent(`https://www.facebook.com/reel/${r.id}/`)}`);
       const j = await res.json();
-      if (j && !j.error) captions[r.id] = j.caption || j.title || "";
-    } catch {}
-    done++;
-    $("status").textContent = `Getting captions… ${done} of ${todo.length}`;
+      if (!j || j.error) throw new Error();
+      const t = (j.title || "").trim();
+      const cap = (j.caption || "").trim();
+      info[r.id] = { t, d: (t && cap.startsWith(t) ? cap.slice(t.length) : cap).trim() };
+    } catch {
+      failed.add(r.id); // not again this time
+    }
+    redraw ||= window.setTimeout(() => {
+      redraw = 0;
+      if (!fetching) return;
+      draw();
+    }, 600);
   };
-  const queue = [...todo];
   await Promise.all(
     [0, 1].map(async () => {
       for (let r = queue.shift(); r; r = queue.shift()) await one(r);
     }),
   );
-  const ids = Object.keys(captions);
-  if (ids.length > 3000) for (const id of ids.slice(0, ids.length - 3000)) delete captions[id];
-  await chrome.storage.local.set({ captions });
+  const ids = Object.keys(info);
+  if (ids.length > 3000) for (const id of ids.slice(0, ids.length - 3000)) delete info[id];
+  await chrome.storage.local.set({ info });
   fetching = false;
-  draw();
-};
+  draw(); // and any reels that came meanwhile
+}
 
 $("sendBtn").onclick = () => {
   const ids = (data?.reels || []).filter((r) => picked.has(r.id)).map((r) => r.id);

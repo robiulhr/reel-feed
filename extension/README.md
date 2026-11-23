@@ -21,10 +21,14 @@ After you change these files, click the ↻ on the extension's card in `chrome:/
    (every 1.5–2.5 s), stops when nothing new comes 3 times in a row, at 300 reels, or when you
    click **Stop scrolling**. It never runs by itself or in the background.
 4. Narrow it down: **Min views** (e.g. `10K`, `1.5M`), **Sort** (page order, most or fewest views),
-   **Search** (ids; captions after **Get captions**).
-5. Tick the ones you want (**Select shown** ticks everything the filters show).
-6. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. Pick categories and lists
-   there, untick any you don't want, then **Add**. Ones you already have are left out.
+   **Search** (titles, captions, ids). Each reel shows its title and caption as they arrive.
+5. **▶** plays a reel at the top of the panel (Facebook's embedded player), so you can see what it
+   is about; **✕ Close** or **■** stops it.
+6. Tick the ones you want (**Select shown** ticks everything the filters show).
+7. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. There each one shows its
+   title and caption, has **▶ Watch**, and its own **✎ Categories & lists** (starting from the
+   guess). **Set categories & lists for all selected** sets them on many at once. Untick any you
+   don't want, then **Add**. Ones you already have are left out.
 
 Reel Feed adds up to 60 at a time.
 
@@ -33,8 +37,9 @@ Reel Feed adds up to 60 at a time.
 - It reads only the reel tiles on the Facebook tab you're looking at: link, view count, thumbnail.
 - It sends nothing by itself. **Add** opens Reel Feed with the picked reel ids in the address
   (`/added#add=id,id,…`); the app looks each one up the same way as adding one by link.
-- **Get captions** asks Reel Feed's own lookup (`/api/fb/meta`), two at a time, for the reels
-  shown. Captions are kept in the extension's storage on this computer so searches work later.
+- Titles and captions come from Reel Feed's own lookup (`/api/fb/meta`), two at a time, only for
+  the reels the panel shows. They're kept in the extension's storage on this computer (up to
+  3,000), so they aren't looked up again.
 
 ## Files
 
