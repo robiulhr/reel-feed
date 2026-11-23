@@ -37,7 +37,7 @@ export default {
         return Response.redirect(`https://www.youtube.com/shorts/${video}`, 302);
       }
       if (OPEN_FILES.has(url.pathname)) return env.ASSETS.fetch(req);
-      if (wantsPage(req)) return loginPage();
+      if (wantsPage(req, url)) return loginPage();
       return Response.json({ error: "Please sign in" }, { status: 401, headers: { "Cache-Control": "no-store" } });
     }
     if (url.pathname.startsWith("/api/fb/")) return handleFb(req, url);

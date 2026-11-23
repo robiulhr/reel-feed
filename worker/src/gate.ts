@@ -52,9 +52,17 @@ export async function gateLogin(req: Request, url: URL, env: AppEnv): Promise<Re
 export const gateLogout = () =>
   new Response(null, { status: 204, headers: { "Set-Cookie": setCookie("", 0), "Cache-Control": "no-store" } });
 
-/** True when a browser is asking for a page (not a script or data file). */
-export const wantsPage = (req: Request) =>
-  req.method === "GET" && (req.headers.get("Sec-Fetch-Dest") === "document" || (req.headers.get("Accept") ?? "").includes("text/html"));
+/**
+ * True when someone is opening a page (not loading a script, a data file or calling the API). Judged by
+ * the address as well as the headers: the app's own service worker re-fetches the page without saying
+ * it wants HTML, and that must still get the login page, never a bare error.
+ */
+export const wantsPage = (req: Request, url: URL) => {
+  if (req.method !== "GET") return false;
+  if (req.headers.get("Sec-Fetch-Dest") === "document" || (req.headers.get("Accept") ?? "").includes("text/html")) return true;
+  const p = url.pathname;
+  return !p.startsWith("/api") && !p.startsWith("/gate/") && !p.startsWith("/assets/") && !p.startsWith("/data/") && !/.w+$/.test(p);
+};
 
 export const loginPage = () =>
   new Response(LOGIN_HTML, {

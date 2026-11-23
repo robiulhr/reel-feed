@@ -138,6 +138,15 @@ describe("password gate", () => {
     expect(sync).toHaveLength(0);
   });
 
+  it("the app's own service worker re-fetches pages without asking for HTML — it still gets the login page", async () => {
+    const { e } = env();
+    for (const path of ["/", "/saved", "/channel/@hook", "/v/abcDEF12345?x=1".replace("/v/abcDEF12345", "/menu")]) {
+      const r = await app.fetch(anon(path, CHROME, { Accept: "*/*" }), e);
+      expect(r.status, path).toBe(401);
+      expect(r.headers.get("Content-Type"), path).toContain("text/html");
+    }
+  });
+
   it("scripts, data and the API answer 401 without the password — nothing is served or passed on", async () => {
     const { e, sync } = env();
     for (const path of ["/assets/index-abc.js", "/data/cache.json", "/api/state2", "/api/fb/lookup?id=1", "/sw.js"]) {
