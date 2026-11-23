@@ -298,15 +298,19 @@ test.describe("Facebook videos you add by link", () => {
     // for all selected: a category and a list
     const all = dlg.locator(".fbbulk-all");
     await all.getByText("Set categories & lists for all selected").click();
+    const row2 = dlg.locator(".fbbulk-row").filter({ hasText: "Reel 2222222222" });
+    const row4 = dlg.locator(".fbbulk-row").filter({ hasText: "Reel 4444444444" });
     await all
       .locator(".catpick")
       .getByRole("button", { name: /^Sales & Customers/ })
       .click();
-    await all.getByRole("button", { name: "🎯 Competitors" }).click();
-    await all.getByRole("button", { name: "Apply to 2 selected" }).click();
-    const row2 = dlg.locator(".fbbulk-row").filter({ hasText: "Reel 2222222222" });
-    const row4 = dlg.locator(".fbbulk-row").filter({ hasText: "Reel 4444444444" });
+    // no Apply click: the category is on both ticked videos at once
+    await expect(row2.locator(".fbbulk-tags")).toContainText("Sales & Customers");
+    await expect(row4.locator(".fbbulk-tags")).toContainText("Sales & Customers");
+    await all.getByRole("button", { name: "🎯 Competitors" }).click(); // and so is the list
     await expect(row2.locator(".fbbulk-tags")).toContainText("Competitors");
+    await expect(row4.locator(".fbbulk-tags")).toContainText("Competitors");
+    await expect(all).toContainText("Put on 2 selected videos.");
     await expect(dlg.locator(".fbbulk-row").filter({ hasText: "Reel 3333333333" })).toContainText("No category yet");
     // then one on its own: not on that list
     await row4.getByRole("button", { name: "Change categories and lists for Reel 4444444444" }).click();

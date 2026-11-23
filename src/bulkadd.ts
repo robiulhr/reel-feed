@@ -59,7 +59,7 @@ interface Row {
 }
 
 /** Toggle chips for your lists. */
-function listChips(on: Set<string>, label: string, onChange: () => void): HTMLElement {
+function listChips(on: Set<string>, label: string, onChange: (id: string, now: boolean) => void): HTMLElement {
   const row = el("div", "catpick-chips");
   row.setAttribute("role", "group");
   row.setAttribute("aria-label", label);
@@ -71,7 +71,7 @@ function listChips(on: Set<string>, label: string, onChange: () => void): HTMLEl
         else on.add(l.id);
         b.classList.toggle("on", on.has(l.id));
         b.setAttribute("aria-pressed", String(on.has(l.id)));
-        onChange();
+        onChange(l.id, on.has(l.id));
       },
       "chip",
     );
@@ -105,29 +105,50 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
   list.setAttribute("role", "group");
   list.setAttribute("aria-label", "Videos to add");
 
-  // For all selected: pick, then apply (each video can still be changed after)
+  // For all selected: what you pick here is put on every ticked video straight away (each video can
+  // still be changed on its own afterwards). Videos still loading take it when they arrive.
   const allBox = el("details", "fbbulk-all");
   allBox.hidden = true;
   let allCats: CatId[] = [];
   const allLists = new Set<string>();
-  const allChooser = catChooser({ current: [], emptyLabel: "Nothing picked", onChange: (c) => (allCats = c) });
-  const applyBtn = btn("Apply to selected", () => {
-    const sel = rows.filter(addable);
-    if (!allCats.length && !allLists.size) return toast("Pick categories or lists above first");
-    for (const r of sel) {
-      if (allCats.length) r.cats = [...allCats];
-      for (const l of allLists) r.lists.add(l);
-      draw(r);
-    }
-    update();
-    toast(`Applied to ${sel.length} video${sel.length === 1 ? "" : "s"}`);
+  const allNote = el("p", "ch-note");
+  allNote.setAttribute("aria-live", "polite");
+  const sayApplied = () => {
+    const n = rows.filter(addable).length;
+    allNote.textContent = `Put on ${n} selected video${n === 1 ? "" : "s"}.`;
+  };
+  const allChooser = catChooser({
+    current: [],
+    emptyLabel: "Nothing picked",
+    onChange: (c) => {
+      allCats = c;
+      if (!c.length) return; // unticking everything leaves the videos as they are
+      for (const r of rows.filter(addable)) {
+        r.cats = [...c];
+        draw(r);
+      }
+      update();
+      sayApplied();
+    },
   });
   allBox.append(
     el("summary", "fbf-label", "Set categories & lists for all selected"),
-    el("p", "ch-note", "Categories you pick here replace theirs; lists are added. Each video can still be changed on its own."),
+    el(
+      "p",
+      "ch-note",
+      "Pick here and it goes on every ticked video right away (categories replace theirs; lists are added or taken off). You can still change any video on its own.",
+    ),
     allChooser.box,
-    listChips(allLists, "Lists for all selected", () => {}),
-    applyBtn,
+    listChips(allLists, "Lists for all selected", (id, on) => {
+      for (const r of rows.filter(addable)) {
+        if (on) r.lists.add(id);
+        else r.lists.delete(id);
+        draw(r);
+      }
+      update();
+      sayApplied();
+    }),
+    allNote,
   );
 
   box.append(area, lookBtn, status, tools, allBox, list);
@@ -150,8 +171,6 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
       noCat ? `${noCat} need a category` : "",
     ].filter(Boolean);
     status.textContent = bits.join(" · ");
-    applyBtn.textContent = `Apply to ${go.length} selected`;
-    applyBtn.disabled = !go.length;
     if (saveBtn) {
       saveBtn.disabled = !go.length || noCat > 0 || waiting > 0;
       saveBtn.textContent = go.length ? `Add ${go.length}` : "Add";
@@ -286,6 +305,11 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
       const dup = state.manual.some((x) => x.id === res.id) || rows.some((o) => o !== r && o.id === res.id && o.state === "ok");
       r.state = dup ? "dup" : "ok";
       r.pick = !dup;
+      if (!dup) {
+        // what was picked "for all selected" while it was loading goes on it too
+        if (allCats.length) r.cats = [...allCats];
+        for (const id of allLists) r.lists.add(id);
+      }
     }
     draw(r);
     update();

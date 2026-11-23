@@ -27,7 +27,7 @@ function watch(id) {
   box.replaceChildren();
   if (id) {
     const f = document.createElement("iframe");
-    f.src = `${APP}embed/fb.html?id=${encodeURIComponent(id)}`;
+    f.src = `${APP}embed/fb?id=${encodeURIComponent(id)}`; // (the site answers /embed/fb.html with a redirect to this)
     f.title = "Facebook reel";
     f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
     f.allowFullscreen = true;
