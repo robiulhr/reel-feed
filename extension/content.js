@@ -64,7 +64,9 @@
   }
 
   function push() {
-    chrome.runtime.sendMessage(snapshot()).catch(() => {}); // the panel may be closed
+    try {
+      chrome.runtime.sendMessage(snapshot()).catch(() => {}); // the panel may be closed
+    } catch {} // the extension was reloaded while this tab stayed open: reload the tab
   }
 
   let pending = 0;
