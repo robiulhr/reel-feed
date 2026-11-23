@@ -21,8 +21,8 @@ The side panel explains the steps itself ("How to use this"). After you change t
    click **Stop scrolling**. It never runs by itself or in the background.
 4. Narrow it down: **Min views** (e.g. `10K`, `1.5M`), **Sort** (page order, most or fewest views),
    **Search** (titles, captions, ids). Each reel shows its title and caption as they arrive.
-5. **▶** plays a reel at the top of the panel (Facebook's embedded player), so you can see what it
-   is about; **✕ Close** or **■** stops it.
+5. **▶** opens the reel in a small window next to the panel (Facebook's own reel page, where you're
+   signed in), so you can see what it is about. The next **▶** reuses that window.
 6. Tick the ones you want (**Select shown** ticks everything the filters show).
 7. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. There each one shows its
    title and caption, has **▶ Watch**, and its own **✎ Categories & lists** (starting from the
@@ -49,3 +49,10 @@ Reel Feed adds up to 60 at a time.
   tab. It collects the tiles (and does the slow scroll) and does nothing on any other page.
 - `panel.html`, `panel.css`, `panel.js`: the side panel.
 - `background.js`: opens the side panel when you click the button.
+
+## After you update the extension
+
+Clicking ↻ on the extension's card cuts off the copy that was already running in an open Facebook
+tab (Chrome calls this "Extension context invalidated"). That old copy now stops by itself without
+errors, and the panel puts a new one in when you open it on a Reels tab. If the list stays empty,
+reload the Facebook tab once.

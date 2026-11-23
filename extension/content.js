@@ -5,8 +5,25 @@
  * "Keep scrolling" scrolls this one page slowly, like a person would, and only when you click it.
  */
 (() => {
-  if (window.__reelFeedCollector) return; // already in this tab
-  window.__reelFeedCollector = true;
+  /** False once the extension was reloaded or updated: this copy is cut off from it and must stop. */
+  const alive = () => {
+    try {
+      return !!chrome.runtime?.id;
+    } catch {
+      return false;
+    }
+  };
+  // Already a working copy in this tab? Then leave it. A dead one (from before a reload) is replaced.
+  const prev = window.__reelFeedCollector;
+  if (prev && typeof prev.alive === "function" && prev.alive()) return;
+  window.__reelFeedCollector = { alive };
+  let observer = null;
+  /** Stop everything (the extension was reloaded). */
+  function shutdown() {
+    running = false;
+    observer?.disconnect();
+    if (window.__reelFeedCollector?.alive === alive) window.__reelFeedCollector = null;
+  }
   const CAP = 300; // most reels collected from one page
   const reels = new Map(); // id -> { id, views, viewsText, thumb, pos }
   let key = "";
@@ -68,19 +85,22 @@
   }
 
   function push() {
+    if (!alive()) return shutdown();
     try {
       chrome.runtime.sendMessage(snapshot()).catch(() => {}); // the panel may be closed
     } catch {} // the extension was reloaded while this tab stayed open: reload the tab
   }
 
   let pending = 0;
-  new MutationObserver(() => {
+  observer = new MutationObserver(() => {
+    if (!alive()) return shutdown();
     if (pending || !isReelsTab()) return;
     pending = window.setTimeout(() => {
       pending = 0;
       if (collect()) push();
     }, 400);
-  }).observe(document.documentElement, { childList: true, subtree: true });
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -91,7 +111,7 @@
     const k = key;
     push();
     let idle = 0;
-    while (running && isReelsTab() && key === k && idle < 3 && reels.size < CAP) {
+    while (running && alive() && isReelsTab() && key === k && idle < 3 && reels.size < CAP) {
       const before = reels.size;
       window.scrollBy({ top: Math.round(window.innerHeight * (0.6 + Math.random() * 0.4)), behavior: "smooth" });
       await sleep(1500 + Math.random() * 1000);

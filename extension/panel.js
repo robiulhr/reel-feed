@@ -18,27 +18,27 @@ chrome.storage.local.get("info").then((s) => {
   draw();
 });
 
-/** Watch a reel at the top of the panel (Facebook's embedded player); null closes it. */
-let watching = null;
-function watch(id) {
-  watching = id;
-  const box = $("player");
-  box.hidden = !id;
-  box.replaceChildren();
-  if (id) {
-    const f = document.createElement("iframe");
-    f.src = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(`https://www.facebook.com/reel/${id}/`)}&show_text=false&autoplay=true&width=270`;
-    f.title = "Facebook reel";
-    f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-    f.allowFullscreen = true;
-    const close = document.createElement("button");
-    close.type = "button";
-    close.textContent = "✕ Close";
-    close.onclick = () => watch(null);
-    box.append(f, close);
-    box.scrollIntoView({ block: "nearest" });
+/** Watch a reel in a small window of its own (Facebook's own reel page, where you're signed in), next
+ *  to this panel. The next ▶ reuses the same window. */
+let watchWin = null;
+async function watch(id) {
+  const url = `https://www.facebook.com/reel/${id}/`;
+  try {
+    if (watchWin != null) {
+      const w = await chrome.windows.get(watchWin, { populate: true });
+      await chrome.tabs.update(w.tabs[0].id, { url });
+      await chrome.windows.update(watchWin, { focused: true });
+      return;
+    }
+  } catch {
+    watchWin = null; // you closed it: open a new one
   }
-  draw();
+  try {
+    const w = await chrome.windows.create({ url, type: "popup", width: 460, height: 820 });
+    watchWin = w.id;
+  } catch {
+    window.open(url, "_blank"); // a plain new tab if a window can't be made
+  }
 }
 
 const textOf = (id) => (info[id] ? `${info[id].t} ${info[id].d}` : "");
@@ -141,9 +141,10 @@ function draw() {
     const play = document.createElement("button");
     play.type = "button";
     play.className = "watch";
-    play.textContent = watching === r.id ? "■" : "▶";
-    play.setAttribute("aria-label", `${watching === r.id ? "Stop" : "Watch"} ${known?.t || `reel ${r.id}`}`);
-    play.onclick = () => watch(watching === r.id ? null : r.id);
+    play.textContent = "▶";
+    play.title = "Watch it in a small window";
+    play.setAttribute("aria-label", `Watch ${known?.t || `reel ${r.id}`}`);
+    play.onclick = () => void watch(r.id);
     li.append(label, play);
     return li;
   });
