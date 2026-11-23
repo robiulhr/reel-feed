@@ -211,3 +211,40 @@ export async function login(page: Page) {
   await page.locator("#panelBody form button[type=submit]").click();
   await expect(page.locator("#panelBody")).toContainText("This device is logged in");
 }
+
+/** Wait until the app's history has been still for 300 ms. Closing a dialog steps Back in history; if
+ *  that Back lands while a test navigates, the browser cancels the navigation (net::ERR_ABORTED). */
+export async function settled(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        let t = setTimeout(done, 300);
+        addEventListener("popstate", () => {
+          clearTimeout(t);
+          t = setTimeout(done, 300);
+        });
+      }),
+  );
+}
+
+async function again<T>(run: () => Promise<T>): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await run();
+    } catch (e) {
+      if (i >= 2 || !String(e).includes("ERR_ABORTED")) throw e;
+    }
+  }
+}
+
+/** page.goto, after the history settles (and once more if it was cancelled anyway). */
+export async function goTo(page: Page, url: string) {
+  await settled(page);
+  return again(() => page.goto(url));
+}
+
+/** page.reload, the same way. */
+export async function reload(page: Page) {
+  await settled(page);
+  return again(() => page.reload());
+}

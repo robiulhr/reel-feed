@@ -1,5 +1,5 @@
 import { makeDataset } from "../fixtures/data";
-import { closeTips, expect, test } from "./fixtures";
+import { closeTips, expect, goTo, reload, test } from "./fixtures";
 
 const path = (page: { url(): string }) => new URL(page.url()).pathname;
 const videos = makeDataset().videos;
@@ -32,7 +32,7 @@ test.describe("page addresses and Back", () => {
 
   test("a link to a Short plays that Short first", async ({ app: page }) => {
     const v = videos[13];
-    await page.goto(`/v/${v.id}`);
+    await goTo(page, `/v/${v.id}`);
     await expect(page.locator("#title")).toHaveText(v.t);
   });
 
@@ -40,7 +40,7 @@ test.describe("page addresses and Back", () => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
     await page.locator('[data-p="history"]').click();
-    await page.reload();
+    await reload(page);
     await expect(page.locator("#panel")).toBeVisible();
     await expect(page.locator('[data-p="history"]')).toHaveAttribute("aria-pressed", "true");
     await page.goBack();
@@ -57,7 +57,7 @@ test.describe("page addresses and Back", () => {
     const chPath = path(page);
     await page.goBack();
     await expect(page.locator("#page")).toBeHidden();
-    await page.goto(chPath);
+    await goTo(page, chPath);
     await expect(page.locator("#page")).toBeVisible();
     await page.goBack();
     await expect(page.locator("#page")).toBeHidden();
@@ -121,7 +121,7 @@ test.describe("page addresses and Back", () => {
         (window as unknown as { shared: string[] }).shared.push(d?.url ?? "");
       };
     });
-    await page.reload();
+    await reload(page);
     await closeTips(page);
     await page.locator("#shareBtn").click();
     const id = path(page).split("/")[2];

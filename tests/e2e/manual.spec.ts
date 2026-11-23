@@ -1,29 +1,4 @@
-import { closeTips, expect, test } from "./fixtures";
-import type { Page } from "@playwright/test";
-
-/** Go to an address. Right after a dialog closes, the app steps Back in history; if that lands while
- *  we navigate, the browser cancels the navigation (net::ERR_ABORTED) — then just go again. */
-async function goTo(page: Page, url: string) {
-  // let that Back finish first: wait until the history has been still for 300 ms
-  await page.evaluate(
-    () =>
-      new Promise<void>((done) => {
-        let t = setTimeout(done, 300);
-        addEventListener("popstate", () => {
-          clearTimeout(t);
-          t = setTimeout(done, 300);
-        });
-      }),
-  );
-  for (let i = 0; ; i++) {
-    try {
-      return await page.goto(url);
-    } catch (e) {
-      if (i >= 2 || !String(e).includes("ERR_ABORTED")) throw e;
-    }
-  }
-}
-
+import { closeTips, expect, goTo, test } from "./fixtures";
 /** Facebook's player SDK, faked: one controllable player per video (play, pause, sound, position). */
 const FAKE_FB = `
 (function () {

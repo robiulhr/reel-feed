@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { makeDataset } from "../fixtures/data";
-import { closeTips, expect, login, player, swipe, test } from "./fixtures";
+import { closeTips, expect, login, player, reload, swipe, test } from "./fixtures";
 
 test.describe("layout", () => {
   test("fits the screen: no sideways scrolling, ↻ and ☰ always reachable", async ({ app: page }) => {
@@ -29,7 +29,7 @@ test.describe("watching", () => {
   test("first-time tips appear once", async ({ app: page }) => {
     await expect(page.locator("#tips")).toBeVisible();
     await page.locator("#tipsOk").click();
-    await page.reload();
+    await reload(page);
     await expect(page.locator("#title")).not.toBeEmpty();
     await expect(page.locator("#tips")).toBeHidden();
   });
@@ -322,7 +322,7 @@ async function withData(page: Page, data: Record<string, unknown>) {
     const k = "ecomgy-reel-feed.v1";
     localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) ?? "{}"), ...d, tipsSeen: true }));
   }, data);
-  await page.reload();
+  await reload(page);
 }
 /** Every library Short in Saved. */
 async function saveAll(page: Page) {
