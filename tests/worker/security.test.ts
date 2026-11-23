@@ -82,3 +82,13 @@ describe("error reports from the app", () => {
     expect(e.stack.length).toBe(1500);
   });
 });
+
+describe("GET /session (what the app's password gate asks)", () => {
+  it("is fine for a good session and refused without one", async () => {
+    const f = setup();
+    const session = await login(f);
+    expect((await call(f, "GET", "/session", { session })).status).toBe(200);
+    expect((await call(f, "GET", "/session")).status).toBe(401);
+    expect((await call(f, "GET", "/session", { session: "forged.token" })).status).toBe(401);
+  });
+});

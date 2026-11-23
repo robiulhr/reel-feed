@@ -114,6 +114,9 @@ async function withRequestId(req: Request, env: Env, cors: Cors, run: () => Prom
 
 async function handle(route: string, req: Request, env: Env, cors: Cors): Promise<Response> {
   switch (route) {
+    // "Is this session still good?" The app's Worker asks this before it serves the app to anyone.
+    case "GET /session":
+      return json({ ok: true }, 200, cors);
     case "GET /state":
       return json(await readJsonFile(env, env.DATA_REPO, STATE_FILE), 200, cors);
     case "PUT /state":
