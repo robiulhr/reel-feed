@@ -286,6 +286,7 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator(".fb-card")).toHaveCount(1);
 
     // the extension's hand-over: reel ids in the link
+    await goTo(page, "/"); // so the next address is a full page load, like opening it from the extension
     await goTo(page, "/added#add=1111111111,2222222222,3333333333,4444444444");
     await expect(page).toHaveURL(/\/added$/); // the ids are taken out of the address
     await expect(dlg.locator(".fbbulk-row")).toHaveCount(4);

@@ -58,6 +58,7 @@ function onSyncUpdate() {
 }
 
 async function boot() {
+  const addAtStart = addLinksOf(location.hash); // read before the router rewrites the address
   initControls();
   initGestures();
   initFullscreen();
@@ -109,7 +110,7 @@ async function boot() {
     }
   }
   if (opened.k !== "feed") applyCurrent(); // opened on a menu page / channel / More like this
-  openAddLink();
+  if (addAtStart.length) void openBulkAdd(addAtStart); // opened from the browser extension
   window.addEventListener("hashchange", openAddLink);
   console.info(`First video in ${Math.round(performance.now() - t0)} ms (from ${first.source})`);
 
@@ -136,15 +137,25 @@ async function boot() {
 }
 
 /** "#add=id,id,…" (from the browser extension, or a shared link): add those Facebook videos. */
-function openAddLink() {
-  const m = /^#add=(.+)$/.exec(location.hash);
-  if (!m) return;
-  history.replaceState(history.state, "", location.pathname + location.search);
-  const links = decodeURIComponent(m[1])
+function addLinksOf(hash: string): string[] {
+  const m = /^#add=(.+)$/.exec(hash);
+  if (!m) return [];
+  let raw = m[1];
+  try {
+    raw = decodeURIComponent(raw);
+  } catch {}
+  return raw
     .split(/[,\s]+/)
     .filter(Boolean)
     .map((x) => (/^\d+$/.test(x) ? `https://www.facebook.com/reel/${x}/` : x))
     .filter((x) => /^https:\/\/([\w-]+\.)?(facebook\.com|fb\.watch)\//i.test(x));
+}
+
+/** The app is already open and the address changes to "#add=…". */
+function openAddLink() {
+  const links = addLinksOf(location.hash);
+  if (!location.hash.startsWith("#add=")) return;
+  history.replaceState(history.state, "", location.pathname + location.search);
   if (links.length) void openBulkAdd(links);
 }
 
