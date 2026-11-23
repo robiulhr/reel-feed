@@ -25,7 +25,8 @@ test.describe("topics", () => {
     await expect(dlg.getByRole("button", { name: new RegExp(suggested, "i") })).toHaveAttribute("aria-pressed", "true"); // pinned
     await dlg.getByRole("button", { name: "Close" }).click();
     await expect(chip).toHaveClass(/has/);
-    await expect(chip).toContainText(suggested);
+    await expect(chip).toContainText("1 topic");
+    await expect(chip).toHaveAttribute("aria-label", new RegExp(suggested));
 
     await menuPage(page, "topics");
     const body = page.locator("#panelBody");

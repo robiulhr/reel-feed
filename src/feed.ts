@@ -302,7 +302,7 @@ export function renderNote() {
   b.setAttribute("aria-label", has ? `Note: ${shown} — tap to edit` : "Add note on this video");
 }
 
-/** The blue topic chip next to the note chip: "Topic", or the names of the topics this video is pinned in. */
+/** The blue topic chip next to the note chip: "Topic", or how many topics this video is pinned in (short, so both chips fit on one line). */
 export function renderTopic() {
   const b = els.topicBtn;
   const cur = feed.cur;
@@ -310,9 +310,10 @@ export function renderTopic() {
   if (!cur) return;
   const names = state.topics.filter((t) => t.vids.some((v) => v.id === cur.id)).map((t) => t.name);
   b.classList.toggle("has", names.length > 0);
-  const shown = names.length ? (names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`) : "Topic";
+  const shown = names.length ? `${names.length} topic${names.length === 1 ? "" : "s"}` : "Topic";
   b.querySelector(".note-txt")!.textContent = shown;
-  b.setAttribute("aria-label", names.length ? `In topic ${shown} — tap to change` : "Add this video to a topic");
+  // the spoken name must contain the words that are shown (an accessibility rule)
+  b.setAttribute("aria-label", names.length ? `${shown}: ${names.join(", ")} — tap to change` : "Add this video to a topic");
 }
 
 export function renderSave() {

@@ -2714,14 +2714,22 @@ button[aria-busy="true"] {
 }
 
 /* ---------- topics ---------- */
+/* the note and topic chips share one line; a long note (or topic name) is cut with … instead of wrapping */
 .chip-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 8px;
   margin: 0 0 8px;
 }
 .chip-row .note-chip {
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
+}
+.chip-row .topic-chip {
+  flex: 0 0 auto; /* keeps its words; the note's text is the one that gets cut */
+  max-width: 45%;
 }
 .topic-chip {
   display: flex;
