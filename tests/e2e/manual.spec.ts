@@ -1,4 +1,28 @@
 import { closeTips, expect, test } from "./fixtures";
+import type { Page } from "@playwright/test";
+
+/** Go to an address. Right after a dialog closes, the app steps Back in history; if that lands while
+ *  we navigate, the browser cancels the navigation (net::ERR_ABORTED) — then just go again. */
+async function goTo(page: Page, url: string) {
+  // let that Back finish first: wait until the history has been still for 300 ms
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        let t = setTimeout(done, 300);
+        addEventListener("popstate", () => {
+          clearTimeout(t);
+          t = setTimeout(done, 300);
+        });
+      }),
+  );
+  for (let i = 0; ; i++) {
+    try {
+      return await page.goto(url);
+    } catch (e) {
+      if (i >= 2 || !String(e).includes("ERR_ABORTED")) throw e;
+    }
+  }
+}
 
 /** Facebook's player SDK, faked: one controllable player per video (play, pause, sound, position). */
 const FAKE_FB = `
@@ -175,7 +199,7 @@ test.describe("Facebook videos you add by link", () => {
     if ((await sales.getAttribute("aria-pressed")) !== "true") await sales.click();
     await dlg.getByRole("button", { name: "Add", exact: true }).click();
     await expect(dlg).toBeHidden();
-    await page.goto("/v/fb1141407915517139");
+    await goTo(page, "/v/fb1141407915517139");
     const frame = page.locator(".fb-slot iframe");
     await expect(frame).toBeVisible();
     await page.keyboard.press("ArrowDown");
@@ -227,7 +251,7 @@ test.describe("Facebook videos you add by link", () => {
     await dlg.getByRole("button", { name: "Add", exact: true }).click();
     await expect(dlg).toBeHidden();
 
-    await page.goto("/channel/fb%3A61595841376442");
+    await goTo(page, "/channel/fb%3A61595841376442");
     await expect(page.locator("#pageTitle")).toHaveText("Boost Marketing");
     await expect(page.getByRole("button", { name: "↗ Open page on Facebook" })).toBeVisible();
     await expect(page.locator("#pageBody .scard")).toHaveCount(1);
@@ -287,7 +311,7 @@ test.describe("Facebook videos you add by link", () => {
     await expect(page.locator(".fb-card")).toHaveCount(1);
 
     // the extension's hand-over: reel ids in the link
-    await page.goto("/added#add=1111111111,2222222222,3333333333,4444444444");
+    await goTo(page, "/added#add=1111111111,2222222222,3333333333,4444444444");
     await expect(page).toHaveURL(/\/added$/); // the ids are taken out of the address
     await expect(dlg.locator(".fbbulk-row")).toHaveCount(4);
     await expect(dlg.locator(".fbbulk-row.st-dup")).toContainText("Already added");
