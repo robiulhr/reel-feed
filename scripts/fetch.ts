@@ -44,7 +44,19 @@ const DAY = 86400;
 const FORCE_PLAYLIST_CHECK = 7 * DAY; // safety net in case RSS misses something
 
 /** How close a category is to what Ecomgy is about (part of the For You "topic relevance"). */
-const GROUP_REL: Record<GroupId, number> = { mkt: 1, sell: 1, biz: 1, money: 1, grow: 1, brands: 0.8, fun: 0.6, facts: 0.6, islam: 0.3 };
+const GROUP_REL: Record<GroupId, number> = {
+  mkt: 1,
+  content: 1,
+  sell: 1,
+  biz: 1,
+  money: 1,
+  grow: 1,
+  tech: 1, // (AI used to sit in "grow", which was 1)
+  brands: 0.8,
+  fun: 0.6,
+  facts: 0.6,
+  islam: 0.3,
+};
 /** Fewer confident videos than this → the channel's mix isn't trusted yet (your categories decide). */
 const MIN_MIX = 5;
 

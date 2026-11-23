@@ -38,6 +38,41 @@ describe("sorting a Short into categories", () => {
     expect(plain.career).toBeGreaterThan(0);
   });
 
+  it("content creation: hooks, making videos, growing them", () => {
+    expect(sort({ title: "Use these hooks to turn 100 likes into 100K" }).cats[0]).toBe("hooks");
+    expect(sort({ title: "কনটেন্টে হুক করার জন্য এই দুইটা কাজ অবশ্যই করতে হবে।" }).cats[0]).toBe("hooks");
+    expect(sort({ title: "5 Best Free Editing Apps In Mobile #capcut" }).cats[0]).toBe("vidcreate");
+    expect(sort({ title: "69 B-roll shots to film" }).cats[0]).toBe("vidcreate");
+    expect(sort({ title: "Why Facebook posts with external links get low reach" }).cats[0]).toBe("vidgrow");
+    expect(sort({ title: "ফেসবুক পেইজে কখন পোস্ট করলে রিচ বেশি পাবেন?" }).cats[0]).toBe("vidgrow");
+    // "ইন্টারভিউ" contains "ভিউ" (views) and "রিচার্জ" contains "রিচ" (reach): whole words only
+    expect(textScores({ title: "জব ইন্টারভিউ টিপস" }).vidgrow ?? 0).toBe(0);
+    expect(textScores({ title: "মোবাইল রিচার্জ অফার" }).vidgrow ?? 0).toBe(0);
+    for (const c of ["hooks", "vidcreate", "vidgrow"]) expect(groupOf(c)).toBe("content");
+  });
+
+  it("business learning, branding and tutorials are their own topics", () => {
+    expect(sort({ title: "How to start a small business with 10,000 taka" }).cats).toContain("bizlearn");
+    expect(sort({ title: "ছোট ব্যবসা শুরু করার ৫টি টিপস" }).cats[0]).toBe("bizlearn");
+    expect(sort({ title: "Liquid Death's $1B Brand Strategy" }).cats[0]).toBe("branding");
+    expect(sort({ title: "ব্র্যান্ডিং কী? ব্র্যান্ড আইডেন্টিটি বুঝুন" }).cats[0]).toBe("branding");
+    expect(sort({ title: "Canva poster design step-by-step tutorial for beginners" }).cats).toContain("tutorial");
+    expect(sort({ title: "ভিডিও এডিটিং টিউটোরিয়াল" }).cats).toContain("tutorial");
+    // "entrepreneur" is a hint for founders, not the whole topic
+    expect(sort({ title: "Elon Musk on being a founder" }).cats[0]).toBe("founders");
+  });
+
+  it("AI and self-growth are in different main categories; groups are in order", () => {
+    expect(groupOf("ai")).toBe("tech");
+    expect(groupOf("growth")).toBe("grow");
+    expect(groupOf("branding")).toBe("mkt");
+    expect(groupOf("bizlearn")).toBe("biz");
+    expect(groupOf("tutorial")).toBe("biz");
+    // "Other" is picked by hand: no words sort a video into it
+    expect(Object.keys(textScores({ title: "other other other" }))).not.toContain("other");
+    expect(normCats(undefined, "other")).toEqual(["other"]);
+  });
+
   it("keeps at most 3 categories, main first, and a second one only with real evidence", () => {
     const r = sort({
       title: "Meta ads + Shopify store: sales funnel for ecommerce brands",

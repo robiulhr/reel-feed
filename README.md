@@ -226,17 +226,21 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 
 ## 5a. Categories — `src/categories.ts` (app) + `src/classify.ts` (rules; fetch, Worker, tests only)
 
-**8 main categories, 19 topics.** In Filters, tap a main category to pick all its topics (✓), or pick single topics (– = partly picked). In the top bar a fully picked main category shows as one chip.
-- 📣 **Marketing & Ads**: Meta & Google Ads · Marketing & Branding · Content & Design
+**11 main categories, 27 topics.** In Filters, tap a main category to pick all its topics (✓), or pick single topics (– = partly picked). In the top bar a fully picked main category shows as one chip.
+- 📣 **Marketing & Ads**: Meta & Google Ads · Marketing Strategy · Branding & Positioning · Design & Creative
+- 🎬 **Content Creation**: Hook Ideas · Video Creation Tips (ideas, scripts, shooting, editing) · Video Growth Tips (views, reach, followers)
 - 🛒 **Selling**: E-commerce · Sales & Customers
-- 🏢 **Business & Founders**: Business Stories · Founders & Leaders
+- 🏢 **Business & Learning**: Business Learning (start, run and grow a business; small-business ideas) · Tutorials & How-tos (step-by-step guides, any topic) · Business Stories (case studies) · Founders & Leaders (the people)
 - 💰 **Money & Career**: Money & Investing · Career & Skills
-- 🚀 **Growth & AI**: Self-growth · AI & Tech Tools
-- 🎬 **Brands & Fun**: Famous Brand Ads · Funny Brand Content · Office & Work Fun · Comedy
-- 💡 **Facts & Knowledge**
+- 🧠 **Mindset & Growth**: Self-growth
+- 🤖 **AI & Tech**: AI & Tech Tools
+- 🏷️ **Brands & Companies**: Famous Brand Ads · Funny Brand Content · Company Channels (a company's own channel, set per channel — no keywords)
+- 😂 **Comedy & Fun**: Office & Work Fun · Comedy
+- 💡 **Facts & Knowledge**: Facts & Knowledge · Other (picked by hand for videos that fit nowhere — no keywords)
 - 🕌 **Islamic**: Quran Tilawat · Waz & Islamic Talks · Nasheed & Gajal — left out of **All**; pick it to see them (mixing it with other categories starts a new pick).
 
-Change the grouping in `GROUPS` / `group:` in `src/categories.ts` (never reorder `CATEGORIES` — the data file stores categories by position).
+Change the grouping in `GROUPS` / `group:` in `src/categories.ts`. The library file carries its own category list and the app reads positions from that, so adding or reordering topics is safe (a new topic needs a `LEX` entry in `src/classify.ts`, even an empty one). Moving a keyword between topics re-sorts everything on the next fetch.
+- **Where overlapping words live:** Hook Ideas = the word "hook" and opening-line talk; Branding = the word "brand", identity/strategy/positioning/naming; Marketing keeps only a weak "brand" hint; "viral", "reach", "followers", "algorithm" → Video Growth Tips (weak "viral"); editing/script/camera/b-roll → Video Creation Tips (Design & Creative keeps design tools, logos, thumbnails); "entrepreneur"/"startup" count fully for Business Learning but only as a weak hint for Founders, whose strong words are CEO, founder and famous names; "tutorial", "step by step", "for beginners" count fully for Tutorials, "how to" only weakly.
 
 **Every Short is sorted by its own words** (`scripts/fetch.ts`, no AI at run time, no API key): keyword lists in English, Bangla (whole words) and Roman Bangla/Hindi score the title (×3), tags/hashtags (×2) and description (×1). Lines and tags a channel puts on most of its videos (links, "subscribe", course ads) are ignored.
 - **1–3 categories per Short**, main first. A second/third only with real evidence — so a near-miss still shows up in the right chip.
