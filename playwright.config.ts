@@ -8,7 +8,8 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
+  // CI: "github" also shows each failure as a note on the run (readable without signing in)
+  reporter: process.env.CI ? [["list"], ["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
     serviceWorkers: "block", // tests control all network traffic themselves
