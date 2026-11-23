@@ -342,6 +342,18 @@ async function fetchFromYouTubeNow() {
   }
 }
 
+/** Opens the "Add to a topic" sheet for the video on screen (the topics code is only downloaded the first time). */
+export async function topicCurrent() {
+  const cur = feed.cur;
+  if (!cur) return;
+  try {
+    const m = await import("./topics");
+    await m.pickTopic(cur);
+  } catch {
+    toast("Couldn't open topics — check your connection and try again");
+  }
+}
+
 /** Opens the note sheet for the video on screen (the notes code is only downloaded the first time). */
 export async function noteCurrent() {
   const cur = feed.cur;
@@ -359,6 +371,7 @@ export function initControls() {
   bindSound();
   els.saveBtn.onclick = () => toggleSave();
   els.noteBtn.onclick = () => void noteCurrent();
+  els.topicBtn.onclick = () => void topicCurrent();
   els.shareBtn.onclick = shareCurrent;
   els.refreshBtn.onclick = refreshFeed;
 }

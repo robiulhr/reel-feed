@@ -29,6 +29,7 @@ export const els = {
   muteBtn: $<HTMLButtonElement>("muteBtn"),
   saveBtn: $<HTMLButtonElement>("saveBtn"),
   noteBtn: $<HTMLButtonElement>("noteBtn"),
+  topicBtn: $<HTMLButtonElement>("topicBtn"),
   shareBtn: $<HTMLButtonElement>("shareBtn"),
   moreBtn: $<HTMLButtonElement>("moreBtn"),
   moreSheet: $("moreSheet"),

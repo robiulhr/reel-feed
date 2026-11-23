@@ -2713,6 +2713,259 @@ button[aria-busy="true"] {
   max-height: 70vh;
 }
 
+/* ---------- topics ---------- */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.chip-row .note-chip {
+  margin: 0;
+}
+.topic-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 7px 14px 7px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: #6ea8ff;
+  color: #04122b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 3px rgba(110, 168, 255, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.topic-chip[hidden] {
+  display: none;
+}
+.topic-chip.has {
+  background: rgba(4, 18, 43, 0.78);
+  color: #b9d4ff;
+  box-shadow:
+    inset 0 0 0 2px #6ea8ff,
+    0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.topic-chip .note-ico {
+  flex: none;
+  font-size: 15px;
+}
+.topic-chip .note-txt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topic-chip:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.topic-back {
+  margin-bottom: 8px;
+}
+.topic-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.topic-name {
+  margin: 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.topic-why {
+  margin: 6px 0 10px;
+  font-size: 14px;
+}
+.topic-chips {
+  margin: 8px 0;
+}
+.topic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.topic-sec {
+  margin: 18px 0 0;
+}
+.topic-sec .note-area {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.topic-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+.topic-word {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chip);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+.topic-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--chip);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.topic-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.topic-card-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.topic-card-why {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.topic-pill {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--line);
+}
+.topic-pill.st-researching {
+  background: rgba(110, 168, 255, 0.25);
+  color: #9cc3ff;
+}
+.topic-pill.st-ready {
+  background: rgba(46, 160, 67, 0.25);
+  color: #7ad48c;
+}
+.topic-pill.st-made {
+  background: rgba(160, 163, 177, 0.2);
+  color: var(--muted);
+}
+.topic-pill.st-fit {
+  background: rgba(255, 200, 61, 0.25);
+  color: #ffd86b;
+}
+.topic-vid {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.topic-vid img {
+  width: 44px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--chip);
+}
+.topic-vid-txt {
+  min-width: 0;
+}
+.topic-vid-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.topic-vid-note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #ffd86b;
+  overflow-wrap: anywhere;
+}
+.topic-vid-acts {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.topic-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0;
+}
+.topic-link-a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--accent, #4a8cff);
+}
+.topic-linkform {
+  flex-wrap: wrap;
+}
+.topic-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.topic-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.topic-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--chip);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.topic-pick-row.on {
+  border-color: #6ea8ff;
+}
+.topic-pick-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.topic-pick-check {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-weight: 800;
+}
+
 /* ---------- notes ---------- */
 /* The amber chip above a video's title: the one thing on the screen that is yours to write on */
 .note-chip {

@@ -81,6 +81,7 @@ function look(e: ActivityEntry): { label: string; tone: Tone } {
   if (e.k === "save") return { label: /^Took/.test(x) ? "Unsaved" : "Saved", tone: "muted" };
   if (e.k === "channel") return { label: /^Hid/.test(x) ? "Hidden" : "Shown", tone: "muted" };
   if (e.k === "list") return { label: "List", tone: "muted" };
+  if (e.k === "topic") return { label: "Topic", tone: "accent" };
   if (e.k === "category") return { label: "Category", tone: "muted" };
   return { label: "Backup", tone: "muted" };
 }

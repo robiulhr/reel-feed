@@ -77,10 +77,12 @@ function facebookLookupsInDev(): Plugin {
  * Raised JS 58 → 62 with the activity log and cloud status (every change is written down in words, the
  *   "saved to the cloud / not backed up" line and dot, urgent syncing with retries): 58.7 kB. The Activity
  *   tab itself is loaded only when used.
+ * Raised JS 62 → 64 with topics (the "📚 Topic" chip on every video, the synced topics data and its merge
+ *   rules): 62.0 kB. The Topics page and its sheet are loaded only when used.
  * Parts loaded only when used (like "Add several at once") don't slow the start: they don't count in
  * `js`, and each has its own limit, `lazy`.
  */
-export const BUDGET_KB = { js: 62, css: 10, lazy: 10 };
+export const BUDGET_KB = { js: 64, css: 10, lazy: 10 };
 
 function sizeBudget(): Plugin {
   return {

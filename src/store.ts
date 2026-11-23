@@ -1,4 +1,5 @@
 import { type CatId, catLabel, LEGACY, type Lang, normCats } from "./categories";
+import { applyTopicOp, mergeTopics, normTopics, type Topic, type TopicOp } from "./topicdata";
 import type { Tab, Win } from "./types";
 
 /** The part of your data that syncs across devices (saved in the private GitHub repo). */
@@ -17,10 +18,11 @@ export interface Shared {
   fbPages: FbPage[]; // the Facebook pages those videos come from
   notes: Record<string, Note>; // your notes, one per video (any Short or Facebook video), by its feed id
   activity: ActivityEntry[]; // what happened to your data (newest first), from all your devices
+  topics: Topic[]; // subjects you're researching: pinned videos, notes, links (see topicdata.ts)
 }
 
 /** One line of the activity log: something that happened to your data, from any device. */
-export type ActivityKind = "video" | "note" | "save" | "channel" | "list" | "category" | "backup";
+export type ActivityKind = "video" | "note" | "save" | "channel" | "list" | "category" | "backup" | "topic";
 export interface ActivityEntry {
   i: string; // unique id, so the same entry is never added twice
   at: number; // unix seconds
@@ -31,7 +33,7 @@ export interface ActivityEntry {
   x: string; // what happened, in words
 }
 export const MAX_ACTIVITY = 1500;
-const KINDS: ActivityKind[] = ["video", "note", "save", "channel", "list", "category", "backup"];
+const KINDS: ActivityKind[] = ["video", "note", "save", "channel", "list", "category", "backup", "topic"];
 export function normActivity(x: unknown): ActivityEntry[] {
   if (!Array.isArray(x)) return [];
   const seen = new Set<string>();
@@ -248,6 +250,7 @@ export type Op =
   | { t: "pageSet"; p: FbPage } // add or change a Facebook page
   | { t: "activity"; e: ActivityEntry } // a line of the activity log
   | { t: "note"; id: string; x: string; at: number; ti?: string } // write a note on a video (empty text = delete it)
+  | TopicOp // a topic: new, changed, a video pinned, a note, a link (topicdata.ts)
   | { t: "restore"; data: Snap; mode: "merge" | "replace" }; // undo an erase / restore a backup
 
 const STORAGE_KEY = "ecomgy-reel-feed.v1";
@@ -268,6 +271,7 @@ export const SHARED_KEYS = [
   "fbPages",
   "notes",
   "activity",
+  "topics",
 ] as const;
 
 export const emptyShared = (): Shared => ({
@@ -285,6 +289,7 @@ export const emptyShared = (): Shared => ({
   fbPages: [],
   notes: {},
   activity: [],
+  topics: [],
 });
 
 const defaults = (): State => ({
@@ -325,7 +330,7 @@ function read<T>(key: string, fallback: T): T {
 export const LOCAL_VERSION = 3;
 /** Choices for the "fewest views" filter (0 = any). */
 export const VIEW_MINS = [0, 1000, 10_000, 100_000, 1_000_000];
-export const FILE_VERSION = 6; // 3: channel lists. 4: added Facebook videos. 5: notes. 6: activity log (older apps must not write the file and drop them)
+export const FILE_VERSION = 7; // 3: channel lists. 4: added Facebook videos. 5: notes. 6: activity log. 7: topics (older apps must not write the file and drop them)
 
 export function migrateLocal(raw: Partial<State> & Record<string, unknown>): State {
   const s = { ...defaults(), ...raw } as State;
@@ -348,6 +353,7 @@ export function migrateLocal(raw: Partial<State> & Record<string, unknown>): Sta
   s.fbPages = normPages(raw.fbPages);
   s.notes = normNotes(raw.notes);
   s.activity = normActivity(raw.activity);
+  s.topics = normTopics(raw.topics);
   adoptManualNotes(s);
   if (typeof s.list !== "string" || (s.list && !s.lists.some((l) => l.id === s.list))) s.list = "";
   if (!["all", "bn", "en", "hi"].includes(s.lang)) s.lang = "all";
@@ -401,7 +407,7 @@ export function onOtherTab(fn: () => void) {
   otherTabListeners.push(fn);
 }
 const sizes = (s: State) =>
-  [s.saved, s.hidden, s.bad, s.hist, s.manual, s.lists, s.fbPages].map((a) => a.length).join() +
+  [s.saved, s.hidden, s.bad, s.hist, s.manual, s.lists, s.fbPages, s.topics].map((a) => a.length).join() +
   [s.seen, s.notes, s.catFix, s.affCh].map((o) => Object.keys(o).length).join();
 
 /** Adds what other tabs saved since this one last looked. Returns true if it added anything. */
@@ -622,6 +628,14 @@ export function applyOp(s: Shared, op: Op) {
         s.notes[op.id] = { x, at: op.at, ti: (op.ti ?? old?.ti ?? "").slice(0, 200) };
       break;
     }
+    case "topicNew":
+    case "topicSet":
+    case "topicDrop":
+    case "topicVid":
+    case "topicNote":
+    case "topicLink":
+      applyTopicOp(s.topics, op);
+      break;
     case "restore":
       applyRestore(s, op.data, op.mode);
       break;
@@ -664,6 +678,7 @@ export const SNAP_KEYS = [
   "manual",
   "fbPages",
   "notes",
+  "topics",
 ] as const;
 
 /**
@@ -698,6 +713,7 @@ export function applyRestore(s: Shared, d: Snap, mode: "merge" | "replace") {
   if (d.lists) mergeLists(s, d.lists);
   mergeManual(s, d);
   for (const [id, n] of Object.entries(normNotes(d.notes))) applyOp(s, { t: "note", id, x: n.x, at: n.at, ti: n.ti });
+  mergeTopics(s.topics, d.topics);
 }
 
 /** Adds back Facebook videos and pages that are missing (keeps everything already there). */
@@ -784,6 +800,36 @@ export function describeOp(op: Op, s: Shared): ActivityEntry | null {
       return entry("list", `Put the channel ${op.h} in the list${quoted(list(op.id))}`, op.id);
     case "listRemove":
       return entry("list", `Took the channel ${op.h} out of the list${quoted(list(op.id))}`, op.id);
+    case "topicNew":
+      return entry("topic", `Started the topic${quoted(op.p.name)}`, op.p.id);
+    case "topicSet": {
+      const t = s.topics.find((x) => x.id === op.id);
+      if (!t) return null;
+      if (t.st !== op.st) return entry("topic", `Moved the topic${quoted(op.name)} to ${op.st}`, op.id);
+      if (t.name !== op.name.trim() || t.why !== op.why.trim() || t.kw.join() !== op.kw.join())
+        return entry("topic", `Changed the topic${quoted(op.name)}`, op.id);
+      return null;
+    }
+    case "topicDrop":
+      return entry("topic", `Deleted the topic${quoted(s.topics.find((x) => x.id === op.id)?.name)}`, op.id);
+    case "topicVid": {
+      const name = quoted(s.topics.find((x) => x.id === op.id)?.name);
+      if (op.m === "pin") return entry("topic", `Pinned a video to the topic${name}`, op.v);
+      if (op.m === "unpin") return entry("topic", `Took a video out of the topic${name}`, op.v);
+      return null; // "not about this" marks are quiet housekeeping
+    }
+    case "topicNote":
+      return entry(
+        "topic",
+        `${op.n.x.trim() ? "Wrote a note in" : "Deleted a note in"} the topic${quoted(s.topics.find((x) => x.id === op.id)?.name)}`,
+        op.id,
+      );
+    case "topicLink":
+      return entry(
+        "topic",
+        `${op.l.u.trim() ? "Added a link to" : "Removed a link from"} the topic${quoted(s.topics.find((x) => x.id === op.id)?.name)}`,
+        op.id,
+      );
     case "restore":
       return entry("backup", op.mode === "replace" ? "Restored a backup (replaced the data)" : "Put back what an erase had removed");
     default:
@@ -853,6 +899,7 @@ export interface StateFile {
   fbPages?: FbPage[];
   notes?: Record<string, Note>;
   activity?: ActivityEntry[];
+  topics?: Topic[];
 }
 
 export function toFile(s: Shared): StateFile {
@@ -875,6 +922,7 @@ export function toFile(s: Shared): StateFile {
     fbPages: s.fbPages,
     notes: s.notes,
     activity: s.activity,
+    topics: s.topics,
   };
 }
 
@@ -906,6 +954,7 @@ export function fromFile(f: Partial<StateFile> | null): Shared {
   s.fbPages = normPages(f.fbPages);
   s.notes = normNotes(f.notes);
   s.activity = normActivity(f.activity);
+  s.topics = normTopics(f.topics);
   adoptManualNotes(s); // notes written in the old place (version 4 files)
   (f.seen ?? []).forEach((id, i) => {
     s.seen[id] = i + 1;
@@ -927,6 +976,7 @@ export function mergeInto(base: Shared, local: Shared) {
   mergeLists(base, local.lists ?? []);
   mergeManual(base, local);
   for (const [id, n] of Object.entries(local.notes ?? {})) applyOp(base, { t: "note", id, x: n.x, at: n.at, ti: n.ti });
+  mergeTopics(base.topics, local.topics);
   const have = new Set(base.activity.map((e) => e.i));
   const more = (local.activity ?? []).filter((e) => !have.has(e.i));
   if (more.length) base.activity = [...more, ...base.activity].sort((a, b) => b.at - a.at).slice(0, MAX_ACTIVITY);
@@ -948,6 +998,7 @@ export function sharedOf(s: State): Shared {
     fbPages: s.fbPages ?? [],
     notes: s.notes ?? {},
     activity: s.activity ?? [],
+    topics: s.topics ?? [],
   });
 }
 

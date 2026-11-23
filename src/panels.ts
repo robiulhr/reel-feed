@@ -128,7 +128,11 @@ export function closePanel() {
   onFeedChange(); // skip the current Short if its channel was removed/hidden while the menu was open
 }
 
+/** Counts every draw of the Menu: a page whose code arrives late must not draw into a newer screen (or twice). */
+let drawn = 0;
+
 export function renderPanel() {
+  const mine = ++drawn;
   els.panelTitle.textContent = PAGE_TITLES[panelTab] ?? "Menu";
   els.panelBack.hidden = panelTab === "home";
   const body = els.panelBody;
@@ -143,11 +147,15 @@ export function renderPanel() {
   else if (panelTab === "added") renderAdded(body, () => openPanel("added"));
   else if (panelTab === "notes")
     void import("./notes").then((m) => {
-      if (panelTab === "notes" && body.isConnected) m.renderNotesPage(body, () => openPanel("notes"));
+      if (panelTab === "notes" && mine === drawn) m.renderNotesPage(body, () => openPanel("notes"));
+    });
+  else if (panelTab === "topics")
+    void import("./topics").then((m) => {
+      if (panelTab === "topics" && mine === drawn) m.renderTopicsPage(body, () => openPanel("topics"), app);
     });
   else if (panelTab === "activity")
     void import("./activity").then((m) => {
-      if (panelTab === "activity" && body.isConnected) m.renderActivity(body, () => openPanel("activity"), feed.byId, app);
+      if (panelTab === "activity" && mine === drawn) m.renderActivity(body, () => openPanel("activity"), feed.byId, app);
     });
   else if (panelTab === "hidden") renderHidden(body);
   else if (panelTab === "sorting") renderSorting(body, app, () => openPanel("sorting"));

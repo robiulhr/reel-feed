@@ -11,6 +11,7 @@ import { leaveList, exploreCurrent, feed, next, prev, upcoming } from "./feed";
 import {
   fasterRate,
   noteCurrent,
+  topicCurrent,
   refreshFeed,
   setRate,
   setVolume,
@@ -273,6 +274,10 @@ function bindKeys() {
       case "n":
         e.preventDefault(); // so the letter doesn't land in the note's text box
         void noteCurrent();
+        break;
+      case "t":
+        e.preventDefault();
+        void topicCurrent();
         break;
       case "r":
         refreshFeed();

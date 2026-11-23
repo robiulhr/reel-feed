@@ -57,18 +57,18 @@ describe("the activity log (what happened, in words)", () => {
     expect(s.state.activity.length).toBe(1);
   });
 
-  it("goes to the cloud file (version 6) and back; broken lines are dropped; an older app can't overwrite it", async () => {
+  it("goes to the cloud file (version 7) and back; broken lines are dropped; an older app can't overwrite it", async () => {
     const s = await open();
     s.act({ t: "manAdd", v: video("100000000002") });
     const file = s.toFile(s.sharedOf(s.state));
-    expect(file.v).toBe(6);
+    expect(file.v).toBe(7);
     expect(file.activity?.length).toBe(1);
     const back = s.fromFile({
       ...file,
       activity: [...(file.activity ?? []), { i: "", x: "no id" }, { i: "z", x: "bad kind", k: "nope" }, null],
     } as never);
     expect(back.activity.length).toBe(1);
-    expect(() => s.fromFile({ v: 7 } as never)).toThrow(s.NewerDataError);
+    expect(() => s.fromFile({ v: 8 } as never)).toThrow(s.NewerDataError);
   });
 
   it("two devices' logs merge without repeats, newest first", async () => {

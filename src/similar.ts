@@ -255,7 +255,7 @@ function buildIndex(videos: Short[]): Index {
   return { docs, norms, inv, idf };
 }
 
-function getIndex(app: AppApi) {
+function getIndex(app: Pick<AppApi, "ds">) {
   if (!index || indexedFor !== app.ds.videos) {
     index = buildIndex(app.ds.videos);
     indexedFor = app.ds.videos;
@@ -306,7 +306,7 @@ export function similarInLibrary(app: AppApi, s: Short, limit = 40): { short: Sh
 }
 
 /** The 3–4 most distinctive words of the title — a starting point you can edit. */
-export function suggestQuery(app: AppApi, s: Short) {
+export function suggestQuery(app: Pick<AppApi, "ds">, s: Short) {
   const ix = getIndex(app);
   const { vec } = queryVector(ix, s.t);
   const words = [...vec]
@@ -314,6 +314,53 @@ export function suggestQuery(app: AppApi, s: Short) {
     .map(([w]) => w)
     .slice(0, 4);
   return words.join(" ");
+}
+
+/** The most distinctive words of a title, as a list (starting search words for a topic). */
+export function suggestWords(app: Pick<AppApi, "ds">, s: Short): string[] {
+  return suggestQuery(app, s).split(" ").filter(Boolean);
+}
+
+/** How alike two texts are, 0..1, with the same word weighting as "More like this". */
+export function textSimilarity(app: Pick<AppApi, "ds">, a: string, b: string): number {
+  const ix = getIndex(app);
+  const x = queryVector(ix, a);
+  const y = queryVector(ix, b);
+  let dot = 0;
+  for (const [w, v] of x.vec) dot += v * (y.vec.get(w) ?? 0);
+  return dot / (x.norm * y.norm);
+}
+
+/**
+ * Free and instant: the videos in your library that are about this text (a topic's name and search
+ * words), best first. Skips the ids in `skip` (pinned already, or marked "not about this").
+ */
+export function matchInLibrary(app: Pick<AppApi, "ds">, text: string, skip: ReadonlySet<string>, limit = 60): Short[] {
+  const ix = getIndex(app);
+  const { vec, norm } = queryVector(ix, text);
+  const scores = new Map<number, number>();
+  for (const [w, qx] of vec) {
+    const idf = ix.idf.get(w);
+    if (idf === undefined) continue; // no video has this word
+    for (const i of ix.inv.get(w) ?? []) scores.set(i, (scores.get(i) ?? 0) + qx * (ix.docs[i].get(w)! * idf));
+  }
+  const vids = app.ds.videos;
+  return [...scores]
+    .map(([i, dot]) => ({ i, cos: dot / (norm * ix.norms[i]) }))
+    .filter(({ i, cos }) => cos >= 0.12 && !skip.has(vids[i].id) && app.ds.channels[vids[i].ch]?.st !== "removed")
+    .map(({ i, cos }) => ({ short: vids[i], score: 0.75 * cos + 0.15 * vids[i].o + 0.1 * vids[i].e }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((r) => r.short);
+}
+
+/** "On YouTube" search for a topic, with its search words filled in (same cost card and results as More like this). */
+export function openTopicSearch(app: AppApi, topic: { id: string; name: string; kw: string[] }) {
+  const words = (topic.kw.length ? topic.kw : [topic.name]).join(" ");
+  const id = `topic-${topic.id}`;
+  if (!queries.has(id)) queries.set(id, words);
+  const stub: Short = { id, ch: -1, t: topic.name, p: 0, v: 0, l: 0, c: 0, o: 0, e: 0, tr: 0, r: 0, k: [], lg: "en", g: false };
+  openSimilar(app, stub, "youtube");
 }
 
 // ---------- page ----------

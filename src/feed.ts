@@ -243,6 +243,7 @@ function show(s: Short) {
   renderMeta();
   renderSave();
   renderNote();
+  renderTopic();
   if (feed.ctx) renderCtxBar();
   setFeed(s.id); // the address follows the Short on screen (refresh / share keeps it)
   announce(`${ch?.n ? `${ch.n}: ` : ""}${s.t}`);
@@ -299,6 +300,19 @@ export function renderNote() {
   b.querySelector(".note-txt")!.textContent = shown;
   // the spoken name must contain the words that are shown (an accessibility rule)
   b.setAttribute("aria-label", has ? `Note: ${shown} — tap to edit` : "Add note on this video");
+}
+
+/** The blue topic chip next to the note chip: "Topic", or the names of the topics this video is pinned in. */
+export function renderTopic() {
+  const b = els.topicBtn;
+  const cur = feed.cur;
+  b.hidden = !cur;
+  if (!cur) return;
+  const names = state.topics.filter((t) => t.vids.some((v) => v.id === cur.id)).map((t) => t.name);
+  b.classList.toggle("has", names.length > 0);
+  const shown = names.length ? (names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`) : "Topic";
+  b.querySelector(".note-txt")!.textContent = shown;
+  b.setAttribute("aria-label", names.length ? `In topic ${shown} — tap to change` : "Add this video to a topic");
 }
 
 export function renderSave() {
