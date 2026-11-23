@@ -177,3 +177,26 @@ body.empty #list,
 body.empty footer {
   display: none;
 }
+#player {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+#player[hidden] {
+  display: none;
+}
+#player iframe {
+  width: min(270px, 100%);
+  aspect-ratio: 9 / 16;
+  max-height: 60vh;
+  border: 0;
+  border-radius: 8px;
+  background: #000;
+}

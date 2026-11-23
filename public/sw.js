@@ -23,6 +23,7 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.includes("/data/")) return; // always fresh from the network (the app caches it itself)
   if (url.pathname.startsWith("/api/")) return; // sync calls: never cached
+  if (url.pathname.startsWith("/embed/")) return; // small pages other tools frame (not the app: never saved as it)
 
   if (req.mode === "navigate") {
     e.respondWith((async () => {

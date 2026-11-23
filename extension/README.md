@@ -56,3 +56,7 @@ Clicking ↻ on the extension's card cuts off the copy that was already running 
 tab (Chrome calls this "Extension context invalidated"). That old copy now stops by itself without
 errors, and the panel puts a new one in when you open it on a Reels tab. If the list stays empty,
 reload the Facebook tab once.
+
+If Chrome's extension page still lists "Extension context invalidated" for a Facebook tab, that is the
+old copy from before an update: reload that Facebook tab (or close it), then use **Clear all** on
+the extension's Errors page.
