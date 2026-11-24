@@ -15,6 +15,7 @@ test.describe("accessibility", () => {
   });
 
   test("tips, menu and the ⋯ sheet pass the WCAG check", async ({ app: page }) => {
+    test.setTimeout(90_000); // it checks the tips, the Menu and seven of its pages, one after another
     await expect(page.locator("#tips")).toBeVisible();
     expect(await wcagProblems(page)).toEqual([]);
     await closeTips(page);

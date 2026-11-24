@@ -12,6 +12,7 @@ import {
   fasterRate,
   noteCurrent,
   topicCurrent,
+  searchCurrent,
   refreshFeed,
   setRate,
   setVolume,
@@ -274,6 +275,10 @@ function bindKeys() {
       case "n":
         e.preventDefault(); // so the letter doesn't land in the note's text box
         void noteCurrent();
+        break;
+      case "/":
+        e.preventDefault(); // so the slash doesn't land in the search box
+        void searchCurrent();
         break;
       case "t":
         e.preventDefault();

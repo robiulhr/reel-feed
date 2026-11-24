@@ -130,6 +130,12 @@ function videoRow(app: AppApi, s: Short | undefined, fallback: { id: string; ti:
 // ---------- the page ----------
 const view = { open: "", status: "all" as TopicStatus | "all", more: 10 };
 
+/** Opens the Menu's Topics page on this topic (used by Search). */
+export function showTopic(id: string) {
+  view.open = id;
+  view.more = 10;
+}
+
 /** Menu → Topics. `rerender` draws the page again after a change. */
 export function renderTopicsPage(body: HTMLElement, rerender: () => void, app: AppApi) {
   const t = view.open ? topicById(state.topics, view.open) : undefined;
@@ -411,11 +417,17 @@ function renderDetail(body: HTMLElement, rerender: () => void, app: AppApi, t: T
     auto2.append(el("p", "ch-note", "Nothing else in your library matches these words yet. Add search words, or search YouTube."));
   else
     auto2.append(
-      el("p", "ch-note", "Found by themselves from the search words. Pin the right ones; ✕ means “not about this” and it won't come back."),
+      el(
+        "p",
+        "ch-note",
+        "Found by themselves from the search words. ▶ Watch one to see if it fits, then pin it; ✕ means “not about this” and it won't come back.",
+      ),
     );
   for (const s of auto.slice(0, view.more)) {
     auto2.append(
       videoRow(app, s, { id: s.id, ti: s.t }, [
+        // watch it first: the list plays on from this video, so you can judge whether it fits before pinning
+        btn("▶ Watch", () => playList(`${t.name} — found`, auto, auto.indexOf(s), rerender), "btn sm"),
         btn(
           "📌 Pin",
           () => {

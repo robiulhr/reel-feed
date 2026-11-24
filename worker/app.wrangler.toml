@@ -10,7 +10,7 @@ preview_urls = false
 directory = "../dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application" # any page link opens the app
-run_worker_first = ["/*"]  # every request runs the password gate first (worker/src/gate.ts); then files are served
+run_worker_first = ["/*", "!/assets/*"]  # every request runs the password gate first (worker/src/gate.ts) — except the app's own code and styles (/assets, named by content, nothing of yours in them), which are served at once, faster
 
 # /api/* → the sync Worker, inside Cloudflare (no extra address, no cross-site requests)
 [[services]]

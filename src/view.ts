@@ -24,6 +24,7 @@ export const els = {
   tabs: $("tabs"),
   filtBtn: $<HTMLButtonElement>("filtBtn"),
   chips: $("chips"),
+  searchBtn: $<HTMLButtonElement>("searchBtn"),
   refreshBtn: $<HTMLButtonElement>("refreshBtn"),
   menuBtn: $<HTMLButtonElement>("menuBtn"),
   muteBtn: $<HTMLButtonElement>("muteBtn"),

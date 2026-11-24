@@ -27,7 +27,9 @@ export function computeDataSaver() {
 export function poolSize() {
   const c = (navigator as any).connection;
   if (playback.dataSaver && c && ["slow-2g", "2g"].includes(c.effectiveType)) return 1; // no preloading at all
-  return playback.dataSaver ? 2 : 3;
+  // A phone gets 2 (this video + the next one): a third YouTube player costs a lot of its memory and speed
+  const phone = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  return playback.dataSaver || phone ? 2 : 3;
 }
 
 /** Filled in by the feed: what to do when a video can't play (skip it) and when it starts. */
@@ -40,11 +42,16 @@ export function stopClock() {
 }
 
 playback.dataSaver = computeDataSaver();
+let warmed = false;
 export const pool = new PlayerPool(
   els.players,
   {
     onPlaying() {
       // (again after buffering: keep counting from when it started)
+      if (!warmed) {
+        warmed = true;
+        setTimeout(() => pool.warmUp(), 1500); // the video is on screen; now get the next ones ready
+      }
       if (!playback.playing || !playback.watch.since) playback.watch.since = performance.now();
       playback.playing = true;
       els.poster.classList.add("gone");

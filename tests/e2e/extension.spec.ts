@@ -210,6 +210,17 @@ test.describe("extension side panel: which reels are already added", () => {
     expect(urls[0]).toBe(`${APP}added#add=${[IDS[0], IDS[2], IDS[4]].join(",")}`);
   });
 
+  test("Select top 60 new picks only reels that aren't added yet, most viewed first", async ({ page }) => {
+    await open(page);
+    await setLibrary(page, [IDS[1], IDS[3]]);
+    await page.getByRole("button", { name: "Select top 60 new" }).click();
+    await expect(page.locator("#sendBtn")).toHaveText("Add 3 to Reel Feed"); // 5 reels, 2 already added
+    await expect(page.locator("#list li.added input:checked")).toHaveCount(0);
+    await setLibrary(page, [IDS[0], IDS[1], IDS[2], IDS[3]]);
+    await page.getByRole("button", { name: "Select top 60 new" }).click();
+    await expect(page.locator("#sendBtn")).toHaveText("Add 1 to Reel Feed");
+  });
+
   test("the Show filter: all / not added yet / already added", async ({ page }) => {
     await open(page);
     await setLibrary(page, [IDS[0], IDS[1]]);

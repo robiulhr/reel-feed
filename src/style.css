@@ -2713,6 +2713,47 @@ button[aria-busy="true"] {
   max-height: 70vh;
 }
 
+/* ---------- search ---------- */
+.search-input {
+  width: 100%;
+}
+.search-chips {
+  margin: 8px 0;
+}
+.search-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.search-row {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 2px 8px;
+  align-items: baseline;
+  width: 100%;
+  margin: 6px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--chip);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.search-row-txt {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.search-row .ch-note,
+.search-note {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 /* ---------- topics ---------- */
 /* the note and topic chips share one line; a long note (or topic name) is cut with … instead of wrapping */
 .chip-row {

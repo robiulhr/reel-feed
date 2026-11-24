@@ -367,12 +367,26 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **Sync behaviour** (`sync.ts`): own changes push after 0.8 s; a failed save retries after 3 s, 10 s, 30 s, 1 min, 2 min (not after a log-out); four conflicts in a row used to end as a silent "success" and are now a visible, retried problem. The browser still keeps a working copy (offline use, instant screens) but the cloud file is what other devices and tabs read; the browser copy is a cache plus a short list of unsent changes.
 - Tests: `tests/unit/activity.test.ts` (recording, merge, version, sync timing/retries/conflicts with a pretend cloud and a controlled clock, status wording) and `tests/e2e/activity.spec.ts`.
 
+## 6i. Search — `src/search.ts`, `src/searchcore.ts`
+
+The **🔍** button in the top bar (or press **/**) opens one search for everything of yours.
+
+- **What it searches:** the videos in your library (title, channel or Facebook page, categories, **your note** on the video, the **topics** it is pinned in), plus your **notes** and your **topics** (name, why, search words, notes). Results come as **Topics**, **Notes** and **Videos** (a grid; tap one to play the results as a list, or **▶ Play all**).
+- **How it matches:** every word you type must match, in any order, **from the start of a word** (“pric” finds “price” and “pricing”; Bangla works). A whole-word match ranks above a partial one; a word in the title counts most, then your note, then the topic, then the channel and categories; views break ties. Filter chips: **All · Saved · With notes · YouTube · Facebook**.
+- **Nothing found?** **🔎 Search YouTube for it** opens the *More like this → On YouTube* search with your words (same cost card, ~103 units). Recent searches are remembered on this device only.
+- The engine (`searchcore.ts`) has no screen code, so it is unit-tested on its own.
+
+## Speed on phones (startup)
+
+- The app starts **one** YouTube player; the extra ones that preload the next videos are created about 1.5 s after the first video plays (each is a whole YouTube page, and three at once made phones slow to start). A phone keeps **two** players (this video + the next) instead of three.
+- On the live site the app's own code and styles (`/assets/*`, named by content, nothing of yours in them) are served directly, without going through the password-gate Worker; everything else still goes through it.
+
 ## 6h. Topics — `src/topics.ts`, `src/topicdata.ts`, `src/similar.ts`, `store.ts` (`topics`)
 
 For research: a **topic** is a subject (“price war”, “Nike’s Jordan deal”) with the videos you pinned, your notes, links and its search words. It syncs with your other devices (file **version 7**).
 
 - **Start one** from the blue **📚 Topic** chip under any video (or press **T**): the sheet lists your topics (marking ones the video **looks like it fits**, by the same word matching as *More like this*) and can **start a new topic from this video** — the name and the search words are taken from its title automatically. Or Menu → **Topics** → type a name.
-- **It finds videos by itself.** A topic's *Found in your library* list is every video whose title matches the topic's name and search words (free, no API units; Bangla and English). **📌 Pin** keeps one; **✕ Not about this** hides it for that topic for good (and teaches the matching, since pinned/hidden ones are left out). **▶ Watch** plays the pinned and found videos as a feed. **🔎 Find on YouTube** opens the *More like this → On YouTube* search with the topic's words filled in (same cost card; ~103 units, repeat searches free for 7 days).
+- **It finds videos by itself.** A topic's *Found in your library* list is every video whose title matches the topic's name and search words (free, no API units; Bangla and English). **▶ Watch** plays the list on from that video (so you can see whether it fits); **📌 Pin** keeps one; **✕ Not about this** hides it for that topic for good (and teaches the matching, since pinned/hidden ones are left out). **▶ Watch** plays the pinned and found videos as a feed. **🔎 Find on YouTube** opens the *More like this → On YouTube* search with the topic's words filled in (same cost card; ~103 units, repeat searches free for 7 days).
 - **Inside a topic:** status (Idea → Researching → Ready to make → Made), the *why*, editable search words, a notes timeline (add, edit, copy, delete with Undo; **Ctrl+Enter** adds), pinned videos (each shows your own 📝 note on it), links, **Copy brief** (name, why, words, notes, links and the videos with their addresses, as plain text for scripting) and **Delete** (with Undo).
 - **How it's stored:** each change is a small operation (`topicNew`, `topicSet`, `topicVid` pin/unpin/skip, `topicNote`, `topicLink`, `topicDrop`), so two devices editing one topic **merge** (pins and notes union; name/status/words: the newer change wins) instead of one overwriting the other. Each change also appears in Activity as a **Topic** line.
 

@@ -12,7 +12,7 @@ import { infoDialog, once, toast, toastError } from "./ui";
 import { ago, el, fmtTime } from "./dom";
 import { els, flashIcon } from "./view";
 import { playback, playerHooks, pool } from "./player";
-import { applyData, feed, latestVersion, offerData, renderMeta, renderSave, resetFeed } from "./feed";
+import { app, applyData, feed, latestVersion, offerData, renderMeta, renderSave, resetFeed } from "./feed";
 
 export function togglePlay() {
   if (!feed.cur) return;
@@ -342,6 +342,16 @@ async function fetchFromYouTubeNow() {
   }
 }
 
+/** Opens the search page (the search code is only downloaded the first time). */
+export async function searchCurrent() {
+  try {
+    const m = await import("./search");
+    m.openSearch(app);
+  } catch {
+    toast("Couldn't open search — check your connection and try again");
+  }
+}
+
 /** Opens the "Add to a topic" sheet for the video on screen (the topics code is only downloaded the first time). */
 export async function topicCurrent() {
   const cur = feed.cur;
@@ -372,6 +382,7 @@ export function initControls() {
   els.saveBtn.onclick = () => toggleSave();
   els.noteBtn.onclick = () => void noteCurrent();
   els.topicBtn.onclick = () => void topicCurrent();
+  els.searchBtn.onclick = () => void searchCurrent();
   els.shareBtn.onclick = shareCurrent;
   els.refreshBtn.onclick = refreshFeed;
 }

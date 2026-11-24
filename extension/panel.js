@@ -353,6 +353,18 @@ chrome.tabs.onUpdated.addListener((id, info) => {
 
 $("scrollBtn").onclick = () => void ask({ t: data?.running ? "stop" : "scroll" }).then(() => refresh());
 for (const id of ["search", "minViews", "sort", "show"]) $(id).addEventListener("input", draw);
+// The most viewed reels that aren't added yet (among those the filters show), as many as Reel Feed adds at once.
+// Add them, and the next press picks the next 60: the ones just added are marked and skipped.
+$("topBtn").textContent = `Select top ${MAX_SEND} new`;
+$("topBtn").onclick = () => {
+  const best = shown()
+    .filter((r) => !added.has(r.id))
+    .sort((a, b) => (b.views || 0) - (a.views || 0))
+    .slice(0, MAX_SEND);
+  picked.clear();
+  for (const r of best) picked.add(r.id);
+  draw();
+};
 $("allBtn").onclick = () => {
   for (const r of shown()) if (!added.has(r.id)) picked.add(r.id); // not the ones you already have
   draw();

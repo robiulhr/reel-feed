@@ -60,17 +60,32 @@ export class PlayerPool {
     return this.fbp?.active ? this.fbp : null;
   }
 
+  /** How many players we want once the first video is playing (see warmUp). */
+  private want: number;
+  private warm = false;
+
   constructor(
     private container: HTMLElement,
     private ev: PoolEvents,
     size: number,
   ) {
-    for (let i = 0; i < size; i++) this.slots.push(this.makeSlot(i));
+    this.want = size;
+    // Only one player at the start: each one is a whole YouTube page, and loading 3 at once made the
+    // first video (and the whole phone) slow. The others come after the first video is playing.
+    this.slots.push(this.makeSlot(0));
+  }
+
+  /** The first video is playing: now the players that preload the next videos can be made. */
+  warmUp() {
+    if (this.warm) return;
+    this.warm = true;
+    this.resize(this.want);
   }
 
   /** Fewer players on slow connections (less data, less memory). */
   resize(size: number) {
-    size = Math.max(1, size);
+    this.want = Math.max(1, size);
+    size = this.warm ? this.want : 1;
     while (this.slots.length > size) {
       const s = this.slots.find((x) => x !== this.active)!;
       s.player?.destroy?.();

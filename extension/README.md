@@ -27,7 +27,9 @@ The side panel explains the steps itself ("How to use this"). After you change t
    be ticked, and the top line counts them ("12 already added · 48 not added yet"). **Show** lets you
    see only the ones **not added yet** (or only the added ones). **Select shown** skips the added ones.
    The marks update by themselves as soon as you add or delete videos in Reel Feed.
-7. Tick the ones you want (**Select shown** ticks everything the filters show that isn't added yet).
+7. Tick the ones you want. **Select top 60 new** ticks the 60 most viewed reels that aren't added yet (among
+   those the filters show); add them, and pressing it again picks the next 60. **Select shown** ticks everything
+   the filters show that isn't added yet.
 8. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. There each one shows its
    title and caption, has **▶ Watch**, and its own **✎ Categories & lists** (starting from the
    guess). **Set categories & lists for all selected** sets them on many at once. Untick any you
