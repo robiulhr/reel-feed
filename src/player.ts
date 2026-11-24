@@ -33,7 +33,12 @@ export function poolSize() {
 }
 
 /** Filled in by the feed: what to do when a video can't play (skip it) and when it starts. */
-export const playerHooks = { onUnplayable: (_code: number) => {}, onPlaying: () => {}, onSoundBlocked: () => {} };
+export const playerHooks = {
+  onUnplayable: (_code: number) => {},
+  onPlaying: () => {},
+  onSoundBlocked: () => {},
+  onSoundUnlocked: () => {},
+};
 
 export function stopClock() {
   const w = playback.watch;
@@ -78,6 +83,12 @@ export const pool = new PlayerPool(
     },
     onSoundBlocked() {
       playerHooks.onSoundBlocked();
+    },
+    onTapThrough(on) {
+      els.tap.style.pointerEvents = on ? "none" : ""; // the video's own player gets the taps
+    },
+    onSoundUnlocked() {
+      playerHooks.onSoundUnlocked();
     },
   },
   poolSize(),

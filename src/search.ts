@@ -71,6 +71,7 @@ function renderSearch(body: HTMLElement, app: AppApi) {
 
   const drawChips = () => {
     chips.replaceChildren();
+    chips.style.display = wordsOf(view.q).length ? "" : "none"; // the filters only matter once you've typed something
     for (const [id, label] of FILTERS) {
       const b = btn(
         label,

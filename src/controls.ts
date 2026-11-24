@@ -136,7 +136,15 @@ playerHooks.onSoundBlocked = () => {
   if (state.muted) return;
   state.muted = true;
   renderMute();
-  toast("Your browser started it without sound — tap 🔇 for sound");
+  toast("Sound is blocked here — tap the video once to turn it on");
+};
+// Facebook's player let the sound on after a tap inside it
+playerHooks.onSoundUnlocked = () => {
+  if (!state.muted) return;
+  state.muted = false;
+  if (state.volume === 0) state.volume = 60;
+  renderMute();
+  persist();
 };
 
 export function toggleMute() {

@@ -37,6 +37,10 @@ export interface PoolEvents {
   onError(code: number): void;
   /** The browser wouldn't play with sound (no tap yet): it plays muted instead. */
   onSoundBlocked?(): void;
+  /** Facebook's player needs a tap inside itself for sound: let taps through to it (true), or take them back (false). */
+  onTapThrough?(on: boolean): void;
+  /** The sound came on (after the tap inside Facebook's player). */
+  onSoundUnlocked?(): void;
 }
 
 interface Slot {

@@ -150,6 +150,7 @@ export class FbPlayer {
           p.mute();
           p.play();
           this.ev.onSoundBlocked?.();
+          this.offerTapInside();
           return;
         }
         this.ev.onPaused();
@@ -165,14 +166,77 @@ export class FbPlayer {
     FB.XFBML.parse(wrap);
   }
 
+  // ---- sound that only a tap inside Facebook's own player can unlock (Android Chrome) ----
+  private unlocking = false;
+  private unlockTimers: number[] = [];
+  private onWindowBlur: (() => void) | null = null;
+  private hint: HTMLElement | null = null;
+
+  /**
+   * The browser said no to sound that came from the app (a tap on the app doesn't count for Facebook's frame).
+   * So for a while the taps go straight to Facebook's player; a tap there is allowed to turn sound on, and the
+   * moment the page sees one (the frame takes focus) the sound is asked for again. Stops by itself.
+   */
+  private offerTapInside() {
+    if (this.unlocking || !this.player) return;
+    this.unlocking = true;
+    this.el.classList.add("unlock");
+    this.ev.onTapThrough?.(true);
+    const hint = document.createElement("div");
+    hint.className = "fb-hint";
+    hint.textContent = "🔇 Tap the video for sound";
+    this.el.append(hint);
+    this.hint = hint;
+    this.onWindowBlur = () => {
+      if (document.activeElement?.tagName !== "IFRAME") return;
+      // the tap went into Facebook's frame: that is the permission, ask for the sound now
+      this.unlockTimers.push(
+        window.setTimeout(() => {
+          if (!this.unlocking) return;
+          this.muted = false;
+          this.soundOn();
+        }, 80),
+      );
+    };
+    window.addEventListener("blur", this.onWindowBlur);
+    this.unlockTimers.push(
+      window.setInterval(() => {
+        if (this.player?.isMuted?.() === false && this.started) this.endUnlock(true);
+      }, 500),
+      window.setTimeout(() => this.endUnlock(false), 25000),
+    );
+  }
+
+  private endUnlock(ok: boolean) {
+    if (!this.unlocking) return;
+    this.unlocking = false;
+    for (const t of this.unlockTimers) {
+      clearTimeout(t);
+      clearInterval(t);
+    }
+    this.unlockTimers = [];
+    if (this.onWindowBlur) window.removeEventListener("blur", this.onWindowBlur);
+    this.onWindowBlur = null;
+    this.hint?.remove();
+    this.hint = null;
+    this.el.classList.remove("unlock");
+    this.ev.onTapThrough?.(false);
+    if (ok) {
+      this.muted = false;
+      this.ev.onSoundUnlocked?.();
+    }
+  }
+
   /** Another video came on screen. */
   hide() {
+    this.endUnlock(false);
     this.active = false;
     this.el.classList.remove("on");
     this.player?.pause?.();
   }
 
   private release() {
+    this.endUnlock(false);
     for (const s of this.subs) s?.release?.();
     this.subs = [];
     this.player = null;

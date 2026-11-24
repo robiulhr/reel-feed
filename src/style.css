@@ -278,6 +278,25 @@ h2 {
 .fb-slot.on {
   visibility: visible;
 }
+/* Sound that only a tap inside Facebook's player can unlock: its taps are let through for a while */
+.fb-slot.unlock {
+  pointer-events: auto;
+}
+.fb-hint {
+  position: absolute;
+  top: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
 /* Facebook sets "visibility: visible" on its own frame, which would show through a hidden slot */
 .fb-slot:not(.on) iframe {
   visibility: hidden !important;
@@ -2714,11 +2733,18 @@ button[aria-busy="true"] {
 }
 
 /* ---------- search ---------- */
+/* the page body is a column: keep these at their own height instead of stretching to fill it */
 .search-input {
+  flex: none;
   width: 100%;
+  height: auto;
 }
 .search-chips {
+  flex: none;
   margin: 8px 0;
+}
+.search-out {
+  flex: none;
 }
 .search-recent {
   display: flex;
