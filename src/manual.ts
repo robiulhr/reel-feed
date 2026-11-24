@@ -11,7 +11,7 @@ import { ago, btn, compact, el, nowSec } from "./dom";
 import { fallbackTitle, fbIdFromLink, fbPagePicUrl, fbThumbUrl, pageHref, pageKey } from "./fbdata";
 import { app, feed, playList, refreshManual, renderSave } from "./feed";
 import { listLabel, LISTS_EVENT, pickLists } from "./lists";
-import { setFbPageOpener, shortGrid } from "./explore";
+import { selectableGrid, setFbPageOpener } from "./explore";
 import { BASE } from "./router";
 import { act, type FbPage, fbShortId, type ManualVideo, noteOf, state, writeNote } from "./store";
 import type { Short } from "./types";
@@ -413,7 +413,7 @@ export async function fbVideoDialog(o: { edit?: ManualVideo; link?: string; page
   if (note.value.trim() !== noteOf(fbShortId(v.id)).trim()) writeNote(fbShortId(v.id), note.value.trim(), v.t);
   refreshManual();
   window.dispatchEvent(new Event(LISTS_EVENT)); // list feeds and chips may change
-  toast(ed ? "Saved ✓" : "Added ✓ — it's in your feeds and on the Added page");
+  toast(ed ? "Saved ✓" : "Added ✓ — it's in your feeds and under Channels & pages → Facebook");
   return true;
 }
 
@@ -678,12 +678,7 @@ function openFbPage(chIndex: number) {
         }
         actions.append(btn("＋ Add a video from this page", async () => (await fbVideoDialog({ page })) && draw()));
         body.append(head, actions);
-        if (items.length)
-          body.append(
-            shortGrid(app, items, (i) => playList(ch.n, items, i, draw), {
-              badge: undefined,
-            }),
-          );
+        if (items.length) body.append(selectableGrid(app, items, (i) => playList(ch.n, items, i, draw), {}, draw));
       },
       { k: "channel", h: ch.h },
     );

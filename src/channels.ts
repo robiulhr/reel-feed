@@ -775,8 +775,8 @@ async function addFacebook(run: () => Promise<boolean> | undefined) {
 function renderAdd() {
   if (!addEl) return;
   addEl.replaceChildren();
-  addEl.hidden = !add.open;
-  if (!add.open) return;
+  addEl.hidden = !add.open || view.src !== "yt";
+  if (addEl.hidden) return;
 
   const form = el("form", "ch-add-form");
   const input = el("input") as HTMLInputElement;
@@ -957,7 +957,9 @@ function renderList() {
       ev.preventDefault();
       openHere();
     };
-    title.append(a, el("span", "pill st-yt", "📺 YouTube"), el("span", `pill st-${st}`, STATUS_LABEL[st]));
+    title.append(a);
+    if (view.src === "all") title.append(el("span", "pill st-yt", "📺 YouTube"));
+    title.append(el("span", `pill st-${st}`, STATUS_LABEL[st]));
     if (isHidden && st !== "removed") title.append(el("span", "pill st-hidden", "Hidden"));
     const bits = [e.handle];
     if (ch?.subs) bits.push(`${ctx.fmt(ch.subs)} subs`);
@@ -1094,7 +1096,8 @@ function facebookRow(p: PageRow) {
     ev.preventDefault();
     openHere();
   };
-  title.append(a, el("span", "pill st-fb", "📘 Facebook"));
+  title.append(a);
+  if (view.src === "all") title.append(el("span", "pill st-fb", "📘 Facebook"));
   if (p.hidden) title.append(el("span", "pill st-hidden", "Hidden"));
   const bits = [`${p.videos} video${p.videos === 1 ? "" : "s"} added`];
   if (p.views) bits.push(`${ctx.fmt(p.views)} views`);

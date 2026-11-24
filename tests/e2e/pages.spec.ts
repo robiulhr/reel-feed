@@ -74,6 +74,7 @@ test.describe("Facebook pages in Channels", () => {
     await closeTips(page);
     await addVideo(page);
     await openChannels(page);
+    await expect(page.locator("#toast")).toBeHidden(); // a message still showing would sit over the rows being measured
     await page.waitForTimeout(600);
     expect(await wcagProblems(page)).toEqual([]);
   });

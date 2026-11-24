@@ -737,6 +737,7 @@ h2 {
 
 /* ---------- Bottom bar ---------- */
 .bottom {
+  flex-wrap: wrap; /* the note/topic chips get a full-width row above the title and buttons */
   flex: none;
   background: var(--bg);
   min-height: var(--bottom-h);
@@ -892,7 +893,19 @@ h2 {
   gap: 12px;
   align-items: center;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  width: max-content; /* (left: 50% would otherwise cap its width at half the screen and wrap every word) */
   max-width: calc(100vw - 32px);
+}
+/* over a page or the Menu it sits at the bottom edge; over a dialog or sheet it goes to the top, so it never covers the buttons */
+body:has(.panel:not([hidden])) .toast,
+body:has(.page:not([hidden])) .toast {
+  top: auto;
+  bottom: 16px;
+}
+/* (the doubled class makes this win over the page/Menu rule above when a dialog opens on top of them) */
+body:has(.dlg-overlay) .toast.toast {
+  bottom: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
 }
 .toast button {
   background: none;
@@ -940,8 +953,29 @@ h2 {
 }
 .panel-body p {
   color: var(--muted);
+  font-size: 14px;
   line-height: 1.6;
   margin-bottom: 12px;
+}
+/* selects and search boxes directly in a Menu page look like the rest */
+.panel-body select {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 14px;
+  max-width: 100%;
+}
+.panel-body > .ch-search,
+.page-body > .ch-search {
+  display: block;
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+.panel-body input[type="checkbox"] {
+  accent-color: var(--accent);
 }
 .grid {
   display: grid;
@@ -1306,6 +1340,46 @@ h2 {
   color: #fff;
   padding: 2px 6px;
   border-radius: 6px;
+}
+.scard.sel {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+.scard-pick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.scard-pick.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.selbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 8px;
+}
+.selbar-count {
+  font-size: 13px;
+  font-weight: 700;
+  margin-right: auto;
+}
+.bulkedit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .scard-saved {
   position: absolute;
@@ -1704,6 +1778,17 @@ button[aria-busy="true"] {
   font: inherit;
   font-size: 16px;
 }
+/* a tick box with its words: the box stays a box (the rule above is for text fields) */
+.u-budget-form input[type="checkbox"] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+.u-budget-form input[type="checkbox"] + span {
+  flex: 1;
+  min-width: 0;
+}
 .u-tips {
   margin: 0;
   padding-left: 18px;
@@ -1799,7 +1884,7 @@ button[aria-busy="true"] {
   cursor: pointer;
 }
 .ch-controls select {
-  flex: 1 1 30%;
+  flex: 1 1 140px; /* two to a row on a narrow phone, never cut to a few letters */
   min-width: 0;
 }
 .ch-list {
@@ -1857,6 +1942,7 @@ button[aria-busy="true"] {
 .ch-actions {
   grid-column: 2;
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
   min-width: 0;
@@ -2792,10 +2878,17 @@ button[aria-busy="true"] {
 /* the note and topic chips share one line; a long note (or topic name) is cut with … instead of wrapping */
 .chip-row {
   display: flex;
+  flex: 1 1 100%;
   flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  margin: 0 0 8px;
+  min-width: 0;
+}
+.chip-row:not(:has(> :not([hidden]))) {
+  display: none; /* no video yet: no empty row */
+}
+.bottom {
+  row-gap: 6px;
 }
 .chip-row .note-chip {
   flex: 0 1 auto;
@@ -2805,6 +2898,9 @@ button[aria-busy="true"] {
 .chip-row .topic-chip {
   flex: 0 0 auto; /* keeps its words; the note's text is the one that gets cut */
   max-width: 45%;
+}
+.chip-row .note-chip {
+  max-width: calc(100% - 100px);
 }
 .topic-chip {
   display: flex;
@@ -2852,6 +2948,16 @@ button[aria-busy="true"] {
 
 .topic-back {
   margin-bottom: 8px;
+}
+.topic-head .btn,
+.topic-actions .btn {
+  white-space: nowrap;
+}
+.add-choose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
 }
 .topic-head {
   display: flex;
@@ -3009,6 +3115,9 @@ button[aria-busy="true"] {
 }
 .topic-linkform {
   flex-wrap: wrap;
+}
+.topic-linkform input {
+  flex: 1 1 100%; /* the address and its note get a line each on a narrow phone */
 }
 .topic-edit {
   display: flex;

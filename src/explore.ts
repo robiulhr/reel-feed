@@ -86,7 +86,7 @@ export function shortGrid(
   app: AppApi,
   items: Short[],
   onPlay: (i: number) => void,
-  opts: { showChannel?: boolean; badge?: (s: Short) => string } = {},
+  opts: { showChannel?: boolean; badge?: (s: Short) => string; picked?: ReadonlySet<string> } = {},
 ) {
   const grid = el("div", "sgrid");
   items.forEach((s, i) => {
@@ -100,6 +100,13 @@ export function shortGrid(
     card.append(img, views);
     const b = opts.badge?.(s);
     if (b) card.append(el("span", "scard-badge", b));
+    if (opts.picked) {
+      // selecting: a tick on the ones picked (the card's tap picks it instead of playing it)
+      const on = opts.picked.has(s.id);
+      card.classList.toggle("sel", on);
+      card.setAttribute("aria-pressed", String(on));
+      card.append(el("span", on ? "scard-pick on" : "scard-pick", on ? "✓" : ""));
+    }
     if (state.saved.includes(s.id)) card.append(el("span", "scard-saved", "♥"));
     if (state.notes[s.id]) card.append(el("span", "scard-note", "📝")); // you wrote a note on this one
     const cap = el("span", "scard-cap", s.t);
@@ -109,6 +116,97 @@ export function shortGrid(
     grid.append(card);
   });
   return grid;
+}
+
+/**
+ * The grid of a page's or channel's videos with a ☑ Select button: pick several, then ✎ Edit changes their
+ * categories (and Facebook videos' lists) all at once. `redraw` draws the screen again after a change.
+ */
+export function selectableGrid(
+  app: AppApi,
+  items: Short[],
+  onPlay: (i: number) => void,
+  opts: Parameters<typeof shortGrid>[3],
+  redraw: () => void,
+) {
+  const wrap = el("div", "selwrap");
+  const picked = new Set<string>();
+  let selecting = false;
+  const draw = () => {
+    wrap.replaceChildren();
+    const bar = el("div", "selbar");
+    if (!selecting) {
+      bar.append(
+        btn(
+          "☑ Select videos",
+          () => {
+            selecting = true;
+            draw();
+          },
+          "btn sm",
+        ),
+      );
+    } else {
+      const count = el("span", "selbar-count", `${picked.size} selected`);
+      count.setAttribute("aria-live", "polite");
+      const edit = btn(
+        `✎ Edit ${picked.size || ""}`.trim(),
+        async () => {
+          const chosen = items.filter((s) => picked.has(s.id));
+          const m = await import("./bulkedit");
+          if (await m.bulkEdit(chosen)) redraw();
+        },
+        "btn sm primary",
+      );
+      edit.disabled = !picked.size;
+      bar.append(
+        count,
+        btn(
+          "All",
+          () => {
+            for (const s of items) picked.add(s.id);
+            draw();
+          },
+          "btn sm",
+        ),
+        btn(
+          "None",
+          () => {
+            picked.clear();
+            draw();
+          },
+          "btn sm",
+        ),
+        edit,
+        btn(
+          "Cancel",
+          () => {
+            selecting = false;
+            picked.clear();
+            draw();
+          },
+          "btn sm",
+        ),
+      );
+    }
+    wrap.append(
+      bar,
+      shortGrid(
+        app,
+        items,
+        (i) => {
+          if (!selecting) return onPlay(i);
+          const id = items[i].id;
+          if (picked.has(id)) picked.delete(id);
+          else picked.add(id);
+          draw();
+        },
+        { ...opts, picked: selecting ? picked : undefined },
+      ),
+    );
+  };
+  draw();
+  return wrap;
 }
 
 /** A Facebook page's screen (manual.ts) — set there, so this module doesn't load it. */
@@ -383,7 +481,9 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       }
       if (preview && !inLibrary)
         body.append(el("p", "ch-note", `Loaded ${app.ago(preview.fetchedAt)} · newest ${preview.shorts.length} Shorts`));
-      body.append(shortGrid(app, list, play, { badge: sort === "gems" ? (s) => `×${ratio(s).toFixed(1)}` : undefined }));
+      const gridOpts = { badge: sort === "gems" ? (s: Short) => `×${ratio(s).toFixed(1)}` : undefined };
+      // a channel in your library: its videos can be picked and edited together
+      body.append(inLibrary ? selectableGrid(app, list, play, gridOpts, () => reopen(sort)) : shortGrid(app, list, play, gridOpts));
     },
     { k: "channel", h: info.handle || info.id },
   );

@@ -352,7 +352,15 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **Sync:** `manual` and `fbPages` in user-state.json (file version 4). Older apps refuse to write the file, so they can't drop the videos you added.
 - **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
 
-## 6g. Notes on videos — `src/notes.ts`, `store.ts` (`notes`)
+## 6j. Editing several videos at once — `src/bulkedit.ts`, `selectableGrid` in `src/explore.ts`
+
+On a **Facebook page's screen** and on a **YouTube channel's screen** (when the channel is in your library) there is a **☑ Select videos** button above the grid. Tap videos to pick them (a tick shows on each; **All**, **None** and **Cancel** are there too), then **✎ Edit N**:
+
+- **Categories:** *Keep each video's own* (default), *Set to these (replaces)* or *Add these to each* (up to 3 in all). For a YouTube Short this is your category fix for it.
+- **Lists** (Facebook videos only — each one has its own lists): *Put these videos in* and *Take them out of* chips. YouTube Shorts have no lists of their own (lists hold whole channels, which you change on the channel), so for them only categories change; the sheet says so.
+- One change for all, **one line** in Activity (with the videos it touched), a toast with **Undo**. Only what you pick is changed; choosing nothing changes nothing.
+
+ — `src/notes.ts`, `store.ts` (`notes`)
 - **On every video** (any Short or Facebook video) there is an amber **📝 Add note** chip above the channel name, the most eye-catching thing on the screen. Tap it, or press **N**. Once you have a note, the chip shows its first words (outlined in amber) so you see it while watching.
 - **The note sheet** names the video and has a large box (up to 5,000 characters), **⏱ Add time** (puts the video's current time, like `[0:12]`, into the note), **Copy** and **Delete note** (with Undo). The video pauses while you write and plays on after. Closing it in any way (Save, Close, Esc, tapping outside) keeps what you typed, so a note is never thrown away by accident.
 - **Menu → 📝 Notes** (`/notes`) lists all your notes, newest first, with search, **▶ Play** (plays your noted videos one after another), **✎ Edit**, **Copy**, **Delete** (with Undo) and **Copy all notes**. Grids of videos (channel pages, More like this) mark videos that have a note with 📝, and the Added page shows the note on its card.
@@ -575,3 +583,4 @@ Tech: Vite + TypeScript (no UI framework), YouTube Data API v3, YouTube IFrame P
 - **"More like this" in two layers**: YouTube removed its related-videos API in 2023, so similarity is computed from your own library (free) and, on request, by a keyword search (~103 units).
 - **Quota guard with a server-side lock**: app warnings can be bypassed by bugs or old devices, so the Worker enforces the budget itself (Cloudflare KV counter); a fixed reserve keeps automatic refreshes safe.
 - **Explore any channel, but keep only best 150 + recent**: deep history wasn't needed; previews load the newest ≤200 Shorts.
+## 6g. Notes on videos

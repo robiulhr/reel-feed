@@ -409,6 +409,6 @@ export async function fbBulkDialog(initial: string[] = []): Promise<boolean> {
   refreshManual();
   window.dispatchEvent(new Event(LISTS_EVENT));
   const skipped = rows.filter((r) => r.state === "dup").length;
-  toast(`Added ${added} ✓${skipped ? ` — ${skipped} you had already` : ""}. They're on the Added page.`);
+  toast(`Added ${added} ✓${skipped ? ` — ${skipped} you had already` : ""}. They're under Channels & pages → Facebook.`);
   return added > 0;
 }

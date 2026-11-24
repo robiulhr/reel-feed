@@ -80,10 +80,12 @@ function facebookLookupsInDev(): Plugin {
  * Raised JS 62 → 64 with topics (the "📚 Topic" chip on every video, the synced topics data and its merge
  *   rules): 62.0 kB. The Topics page and its sheet are loaded only when used.
  * Raised JS 64 → 66 with Facebook pages in the Channels list, search and the phone-startup/sound work: 63.7 kB.
+ * Raised JS 66 → 68 with the select-and-edit grid (the ☑ button on page and channel screens), the UI fixes of the
+ *   screen-by-screen audit and the full-width note/topic chips: 65.0 kB. The edit sheet loads only when used.
  * Parts loaded only when used (like "Add several at once") don't slow the start: they don't count in
  * `js`, and each has its own limit, `lazy`.
  */
-export const BUDGET_KB = { js: 66, css: 10, lazy: 10 };
+export const BUDGET_KB = { js: 68, css: 10, lazy: 10 };
 
 function sizeBudget(): Plugin {
   return {
