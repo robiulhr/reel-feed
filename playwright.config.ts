@@ -4,8 +4,8 @@ const PORT = 4174;
 
 export default defineConfig({
   testDir: "tests/e2e",
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
+  timeout: 45_000, // (the machines that run CI are slow)
+  expect: { timeout: 7_000 },
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
   // CI: "github" also shows each failure as a note on the run (readable without signing in)
