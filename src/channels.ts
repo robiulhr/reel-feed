@@ -50,7 +50,7 @@ export function addFromInfo(info: { name: string; handle: string; id: string; ca
   return change([{ t: "add", channel: info }], `Added ${info.name} — its Shorts join your feed after the refresh (~3 min)`);
 }
 export function removeByHandle(handle: string, name: string) {
-  return change([{ t: "remove", h: handle }], `Removed ${name}. Restore any time under Channels → Removed.`, {
+  return change([{ t: "remove", h: handle }], `Removed ${name}. Restore any time under Channels & pages → Removed.`, {
     label: "Undo",
     run: () => change([{ t: "restore", h: handle }], `Restored ${name}`),
   });
@@ -494,7 +494,7 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
 
   const search = el("input", "ch-search") as HTMLInputElement;
   search.type = "search";
-  search.placeholder = "Search channels…";
+  search.placeholder = "Search channels and pages…";
   search.value = view.q;
   let t: number | undefined;
   search.oninput = () => {
@@ -613,13 +613,14 @@ function renderHead() {
       if (s === "noShorts") counts.noShorts++;
     }
   }
+  const fbPages = ctx.ds.channels.filter((c) => c.st === "fb").length;
   headEl.replaceChildren();
   const top = el("div", "ch-head-row");
   top.append(
     el(
       "p",
       "ch-counts",
-      `${counts.listed} channels · ${counts.active} active · ${counts.noShorts} no Shorts yet${counts.removed ? ` · ${counts.removed} removed` : ""}`,
+      `${counts.listed} channels${fbPages ? ` · ${fbPages} Facebook page${fbPages === 1 ? "" : "s"}` : ""} · ${counts.active} active · ${counts.noShorts} no Shorts yet${counts.removed ? ` · ${counts.removed} removed` : ""}`,
     ),
   );
   const actions = el("div", "ch-head-actions");

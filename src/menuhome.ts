@@ -18,7 +18,7 @@ export const PAGE_TITLES: Record<string, string> = {
   topics: "Topics",
   history: "Watch history",
   hidden: "Hidden channels",
-  channels: "Channels",
+  channels: "Channels & pages",
   sorting: "Sorting",
   activity: "Activity",
   sync: "Sync",
@@ -44,6 +44,7 @@ const startOfToday = () => {
 
 function items(): { title: string; cards?: boolean; rows: Item[] }[] {
   const channels = feed.ds.channels.filter((c) => c.st === "active" || c.st === "noShorts").length;
+  const pages = feed.ds.channels.filter((c) => c.st === "fb").length; // Facebook pages with videos you added
   const toCheck = feed.ds.videos.filter((s) => feed.ds.channels[s.ch]?.st === "active" && isGuessed(s, state)).length;
   const today = state.activity.filter((e) => e.at >= startOfToday()).length;
   const notes = Object.keys(state.notes).length;
@@ -63,7 +64,12 @@ function items(): { title: string; cards?: boolean; rows: Item[] }[] {
     {
       title: "Discover",
       rows: [
-        { tab: "channels", icon: "📺", label: "Channels", note: channels.toLocaleString() },
+        {
+          tab: "channels",
+          icon: "📺",
+          label: "Channels & pages",
+          note: pages ? `${channels.toLocaleString()} channels · ${plural(pages, "page")}` : plural(channels, "channel"),
+        },
         {
           tab: "sorting",
           icon: "🏷️",
