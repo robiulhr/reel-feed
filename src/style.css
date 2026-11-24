@@ -2173,6 +2173,14 @@ button[aria-busy="true"] {
   font-weight: 700;
   opacity: 0.8;
 }
+/* in the category picker the chips wrap (no sideways scrolling inside a popup); the scrolling rows are for the page's own filter bars */
+.catpick-chips {
+  flex-wrap: wrap;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
+  padding-right: 0;
+}
 .catpick-status {
   font-weight: 600;
 }

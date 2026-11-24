@@ -55,6 +55,7 @@ const GROUP_REL: Record<GroupId, number> = {
   brands: 0.8,
   fun: 0.6,
   facts: 0.6,
+  world: 0.3, // (politics and world affairs: followed on purpose, not part of the business feed)
   type: 1, // tutorials, explainers…: what kind of video, so it neither helps nor hurts the topic
   learn: 0.3, // (English/Arabic/Quran learning: yours to study, not part of the business feed)
   islam: 0.3,

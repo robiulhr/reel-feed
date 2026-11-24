@@ -15,6 +15,7 @@ export const GROUPS = [
   { id: "brands", label: "Brands & Companies", icon: "🏷️" },
   { id: "fun", label: "Comedy & Fun", icon: "😂" },
   { id: "facts", label: "Facts & Knowledge", icon: "💡" },
+  { id: "world", label: "Politics & World", icon: "🌍" },
   { id: "type", label: "Video type", icon: "🎞️" },
   { id: "learn", label: "Learn", icon: "🎓" },
   { id: "islam", label: "Islamic", icon: "🕌" },
@@ -46,6 +47,9 @@ export const CATEGORIES = [
   { id: "comedy", label: "Comedy", short: "Comedy", group: "fun" },
   { id: "facts", label: "Facts & Knowledge", short: "Facts", group: "facts" },
   { id: "other", label: "Other", short: "Other", group: "facts" },
+  // news and world affairs (kept out of the All feed, like Islamic and Learn: pick them to follow the news)
+  { id: "politics", label: "Politics", short: "Politics", group: "world" },
+  { id: "geopolitics", label: "Geopolitics & World Affairs", short: "Geopolitics", group: "world" },
   // what kind of video it is (a Short can be a tutorial about ads: topic first, type second)
   { id: "tutorial", label: "Tutorials & How-tos", short: "Tutorials", group: "type" },
   { id: "explainer", label: "Explainers", short: "Explainers", group: "type" },
@@ -72,8 +76,8 @@ export const groupInfo = (id: string) => GROUPS.find((g) => g.id === id);
 /** The topics in a main category, in display order. */
 export const groupCats = (g: GroupId): CatId[] => CATEGORIES.filter((c) => c.group === g).map((c) => c.id);
 
-/** Main categories kept out of the "All" feed by default (they have their own chips): what you pick to study or pray. */
-export const PERSONAL_GROUPS: readonly GroupId[] = ["learn", "islam"];
+/** Main categories kept out of the "All" feed by default (they have their own chips): what you pick to follow, study or pray. */
+export const PERSONAL_GROUPS: readonly GroupId[] = ["world", "learn", "islam"];
 export const isPersonalGroup = (g: string | undefined) => !!g && (PERSONAL_GROUPS as readonly string[]).includes(g);
 
 /** Old single categories (before multi-category) → new ones. "bangla" was a language, not a topic. */

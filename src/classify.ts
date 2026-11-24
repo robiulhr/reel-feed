@@ -62,6 +62,9 @@ const CLOSE: [CatId, CatId][] = [
   ["tutorial", "career"],
   ["quran", "waz"],
   ["waz", "nasheed"],
+  ["politics", "geopolitics"],
+  ["geopolitics", "facts"],
+  ["politics", "facts"],
   ["bizideas", "stories"],
   ["bizideas", "founders"],
   ["bizideas", "bizlearn"],
@@ -169,6 +172,23 @@ const LEX: Record<CatId, string[]> = {
     "উদ্যোগ", "ক্ষুদ্র উদ্যোক্তা", "নারী উদ্যোক্তা", "স্বল্প পুঁজি", "কম পুঁজি", "কম পুঁজিতে", "পুঁজিতে ব্যবসা", "বাড়িতে বসে আয়",
     "ঘরে বসে আয়", "ঘরে বসে ইনকাম", "সফল উদ্যোক্তা", "সাফল্যের গল্প", "সফলতার গল্প", "ব্যবসা শুরু", "নতুন ব্যবসা", "লাভজনক ব্যবসা",
     "আয়ের উৎস", "আয়ের সুযোগ", "অন্যরকম", "~ব্যবসা", "~ইনকাম", "~ব্যবসায়ী",
+  ],
+  politics: [
+    "politics", "political", "politician", "election", "elections", "parliament", "prime minister", "president",
+    "government", "minister", "opposition", "voting", "ballot", "interim government", "chief adviser", "caretaker",
+    "constitution", "coalition", "manifesto", "lawmaker", "senate", "congress", "democracy", "dictator", "corruption scandal",
+    "=bnp", "awami league", "=ncp", "~party", "~vote", "~policy", "~reform",
+    "রাজনীতি", "রাজনৈতিক", "রাজনীতিবিদ", "নির্বাচন", "সংসদ", "প্রধানমন্ত্রী", "রাষ্ট্রপতি", "সরকার", "মন্ত্রী", "বিরোধী দল", "আওয়ামী লীগ",
+    "বিএনপি", "অন্তর্বর্তী সরকার", "প্রধান উপদেষ্টা", "গণতন্ত্র", "সংবিধান", "~ভোট", "~দল", "~ক্ষমতা",
+  ],
+  geopolitics: [
+    "geopolitic", "geopolitical", "foreign policy", "diplomacy", "diplomatic", "sanction", "=nato", "united nations", "=un",
+    "brics", "superpower", "cold war", "world war", "trade war", "ukraine", "russia", "taiwan", "israel", "palestine", "gaza",
+    "middle east", "iran", "india pakistan", "south china sea", "indo-pacific", "world order", "global south", "border dispute",
+    "invasion", "ceasefire", "treaty", "bilateral", "regime change", "military base", "arms race", "world affairs",
+    "~china", "~war", "~america", "~europe", "~russian",
+    "ভূরাজনীতি", "ভূ-রাজনীতি", "বিশ্ব রাজনীতি", "আন্তর্জাতিক রাজনীতি", "পররাষ্ট্রনীতি", "কূটনীতি", "নিষেধাজ্ঞা", "ইউক্রেন", "রাশিয়া", "ইসরায়েল",
+    "ফিলিস্তিন", "গাজা", "মধ্যপ্রাচ্য", "ইরান", "বিশ্বযুদ্ধ", "যুদ্ধবিরতি", "মহাশক্তি", "বিশ্ব ব্যবস্থা", "~চীন", "~যুদ্ধ", "~আমেরিকা",
   ],
   explainer: [
     "explained", "explainer", "explain", "breakdown", "break down", "the truth about", "the real reason", "behind the scenes",
@@ -312,12 +332,12 @@ const LEX: Record<CatId, string[]> = {
   ],
   facts: [
     "facts", "=fact", "did you know", "science", "~history", "why do", "how does", "~explained", "~explain", "~news",
-    "politic", "election", "geopolit", "~health", "~doctor", "~cancer", "~diet", "~food", "mystery", "~world",
+    "~health", "~doctor", "~cancer", "~diet", "~food", "mystery", "~world",
     "space", "universe", "animal", "ocean", "~country", "~countries", "biggest", "smallest", "most dangerous",
-    "human body", "~brain", "geography", "planet", "earth", "invention", "ancient", "=war", "~weird", "strange",
+    "human body", "~brain", "geography", "planet", "earth", "invention", "ancient", "~weird", "strange",
     "~secret", "~truth", "physics", "chemistry", "biology", "dinosaur", "nasa", "telescope", "satellite", "engineering", "explainer", "antarctic", "=isro", "জানেন কি", "জানেন", "তথ্য",
-    "বিজ্ঞান", "রহস্য", "পৃথিবী", "মহাবিশ্ব", "অবাক", "আশ্চর্য", "~দেশ", "প্রাণী", "~ইতিহাস", "অদ্ভুত", "~রাজনীতি",
-    "~নির্বাচন", "~স্বাস্থ্য", "~ক্যান্সার", "~খাবার", "~যুদ্ধ", "~ফিলিস্তিন", "~গাজা",
+    "বিজ্ঞান", "রহস্য", "পৃথিবী", "মহাবিশ্ব", "অবাক", "আশ্চর্য", "~দেশ", "প্রাণী", "~ইতিহাস", "অদ্ভুত",
+    "~স্বাস্থ্য", "~ক্যান্সার", "~খাবার",
   ],
   quran: [
     "quran", "qur'an", "koran", "tilawat", "tilawah", "telawat", "recitation", "recite", "surah", "surath", "=sura", "ayat",
@@ -413,12 +433,13 @@ const TOPIC_SIGNAL: Record<string, Partial<Record<CatId, number>>> = {
   Technology: { ai: 0.6 }, // also on productivity / phone clips — a hint
   Humour: { comedy: 1.5 },
   Health: { facts: 0.3 }, // also on fitness/motivation clips — only a hint
-  Politics: { facts: 1 },
-  Military: { facts: 1 },
+  Politics: { politics: 1, facts: 0.3 },
+  Government: { politics: 0.8 },
+  Military: { geopolitics: 0.8, facts: 0.3 },
 };
 const YTCAT_SIGNAL: Record<number, Partial<Record<CatId, number>>> = {
   23: { comedy: 1.5 }, // Comedy
-  25: { facts: 0.6 }, // News & Politics (business news uses it too)
+  25: { politics: 0.5, facts: 0.3 }, // News & Politics (business news uses it too)
   28: { facts: 0.3, ai: 0.3 }, // Science & Technology
 };
 const ISLAMIC = new Set<string>(["quran", "waz", "nasheed", "quranlearn"]);

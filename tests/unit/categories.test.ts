@@ -250,6 +250,31 @@ describe("category feeds", () => {
   });
 });
 
+describe("politics and geopolitics", () => {
+  const first = (title: string, extra: Partial<VideoText> = {}) => sort({ title, ...extra }).cats;
+  it("are their own main category, kept out of the All feed", () => {
+    expect(groupOf("politics")).toBe("world");
+    expect(groupOf("geopolitics")).toBe("world");
+    expect(isPersonalGroup(groupOf("politics"))).toBe(true);
+    expect(isPersonalGroup(groupOf("geopolitics"))).toBe(true);
+  });
+  it("sort politics and world affairs by what the video is about", () => {
+    expect(first("Parliament election results: what the opposition says about the government")[0]).toBe("politics");
+    expect(first("নির্বাচন নিয়ে সরকার ও বিরোধী দলের রাজনীতি")[0]).toBe("politics");
+    expect(first("Geopolitics explained: NATO, Russia and the war in Ukraine")[0]).toBe("geopolitics");
+    expect(first("মধ্যপ্রাচ্যের ভূরাজনীতি: ইসরায়েল, ইরান ও গাজা")[0]).toBe("geopolitics");
+    expect(first("US China trade war and sanctions: foreign policy after the election")).toContain("geopolitics");
+  });
+  it("YouTube's own politics topics tip a vague title", () => {
+    expect(first("The full story", { topics: ["Politics"] })[0]).toBe("politics");
+    expect(first("What happened next", { topics: ["Military"] })[0]).toBe("geopolitics");
+  });
+  it("does not take business titles", () => {
+    expect(first("Facebook ads targeting for dentists")[0]).toBe("ads");
+    expect(first("How small shops price products to earn more profit")[0]).not.toBe("politics");
+  });
+});
+
 describe("business ideas and local entrepreneurs", () => {
   const first = (title: string) => sort({ title }).cats;
   it("sorts small-business ideas and entrepreneur stories into their own category", () => {
