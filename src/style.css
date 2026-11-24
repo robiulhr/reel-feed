@@ -1892,6 +1892,14 @@ button[aria-busy="true"] {
   background: rgba(255, 59, 92, 0.16);
   color: var(--accent);
 }
+.pill.st-fb {
+  background: rgba(110, 168, 255, 0.22);
+  color: #9cc3ff;
+}
+.ch-src {
+  flex: none;
+  margin: 8px 0;
+}
 .pill.st-hidden {
   background: var(--chip);
   color: var(--muted);

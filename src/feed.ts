@@ -465,6 +465,8 @@ export function channelsCtx() {
     fmt: compact,
     onFeedChange,
     explore: (info: ExternalChannelInfo) => openChannel(app, { info }),
+    openPage: (chIndex: number) => openChannel(app, { chIndex }),
+    refreshPages: () => refreshManual(),
   };
 }
 

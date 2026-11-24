@@ -8,13 +8,14 @@
  */
 import { CATEGORIES, type CatId, catLabel, normCats } from "./categories";
 import { catSummary, pickCategories } from "./catpicker";
-import { act, state } from "./store";
+import { act, type FbPage, state } from "./store";
 import * as sync from "./sync";
 import { COST, confirmCost, noteSpend, spendToast } from "./quota";
 import { busy, confirmDialog, latest, toastError } from "./ui";
 import type { Channel, Dataset } from "./types";
 import { el, btn } from "./dom";
 import { listSummary, pickLists } from "./lists";
+import { fbPagePicUrl, pageHref } from "./fbdata";
 import { BASE } from "./router";
 
 export interface ChannelsCtx {
@@ -24,6 +25,8 @@ export interface ChannelsCtx {
   fmt(n: number): string;
   onFeedChange(): void; // a channel was removed/restored/re-categorised → refresh the queue
   explore(info: { id: string; name: string; handle: string; thumb: string; subs: number; suggestedCats?: CatId[] }): void;
+  openPage(chIndex: number): void; // a Facebook page's screen
+  refreshPages(): void; // a Facebook page was renamed/removed → rebuild its channel
 }
 
 /** Called at startup so other screens (channel page, More like this) can add/remove channels too. */
@@ -117,7 +120,7 @@ const addCats = new Map<string, CatId[]>();
 let entries: Entry[] | null = null; // from GitHub (source of truth); null = not loaded
 let loading = false;
 let loadError = "";
-const view = { q: "", cat: "all", status: "listed", sort: "name" };
+const view = { q: "", cat: "all", status: "listed", sort: "name", src: "all" as "all" | "yt" | "fb" };
 const add = { open: false, q: "", busy: false, pendingKey: "", msg: "", results: [] as LookupResult[], needsSearch: false };
 const lookupCache = new Map<string, { results: LookupResult[]; needsSearch: boolean }>();
 let runText = "";
@@ -559,7 +562,34 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
     ),
   );
 
-  body.append(headEl, addEl, controls, listEl);
+  // Channels and Facebook pages are one list; this narrows it to one platform
+  const srcChips = el("div", "chips ch-src");
+  srcChips.setAttribute("role", "group");
+  srcChips.setAttribute("aria-label", "Show");
+  const drawSrc = () => {
+    srcChips.replaceChildren();
+    for (const [id, label] of [
+      ["all", "All"],
+      ["yt", "📺 YouTube"],
+      ["fb", "📘 Facebook"],
+    ] as ["all" | "yt" | "fb", string][]) {
+      const b = btn(
+        label,
+        () => {
+          view.src = id;
+          sticky.clear();
+          drawSrc();
+          renderList();
+        },
+        view.src === id ? "on" : "",
+      );
+      b.setAttribute("aria-pressed", String(view.src === id));
+      srcChips.append(b);
+    }
+  };
+  drawSrc();
+
+  body.append(headEl, addEl, srcChips, controls, listEl);
   renderHead();
   renderAdd();
   renderList();
@@ -739,7 +769,7 @@ function renderList() {
   const hidden = new Set(state.hidden.map(lc));
   const q = lc(view.q.trim());
 
-  const rows = list
+  const rows = (view.src === "fb" ? [] : list)
     .map((e) => {
       const ch = d.get(lc(e.handle));
       return { e, ch, st: rowStatus(e, ch), hidden: hidden.has(lc(e.handle)) };
@@ -770,8 +800,9 @@ function renderList() {
     }
   });
 
-  listEl.append(el("p", "ch-note", `${rows.length} shown`));
-  if (!rows.length) {
+  const pages = view.src === "yt" ? [] : facebookPages(q, hidden);
+  listEl.append(el("p", "ch-note", `${rows.length + pages.length} shown`));
+  if (!rows.length && !pages.length) {
     listEl.append(el("p", "ch-note", "No channels match."));
     return;
   }
@@ -796,7 +827,7 @@ function renderList() {
       ev.preventDefault();
       openHere();
     };
-    title.append(a, el("span", `pill st-${st}`, STATUS_LABEL[st]));
+    title.append(a, el("span", "pill st-yt", "📺 YouTube"), el("span", `pill st-${st}`, STATUS_LABEL[st]));
     if (isHidden && st !== "removed") title.append(el("span", "pill st-hidden", "Hidden"));
     const bits = [e.handle];
     if (ch?.subs) bits.push(`${ctx.fmt(ch.subs)} subs`);
@@ -817,7 +848,7 @@ function renderList() {
     const open = btn("▶ Open", openHere, "btn sm");
     open.setAttribute("aria-label", `Open ${name} in the app`);
     const lists = btn(`📋 ${listSummary(e.handle)}`, async () => (await pickLists(e.handle, name)) && renderList(), "btn sm");
-    lists.setAttribute("aria-label", `Lists for ${name}: ${listSummary(e.handle, "none")}. Change`);
+    lists.setAttribute("aria-label", `${listSummary(e.handle)} — change the lists for ${name}`);
     const nav = el("div", "ch-nav");
     nav.append(open, yt, lists);
     if (st === "removed") {
@@ -828,7 +859,7 @@ function renderList() {
     } else {
       const cats = entryCats(e);
       const cat = btn(catSummary(cats), () => editChannelCats(e.handle, e.name, cats));
-      cat.setAttribute("aria-label", `Categories: ${cats.map(catLabel).join(", ") || "none"}. Change`);
+      cat.setAttribute("aria-label", `${catSummary(cats)} — change the categories for ${name}`);
       cat.disabled = !canEdit;
       actions.append(
         cat,
@@ -852,6 +883,163 @@ function renderList() {
     item.append(img, main, actions);
     listEl.append(item);
   }
+  if (pages.length) {
+    if (rows.length) listEl.append(el("div", "u-h", "Facebook pages"));
+    for (const p of pages) listEl.append(facebookRow(p));
+  }
+}
+
+// ---------- Facebook pages (the same list, with a 📘 badge) ----------
+interface PageRow {
+  i: number; // index in ds.channels
+  handle: string; // "fb:…"
+  name: string;
+  page?: FbPage;
+  videos: number;
+  views: number;
+  latest: number; // when the newest video was added (unix seconds)
+  cats: CatId[]; // its videos' most common categories
+  hidden: boolean;
+}
+
+/** Facebook pages that have videos in your library, filtered like the channels. */
+function facebookPages(q: string, hidden: Set<string>): PageRow[] {
+  if (!["listed", "active", "hidden"].includes(view.status)) return []; // the other statuses only mean something for YouTube channels
+  const ds = ctx.ds;
+  const stats = new Map<number, { n: number; v: number; at: number; cats: Map<CatId, number> }>();
+  for (const s of ds.videos) {
+    if (!s.fb || ds.channels[s.ch]?.st !== "fb") continue;
+    const x = stats.get(s.ch) ?? { n: 0, v: 0, at: 0, cats: new Map() };
+    x.n++;
+    x.v += s.v;
+    x.at = Math.max(x.at, s.p);
+    for (const k of s.k) x.cats.set(k, (x.cats.get(k) ?? 0) + 1);
+    stats.set(s.ch, x);
+  }
+  const out: PageRow[] = [];
+  ds.channels.forEach((c, i) => {
+    if (c.st !== "fb") return;
+    const page = state.fbPages.find((p) => p.key === c.h);
+    const x = stats.get(i);
+    if (!x) return; // no video of its left in your library: nothing to show
+    const name = page?.name || c.n;
+    const isHidden = hidden.has(lc(c.h));
+    if (q && !lc(`${name} ${c.h}`).includes(q)) return;
+    if (view.status === "hidden" && !isHidden) return;
+    if (view.cat !== "all" && !x?.cats.has(view.cat as CatId)) return;
+    const cats = x ? ([...x.cats].sort((a, b) => b[1] - a[1]).map(([k]) => k) as CatId[]) : [];
+    out.push({ i, handle: c.h, name, page, videos: x?.n ?? 0, views: x?.v ?? 0, latest: x?.at ?? 0, cats, hidden: isHidden });
+  });
+  const taste = (h: string) => state.affCh[h] ?? 0;
+  out.sort((a, b) => {
+    switch (view.sort) {
+      case "shorts":
+        return b.videos - a.videos;
+      case "latest":
+        return b.latest - a.latest;
+      case "taste":
+        return taste(b.handle) - taste(a.handle);
+      default:
+        return a.name.localeCompare(b.name);
+    }
+  });
+  return out;
+}
+
+function facebookRow(p: PageRow) {
+  const item = el("div", "ch-item");
+  const img = el("img", "ch-avatar") as HTMLImageElement;
+  img.alt = "";
+  img.loading = "lazy";
+  const pic = p.page ? fbPagePicUrl(p.page.url) : "";
+  if (pic) img.src = pic;
+
+  const main = el("div", "ch-main");
+  const title = el("div", "ch-title");
+  const openHere = () => ctx.openPage(p.i);
+  const a = el("a", "", p.name) as HTMLAnchorElement;
+  a.href = `${BASE}channel/${encodeURIComponent(p.handle)}`;
+  a.onclick = (ev) => {
+    if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    ev.preventDefault();
+    openHere();
+  };
+  title.append(a, el("span", "pill st-fb", "📘 Facebook"));
+  if (p.hidden) title.append(el("span", "pill st-hidden", "Hidden"));
+  const bits = [`${p.videos} video${p.videos === 1 ? "" : "s"} added`];
+  if (p.views) bits.push(`${ctx.fmt(p.views)} views`);
+  if (p.latest) bits.push(`latest ${ctx.ago(p.latest)}`);
+  if (p.page?.ch) bits.push(`same as ${p.page.ch}`);
+  main.append(title, el("div", "ch-sub", bits.join(" · ")));
+  if (p.cats.length) main.append(el("div", "ch-sub ch-mix", p.cats.slice(0, 3).map(catLabel).join(" · ")));
+
+  const nav = el("div", "ch-nav");
+  const open = btn("▶ Open", openHere, "btn sm");
+  open.setAttribute("aria-label", `Open ${p.name} in the app`);
+  const fbLink = el("a", "btn sm", "↗ Facebook") as HTMLAnchorElement;
+  fbLink.href = pageHref({ url: p.page?.url ?? "", name: p.name });
+  fbLink.target = "_blank";
+  fbLink.rel = "noopener";
+  fbLink.setAttribute("aria-label", `Open ${p.name} on Facebook`);
+  const lists = btn(`📋 ${listSummary(p.handle)}`, async () => (await pickLists(p.handle, p.name)) && renderList(), "btn sm");
+  lists.setAttribute("aria-label", `${listSummary(p.handle)} — change the lists for ${p.name}`);
+  nav.append(open, fbLink, lists);
+  main.append(nav);
+
+  const actions = el("div", "ch-actions");
+  actions.append(
+    btn("Rename", () => void renamePage(p), "btn sm"),
+    btn(p.hidden ? "Unhide" : "Hide", () => toggleHide(p.handle, p.hidden), "btn sm"),
+    btn("Remove", () => void removePage(p), "btn sm danger"),
+  );
+  item.append(img, main, actions);
+  return item;
+}
+
+async function renamePage(p: PageRow) {
+  const input = el("input", "ch-search") as HTMLInputElement;
+  input.type = "text";
+  input.value = p.name;
+  input.setAttribute("aria-label", "Name of the page");
+  input.dataset.ownEnter = "1";
+  const ok = await confirmDialog({
+    title: "Rename this page",
+    extra: input,
+    confirm: "Save",
+    cancel: "Cancel",
+    onOpen: () => input.select(),
+  });
+  const name = input.value.trim();
+  if (!ok || !name || name === p.name) return;
+  act({ t: "pageSet", p: { key: p.handle, name, url: p.page?.url ?? "", ch: p.page?.ch ?? "" } });
+  ctx.refreshPages();
+  renderList();
+}
+
+/** Takes the page's videos out of your library (they stay in the Facebook page itself, of course). Undo puts them back. */
+async function removePage(p: PageRow) {
+  const mine = state.manual.filter((m) => m.by === p.handle);
+  const ok = await confirmDialog({
+    title: `Remove ${p.name}?`,
+    body: `This removes the ${mine.length} video${mine.length === 1 ? "" : "s"} you added from this page (also from Saved and your lists). Nothing changes on Facebook. You can Undo.`,
+    confirm: "Remove",
+    danger: true,
+  });
+  if (!ok) return;
+  const copy = structuredClone(mine);
+  for (const m of mine) act({ t: "manDel", id: m.id });
+  ctx.refreshPages();
+  ctx.onFeedChange();
+  renderList();
+  ctx.toast(`Removed ${p.name}`, {
+    label: "Undo",
+    run: () => {
+      for (const m of copy) act({ t: "manAdd", v: m });
+      ctx.refreshPages();
+      ctx.onFeedChange();
+      renderList();
+    },
+  });
 }
 
 /** Forget the cached list (e.g. after logging out). */

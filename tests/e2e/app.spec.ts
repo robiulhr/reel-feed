@@ -189,7 +189,7 @@ test.describe("channels (with the fake sync server)", () => {
     await page
       .locator(".ch-item")
       .first()
-      .getByRole("button", { name: new RegExp(`^Lists for ${name}`) })
+      .getByRole("button", { name: new RegExp(`change the lists for ${name}`) })
       .click();
     const dlg = page.getByRole("dialog", { name: `Lists for ${name}` });
     await dlg.getByRole("button", { name: "🎯 Competitors" }).click();
@@ -198,7 +198,7 @@ test.describe("channels (with the fake sync server)", () => {
       page
         .locator(".ch-item")
         .first()
-        .getByRole("button", { name: new RegExp(`^Lists for ${name}`) }),
+        .getByRole("button", { name: new RegExp(`change the lists for ${name}`) }),
     ).toHaveText("📋 🎯 Competitors");
   });
 
