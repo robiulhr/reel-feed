@@ -155,7 +155,7 @@ test.describe("Facebook videos you add by link", () => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
     await menuPage(page, "added");
-    await expect(page).toHaveURL(/\/added$/);
+    await expect(page).toHaveURL(/\/channels$/);
     await page.locator("#panelBody").getByRole("button", { name: "＋ Add a Facebook video" }).click();
 
     const dlg = page.locator(".dlg");
@@ -385,7 +385,7 @@ test.describe("Facebook videos you add by link", () => {
     // the extension's hand-over: reel ids in the link
     await goTo(page, "/"); // so the next address is a full page load, like opening it from the extension
     await goTo(page, "/added#add=1111111111,2222222222,3333333333,4444444444");
-    await expect(page).toHaveURL(/\/added$/); // the ids are taken out of the address
+    await expect(page).toHaveURL(/\/channels$/); // the ids are taken out of the address
     await expect(dlg.locator(".fbbulk-row")).toHaveCount(4);
     await expect(dlg.locator(".fbbulk-row.st-dup")).toContainText("Already added");
     await expect(dlg.locator(".fbbulk-row.st-ok")).toHaveCount(3);

@@ -27,6 +27,12 @@ export interface ChannelsCtx {
   explore(info: { id: string; name: string; handle: string; thumb: string; subs: number; suggestedCats?: CatId[] }): void;
   openPage(chIndex: number): void; // a Facebook page's screen
   refreshPages(): void; // a Facebook page was renamed/removed → rebuild its channel
+  /** The videos you added by link (manual.ts): shown under the Facebook filter. */
+  fb?: {
+    renderVideos(body: HTMLElement, rerender: () => void): void;
+    addVideo(): Promise<boolean>;
+    addSeveral(): Promise<boolean>;
+  };
 }
 
 /** Called at startup so other screens (channel page, More like this) can add/remove channels too. */
@@ -120,7 +126,20 @@ const addCats = new Map<string, CatId[]>();
 let entries: Entry[] | null = null; // from GitHub (source of truth); null = not loaded
 let loading = false;
 let loadError = "";
-const view = { q: "", cat: "all", status: "listed", sort: "name", src: "all" as "all" | "yt" | "fb" };
+const view = {
+  q: "",
+  cat: "all",
+  status: "listed",
+  sort: "name",
+  src: "all" as "all" | "yt" | "fb",
+  fbMode: "pages" as "pages" | "videos",
+};
+
+/** Opens the Facebook tab (used by the old "Added" address and the extension's links). */
+export function showFacebook(mode: "pages" | "videos") {
+  view.src = "fb";
+  view.fbMode = mode;
+}
 const add = { open: false, q: "", busy: false, pendingKey: "", msg: "", results: [] as LookupResult[], needsSearch: false };
 const lookupCache = new Map<string, { results: LookupResult[]; needsSearch: boolean }>();
 let runText = "";
@@ -129,6 +148,9 @@ const prevStatus = new Map<string, Channel["st"]>();
 let ctx: ChannelsCtx;
 let listEl: HTMLElement | null = null;
 let headEl: HTMLElement | null = null;
+let controlsEl: HTMLElement | null = null;
+let srcEl: HTMLElement | null = null;
+let modeEl: HTMLElement | null = null;
 let addEl: HTMLElement | null = null;
 
 const lc = (s: string) => s.toLowerCase();
@@ -489,12 +511,107 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
   ctx = c;
   headEl = el("div", "ch-head");
   addEl = el("div", "ch-add");
-  const controls = el("div", "ch-controls");
+  srcEl = el("div", "chips ch-src");
+  modeEl = el("div", "chips ch-mode");
+  controlsEl = el("div", "ch-controls");
   listEl = el("div", "ch-list");
+  srcEl.setAttribute("role", "group");
+  srcEl.setAttribute("aria-label", "Show");
+  modeEl.setAttribute("role", "group");
+  modeEl.setAttribute("aria-label", "Facebook view");
+  body.append(headEl, addEl, srcEl, modeEl, controlsEl, listEl);
+  redraw();
+  if (sync.isConnected()) {
+    if (!entries && !loading) loadEntries();
+    loadRunStatus();
+  }
+}
+
+/** Everything that depends on the platform you are looking at. */
+function redraw() {
+  drawSrc();
+  drawMode();
+  renderHead();
+  renderAdd();
+  renderControls();
+  renderList();
+}
+
+// Channels and Facebook pages are one list; the platform chips decide which tools you see
+function drawSrc() {
+  if (!srcEl) return;
+  srcEl.replaceChildren();
+  for (const [id, label] of [
+    ["all", "All"],
+    ["yt", "📺 YouTube"],
+    ["fb", "📘 Facebook"],
+  ] as ["all" | "yt" | "fb", string][]) {
+    const b = btn(
+      label,
+      () => {
+        view.src = id;
+        sticky.clear();
+        const ok = sortOptions().some(([v]) => v === view.sort);
+        if (!ok) view.sort = "name";
+        redraw();
+      },
+      view.src === id ? "on" : "",
+    );
+    b.setAttribute("aria-pressed", String(view.src === id));
+    srcEl.append(b);
+  }
+}
+
+/** Facebook only: your pages, or the flat list of videos you added. */
+function drawMode() {
+  if (!modeEl) return;
+  modeEl.replaceChildren();
+  modeEl.hidden = view.src !== "fb";
+  modeEl.style.display = view.src === "fb" ? "" : "none";
+  if (view.src !== "fb") return;
+  for (const [id, label] of [
+    ["pages", "Pages"],
+    ["videos", "Videos you added"],
+  ] as ["pages" | "videos", string][]) {
+    const b = btn(
+      label,
+      () => {
+        view.fbMode = id;
+        redraw();
+      },
+      view.fbMode === id ? "on" : "",
+    );
+    b.setAttribute("aria-pressed", String(view.fbMode === id));
+    modeEl.append(b);
+  }
+}
+
+function sortOptions(): [string, string][] {
+  const base: [string, string][] = [["name", "Sort: Name"]];
+  if (view.src === "yt")
+    base.push(
+      ["subs", "Sort: Subscribers"],
+      ["shorts", "Sort: Shorts in feed"],
+      ["latest", "Sort: Latest upload"],
+      ["taste", "Sort: Your taste"],
+    );
+  else if (view.src === "fb") base.push(["shorts", "Sort: Videos added"], ["latest", "Sort: Latest added"], ["taste", "Sort: Your taste"]);
+  else base.push(["latest", "Sort: Latest"], ["taste", "Sort: Your taste"]);
+  return base;
+}
+
+/** Search, category, status and sort: only the ones that mean something for this platform. */
+function renderControls() {
+  if (!controlsEl) return;
+  controlsEl.replaceChildren();
+  const videosView = view.src === "fb" && view.fbMode === "videos"; // that list has its own search and filters
+  controlsEl.hidden = videosView;
+  controlsEl.style.display = videosView ? "none" : "";
+  if (videosView) return;
 
   const search = el("input", "ch-search") as HTMLInputElement;
   search.type = "search";
-  search.placeholder = "Search channels and pages…";
+  search.placeholder = view.src === "yt" ? "Search channels…" : view.src === "fb" ? "Search pages…" : "Search channels and pages…";
   search.value = view.q;
   let t: number | undefined;
   search.oninput = () => {
@@ -507,17 +624,17 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
   };
 
   const sel = (options: [string, string][], value: string, onChange: (v: string) => void, label: string) => {
-    const s = el("select") as HTMLSelectElement;
-    s.setAttribute("aria-label", label);
-    for (const [v, l] of options) s.append(new Option(l, v));
-    s.value = value;
-    s.onchange = () => {
+    const x = el("select") as HTMLSelectElement;
+    x.setAttribute("aria-label", label);
+    for (const [v, l] of options) x.append(new Option(l, v));
+    x.value = value;
+    x.onchange = () => {
       sticky.clear();
-      onChange(s.value);
+      onChange(x.value);
     };
-    return s;
+    return x;
   };
-  controls.append(
+  controlsEl.append(
     search,
     sel(
       [["all", "All categories"], ...CATEGORIES.map((x) => [x.id, x.label] as [string, string])],
@@ -528,31 +645,30 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
       },
       "Category",
     ),
+  );
+  if (view.src === "yt")
+    controlsEl.append(
+      sel(
+        [
+          ["listed", "In my list"],
+          ["active", "Active"],
+          ["noShorts", "No Shorts yet"],
+          ["notFound", "Not found"],
+          ["pending", "Waiting for refresh"],
+          ["hidden", "Hidden by me"],
+          ["removed", "Removed"],
+        ],
+        view.status,
+        (v) => {
+          view.status = v;
+          renderList();
+        },
+        "Status",
+      ),
+    );
+  controlsEl.append(
     sel(
-      [
-        ["listed", "In my list"],
-        ["active", "Active"],
-        ["noShorts", "No Shorts yet"],
-        ["notFound", "Not found"],
-        ["pending", "Waiting for refresh"],
-        ["hidden", "Hidden by me"],
-        ["removed", "Removed"],
-      ],
-      view.status,
-      (v) => {
-        view.status = v;
-        renderList();
-      },
-      "Status",
-    ),
-    sel(
-      [
-        ["name", "Sort: Name"],
-        ["subs", "Sort: Subscribers"],
-        ["shorts", "Sort: Shorts in feed"],
-        ["latest", "Sort: Latest upload"],
-        ["taste", "Sort: Your taste"],
-      ],
+      sortOptions(),
       view.sort,
       (v) => {
         view.sort = v;
@@ -561,42 +677,6 @@ export function renderChannelsPanel(body: HTMLElement, c: ChannelsCtx) {
       "Sort",
     ),
   );
-
-  // Channels and Facebook pages are one list; this narrows it to one platform
-  const srcChips = el("div", "chips ch-src");
-  srcChips.setAttribute("role", "group");
-  srcChips.setAttribute("aria-label", "Show");
-  const drawSrc = () => {
-    srcChips.replaceChildren();
-    for (const [id, label] of [
-      ["all", "All"],
-      ["yt", "📺 YouTube"],
-      ["fb", "📘 Facebook"],
-    ] as ["all" | "yt" | "fb", string][]) {
-      const b = btn(
-        label,
-        () => {
-          view.src = id;
-          sticky.clear();
-          drawSrc();
-          renderList();
-        },
-        view.src === id ? "on" : "",
-      );
-      b.setAttribute("aria-pressed", String(view.src === id));
-      srcChips.append(b);
-    }
-  };
-  drawSrc();
-
-  body.append(headEl, addEl, srcChips, controls, listEl);
-  renderHead();
-  renderAdd();
-  renderList();
-  if (sync.isConnected()) {
-    if (!entries && !loading) loadEntries();
-    loadRunStatus();
-  }
 }
 
 function renderHead() {
@@ -614,38 +694,82 @@ function renderHead() {
     }
   }
   const fbPages = ctx.ds.channels.filter((c) => c.st === "fb").length;
+  const videos = state.manual.length;
+  const yt = `${counts.listed} channels · ${counts.active} active · ${counts.noShorts} no Shorts yet${counts.removed ? ` · ${counts.removed} removed` : ""}`;
+  const fb = `${fbPages} Facebook page${fbPages === 1 ? "" : "s"} · ${videos} video${videos === 1 ? "" : "s"} added`;
   headEl.replaceChildren();
   const top = el("div", "ch-head-row");
-  top.append(
-    el(
-      "p",
-      "ch-counts",
-      `${counts.listed} channels${fbPages ? ` · ${fbPages} Facebook page${fbPages === 1 ? "" : "s"}` : ""} · ${counts.active} active · ${counts.noShorts} no Shorts yet${counts.removed ? ` · ${counts.removed} removed` : ""}`,
-    ),
-  );
+  top.append(el("p", "ch-counts", view.src === "yt" ? yt : view.src === "fb" ? fb : `${counts.listed} channels · ${fb}`));
   const actions = el("div", "ch-head-actions");
-  actions.append(
-    btn(
-      add.open ? "Close" : "+ Add channel",
-      () => {
-        add.open = !add.open;
-        renderHead();
-        renderAdd();
-      },
-      "btn sm primary",
-    ),
-    btn("↻ Refresh now", (b) => busy(b, "Starting…", refreshNow)),
-  );
+  if (view.src === "all") actions.append(btn("＋ Add", () => void chooseAdd(), "btn sm primary"));
+  if (view.src === "yt")
+    actions.append(
+      btn(
+        add.open ? "Close" : "+ Add channel",
+        () => {
+          add.open = !add.open;
+          renderHead();
+          renderAdd();
+        },
+        "btn sm primary",
+      ),
+      btn("↻ Refresh now", (b) => busy(b, "Starting…", refreshNow)),
+    );
+  if (view.src === "fb" && view.fbMode === "pages")
+    actions.append(
+      btn("＋ Add video", () => void addFacebook(() => ctx.fb?.addVideo()), "btn sm primary"),
+      btn("＋ Add several", () => void addFacebook(() => ctx.fb?.addSeveral()), "btn sm"),
+    );
   top.append(actions);
   headEl.append(top);
-  const info = el(
-    "p",
-    "ch-note",
-    `${runText ? `${runText} · ` : ""}Data from ${ctx.ago(ctx.ds.generatedAt)}${ctx.ds.units ? ` · last refresh used ~${ctx.ds.units} API units` : ""}`,
+  if (view.src !== "fb") {
+    headEl.append(
+      el(
+        "p",
+        "ch-note",
+        `${runText ? `${runText} · ` : ""}Data from ${ctx.ago(ctx.ds.generatedAt)}${ctx.ds.units ? ` · last refresh used ~${ctx.ds.units} API units` : ""}`,
+      ),
+    );
+    if (!sync.isConnected()) headEl.append(el("p", "ch-note warn", "View only — log in under Sync to add, remove or edit channels."));
+    else if (loadError) headEl.append(el("p", "ch-note warn", loadError));
+  } else if (view.fbMode === "pages") {
+    headEl.append(
+      el(
+        "p",
+        "ch-note",
+        "A page appears here once you add a video from it. Facebook has no feed to refresh, so its videos only grow when you add them.",
+      ),
+    );
+  }
+}
+
+/** The ＋ Add button of the All view: what do you want to add? */
+async function chooseAdd() {
+  const box = el("div", "add-choose");
+  const option = (label: string, hint: string, run: () => void) => {
+    const b = el("button", "share-opt");
+    b.type = "button";
+    b.append(el("strong", "", label), el("span", "", hint));
+    b.onclick = () => {
+      for (const x of document.querySelectorAll<HTMLButtonElement>(".dlg-overlay button")) if (x.textContent === "Close") x.click();
+      run();
+    };
+    return b;
+  };
+  box.append(
+    option("📺 A YouTube channel", "By @handle, link or name.", () => {
+      view.src = "yt";
+      add.open = true;
+      redraw();
+    }),
+    option("📘 A Facebook video", "Paste its link; its page is added with it.", () => void addFacebook(() => ctx.fb?.addVideo())),
+    option("📘 Several Facebook videos", "Paste many links at once.", () => void addFacebook(() => ctx.fb?.addSeveral())),
   );
-  headEl.append(info);
-  if (!sync.isConnected()) headEl.append(el("p", "ch-note warn", "View only — log in under Sync to add, remove or edit channels."));
-  else if (loadError) headEl.append(el("p", "ch-note warn", loadError));
+  await confirmDialog({ title: "Add", extra: box, confirm: "", cancel: "Close", variant: "sheet" });
+}
+
+async function addFacebook(run: () => Promise<boolean> | undefined) {
+  if (await run()) redraw();
 }
 
 function renderAdd() {
@@ -762,6 +886,11 @@ function renderAdd() {
 function renderList() {
   if (!listEl) return;
   listEl.replaceChildren();
+  if (view.src === "fb" && view.fbMode === "videos") {
+    ctx.fb?.renderVideos(listEl, renderList);
+    return;
+  }
+  const status = view.src === "yt" ? view.status : "listed"; // the other statuses only mean something for YouTube channels
   if (loading && !entries) {
     listEl.append(el("p", "ch-note", "Loading channel list…"));
   }
@@ -780,9 +909,9 @@ function renderList() {
       // A channel you just changed stays where it is (so the next row can't slide under your finger)
       if (sticky.has(lc(e.handle))) return true;
       if (view.cat !== "all" && !entryCats(e).includes(view.cat as CatId)) return false;
-      if (view.status === "listed") return st !== "removed";
-      if (view.status === "hidden") return isHidden && st !== "removed";
-      return st === view.status;
+      if (status === "listed") return st !== "removed";
+      if (status === "hidden") return isHidden && st !== "removed";
+      return st === status;
     });
 
   const taste = (h: string) => state.affCh[h] ?? 0;
@@ -801,7 +930,7 @@ function renderList() {
     }
   });
 
-  const pages = view.src === "yt" ? [] : facebookPages(q, hidden);
+  const pages = view.src === "yt" ? [] : facebookPages(q, hidden, status);
   listEl.append(el("p", "ch-note", `${rows.length + pages.length} shown`));
   if (!rows.length && !pages.length) {
     listEl.append(el("p", "ch-note", "No channels match."));
@@ -904,8 +1033,8 @@ interface PageRow {
 }
 
 /** Facebook pages that have videos in your library, filtered like the channels. */
-function facebookPages(q: string, hidden: Set<string>): PageRow[] {
-  if (!["listed", "active", "hidden"].includes(view.status)) return []; // the other statuses only mean something for YouTube channels
+function facebookPages(q: string, hidden: Set<string>, status: string): PageRow[] {
+  if (!["listed", "active", "hidden"].includes(status)) return [];
   const ds = ctx.ds;
   const stats = new Map<number, { n: number; v: number; at: number; cats: Map<CatId, number> }>();
   for (const s of ds.videos) {
@@ -926,7 +1055,7 @@ function facebookPages(q: string, hidden: Set<string>): PageRow[] {
     const name = page?.name || c.n;
     const isHidden = hidden.has(lc(c.h));
     if (q && !lc(`${name} ${c.h}`).includes(q)) return;
-    if (view.status === "hidden" && !isHidden) return;
+    if (status === "hidden" && !isHidden) return;
     if (view.cat !== "all" && !x?.cats.has(view.cat as CatId)) return;
     const cats = x ? ([...x.cats].sort((a, b) => b[1] - a[1]).map(([k]) => k) as CatId[]) : [];
     out.push({ i, handle: c.h, name, page, videos: x?.n ?? 0, views: x?.v ?? 0, latest: x?.at ?? 0, cats, hidden: isHidden });

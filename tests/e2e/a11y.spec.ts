@@ -56,7 +56,7 @@ test.describe("accessibility", () => {
   test("Enter on Cancel in a confirm dialog cancels (never confirms)", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await menuPage(page, "channels");
+    await menuPage(page, "youtube");
     await page.locator(".ch-search").fill("Ads");
     await page.locator(".ch-item", { hasText: "Ads Lab" }).getByRole("button", { name: "Remove" }).click();
     await page.locator(".ch-controls select").nth(1).selectOption("removed");

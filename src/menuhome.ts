@@ -54,7 +54,6 @@ function items(): { title: string; cards?: boolean; rows: Item[] }[] {
       cards: true,
       rows: [
         { tab: "saved", icon: "♡", label: "Saved", note: plural(state.saved.length, "video") },
-        { tab: "added", icon: "📘", label: "Added", note: plural(state.manual.length, "video") },
         { tab: "notes", icon: "📝", label: "Notes", note: plural(notes, "note") },
         { tab: "topics", icon: "📚", label: "Topics", note: plural(state.topics.length, "topic") },
         { tab: "history", icon: "🕘", label: "History", note: `${state.hist.length.toLocaleString()} watched` },

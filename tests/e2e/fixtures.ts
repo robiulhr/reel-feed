@@ -227,6 +227,19 @@ export async function menuPage(page: Page, tab: string) {
   if (!(await page.locator("#closePanel").isVisible())) await page.locator("#menuBtn").click();
   const back = page.locator("#panelBack");
   if (await back.isVisible()) await back.click();
+  if (tab === "added") {
+    // the videos you added now live in Channels & pages → Facebook → Videos you added
+    await page.locator('#panelBody [data-p="channels"]').click();
+    await page.locator("#panelBody").getByRole("button", { name: "📘 Facebook" }).click();
+    await page.locator("#panelBody").getByRole("button", { name: "Videos you added" }).click();
+    return;
+  }
+  if (tab === "youtube") {
+    // the YouTube channel tools (add, refresh, status filter) are under Channels & pages → 📺 YouTube
+    await page.locator('#panelBody [data-p="channels"]').click();
+    await page.locator("#panelBody").getByRole("button", { name: "📺 YouTube" }).click();
+    return;
+  }
   await page.locator(`#panelBody [data-p="${tab}"]`).click();
 }
 

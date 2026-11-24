@@ -8,7 +8,7 @@ import { pickCategories } from "./catpicker";
 import { bindFilterBar, LANG_OPTS, renderFilterBar, WINS } from "./filters";
 import { videoCats } from "./rank";
 import { act, persist, state } from "./store";
-import { renderChannelsPanel } from "./channels";
+import { renderChannelsPanel, showFacebook } from "./channels";
 import { renderUsagePanel } from "./usage";
 import { openSimilar } from "./similar";
 import { renderHistory } from "./history";
@@ -38,7 +38,7 @@ import { undoable } from "./backup";
 import { toast } from "./ui";
 import { LISTS_EVENT, listById, listLabel, pickLists } from "./lists";
 import { fbPageOf } from "./fbdata";
-import { deleteManual, fbVideoDialog, openOnFacebook, renderAdded } from "./manual";
+import { deleteManual, fbVideoDialog, openBulkAdd, openOnFacebook, renderAdded } from "./manual";
 import { shortInList } from "./rank";
 import type { Short, Tab, Win } from "./types";
 import { PAGE_TITLES, renderHome } from "./menuhome";
@@ -113,6 +113,11 @@ export const currentPanelTab = () => panelTab;
 export const panelOpen = () => panelModal.isOpen();
 
 export function openPanel(tab = "home") {
+  if (tab === "added") {
+    // the videos you added now live in Channels & pages → Facebook → Videos (old links and the extension still open this address)
+    showFacebook("videos");
+    tab = "channels";
+  }
   const wasOpen = panelModal.isOpen();
   panelTab = tab;
   if (playback.playing) pool.pause();
@@ -141,10 +146,13 @@ export function renderPanel() {
   body.scrollTop = 0;
 
   if (panelTab === "home") renderHome(body, (t) => openPanel(t));
-  else if (panelTab === "channels") renderChannelsPanel(body, channelsCtx());
+  else if (panelTab === "channels")
+    renderChannelsPanel(body, {
+      ...channelsCtx(),
+      fb: { renderVideos: renderAdded, addVideo: () => fbVideoDialog(), addSeveral: () => openBulkAdd() },
+    });
   else if (panelTab === "history") renderHistory(body, app, feed.byId, () => openPanel("history"));
   else if (panelTab === "saved") renderSaved(body);
-  else if (panelTab === "added") renderAdded(body, () => openPanel("added"));
   else if (panelTab === "notes")
     void import("./notes").then((m) => {
       if (panelTab === "notes" && mine === drawn) m.renderNotesPage(body, () => openPanel("notes"));

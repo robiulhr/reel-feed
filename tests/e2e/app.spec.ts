@@ -156,7 +156,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("Add: triple tap → exactly one save", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await menuPage(page, "channels");
+    await menuPage(page, "youtube");
     await page.getByRole("button", { name: "+ Add channel" }).click();
     await page.locator(".ch-add-form input").fill("@pricinglab");
     await page.locator(".ch-add-form button[type=submit]").click();
@@ -172,7 +172,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("a channel in the list: open it in the app (Back returns), on YouTube, or add it to a list", async ({ app: page }) => {
     await closeTips(page);
     await page.locator("#menuBtn").click();
-    await menuPage(page, "channels");
+    await menuPage(page, "youtube");
     const row = page.locator(".ch-item").first();
     const name = (await row.locator(".ch-title a").textContent())!.trim();
     await expect(row.getByRole("link", { name: `Open ${name} on YouTube` })).toHaveAttribute("href", /^https:\/\/www\.youtube\.com\//);
@@ -205,7 +205,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("Remove: triple tap on the full list → one save, and never touches the next channel", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await menuPage(page, "channels");
+    await menuPage(page, "youtube");
     await expect(page.locator(".ch-item")).toHaveCount(3);
     const first = page.locator(".ch-item").first();
     const name = (await first.locator(".ch-title a").textContent())!.trim();
@@ -225,7 +225,7 @@ test.describe("channels (with the fake sync server)", () => {
   test("Delete asks first with the app's own dialog", async ({ app: page, sync }) => {
     await closeTips(page);
     await login(page);
-    await menuPage(page, "channels");
+    await menuPage(page, "youtube");
     await page.locator(".ch-search").fill("Ads");
     await page.locator(".ch-item", { hasText: "Ads Lab" }).getByRole("button", { name: "Remove" }).click();
     await expect(page.locator("#toast")).toContainText("Removed Ads Lab");

@@ -39,12 +39,21 @@ async function addVideo(page: Page) {
   await expect(dlg).toBeHidden();
 }
 
+/** Opens Menu → Channels & pages on its All view (the Facebook tab is left on Pages, not on the videos you added). */
+async function openChannels(page: Page) {
+  await menuPage(page, "channels");
+  const body = page.locator("#panelBody");
+  await body.getByRole("button", { name: "📘 Facebook" }).click();
+  await body.getByRole("button", { name: "Pages", exact: true }).click();
+  await body.getByRole("button", { name: "All", exact: true }).click();
+}
+
 /** Channels and Facebook pages are one list: a page shows up beside the YouTube channels, with a badge and a filter. */
 test.describe("Facebook pages in Channels", () => {
   test("a page you added a video from is listed with a 📘 badge; the platform filter narrows the list", async ({ app: page }) => {
     await closeTips(page);
     await addVideo(page);
-    await menuPage(page, "channels");
+    await openChannels(page);
     const body = page.locator("#panelBody");
     const row = body.locator(".ch-item").filter({ hasText: "Boost Marketing" });
     await expect(row).toHaveCount(1);
@@ -64,7 +73,7 @@ test.describe("Facebook pages in Channels", () => {
   test("the Channels page with a Facebook page in it passes the WCAG check", async ({ app: page }) => {
     await closeTips(page);
     await addVideo(page);
-    await menuPage(page, "channels");
+    await openChannels(page);
     await page.waitForTimeout(600);
     expect(await wcagProblems(page)).toEqual([]);
   });
@@ -72,7 +81,7 @@ test.describe("Facebook pages in Channels", () => {
   test("▶ Open shows the page's own screen with its videos", async ({ app: page }) => {
     await closeTips(page);
     await addVideo(page);
-    await menuPage(page, "channels");
+    await openChannels(page);
     await page.locator("#panelBody").getByRole("button", { name: "📘 Facebook" }).click();
     await page
       .locator("#panelBody")
@@ -85,7 +94,7 @@ test.describe("Facebook pages in Channels", () => {
   test("Rename changes its name; Remove takes its videos out, with Undo", async ({ app: page }) => {
     await closeTips(page);
     await addVideo(page);
-    await menuPage(page, "channels");
+    await openChannels(page);
     const body = page.locator("#panelBody");
     await body.getByRole("button", { name: "📘 Facebook" }).click();
 
