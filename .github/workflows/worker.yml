@@ -10,11 +10,17 @@ on:
     branches: [main]
     paths:
       - "worker/**"
+      # the Worker checks categories and sorts Facebook videos with these two files, so it must be
+      # redeployed when they change (a new category was refused as "Unknown" until it was)
+      - "src/categories.ts"
+      - "src/classify.ts"
       - ".github/workflows/worker.yml"
   pull_request: # type-checked only, never deployed
     branches: [main]
     paths:
       - "worker/**"
+      - "src/categories.ts"
+      - "src/classify.ts"
   workflow_dispatch: # "Run workflow" button in the Actions tab
 
 permissions:
