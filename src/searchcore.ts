@@ -39,7 +39,10 @@ function scoreOf(tokens: string[], pools: Pool[]): number {
 const noteWords = new WeakMap<Note, string[]>();
 const wordsOfNote = (n: Note) => {
   let w = noteWords.get(n);
-  if (!w) noteWords.set(n, (w = wordsOf(`${n.x} ${n.ti}`)));
+  if (!w) {
+    w = wordsOf(`${n.x} ${n.ti}`);
+    noteWords.set(n, w);
+  }
   return w;
 };
 const staticWords = new WeakMap<Short, string[]>();
@@ -47,7 +50,8 @@ function makerAndCats(app: Pick<AppApi, "ds">, s: Short): string[] {
   let w = staticWords.get(s);
   if (!w) {
     const maker = s.fb ? (state.fbPages.find((p) => p.key === s.fb!.by)?.name ?? "Facebook") : (app.ds.channels[s.ch]?.n ?? "");
-    staticWords.set(s, (w = wordsOf(`${maker} ${s.k.map(catLabel).join(" ")}`)));
+    w = wordsOf(`${maker} ${s.k.map(catLabel).join(" ")}`);
+    staticWords.set(s, w);
   }
   return w;
 }
