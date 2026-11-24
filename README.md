@@ -228,18 +228,20 @@ Scores are capped at ±20. Only **For You** uses them. Reset any time: Menu → 
 
 ## 5a. Categories — `src/categories.ts` (app) + `src/classify.ts` (rules; fetch, Worker, tests only)
 
-**11 main categories, 27 topics.** In Filters, tap a main category to pick all its topics (✓), or pick single topics (– = partly picked). In the top bar a fully picked main category shows as one chip.
+**13 main categories, 35 topics.** In Filters, tap a main category to pick all its topics (✓), or pick single topics (– = partly picked). In the top bar a fully picked main category shows as one chip.
 - 📣 **Marketing & Ads**: Meta & Google Ads · Marketing Strategy · Branding & Positioning · Design & Creative
 - 🎬 **Content Creation**: Hook Ideas · Video Creation Tips (ideas, scripts, shooting, editing) · Video Growth Tips (views, reach, followers)
 - 🛒 **Selling**: E-commerce · Sales & Customers
-- 🏢 **Business & Learning**: Business Learning (start, run and grow a business; small-business ideas) · Tutorials & How-tos (step-by-step guides, any topic) · Business Stories (case studies) · Founders & Leaders (the people)
+- 🏢 **Business & Learning**: Business Learning (start, run and grow a business) · **Business Ideas & Local Entrepreneurs** (ideas for small businesses and what real, often small and local, entrepreneurs do and how they started — e.g. Bangladeshi small-entrepreneur pages; English and Bangla keywords) · Business Stories (case studies) · Founders & Leaders (the people)
 - 💰 **Money & Career**: Money & Investing · Career & Skills
 - 🧠 **Mindset & Growth**: Self-growth
 - 🤖 **AI & Tech**: AI & Tech Tools
 - 🏷️ **Brands & Companies**: Famous Brand Ads · Funny Brand Content · Company Channels (a company's own channel, set per channel — no keywords)
 - 😂 **Comedy & Fun**: Office & Work Fun · Comedy
 - 💡 **Facts & Knowledge**: Facts & Knowledge · Other (picked by hand for videos that fit nowhere — no keywords)
-- 🕌 **Islamic**: Quran Tilawat · Waz & Islamic Talks · Nasheed & Gajal — left out of **All**; pick it to see them (mixing it with other categories starts a new pick).
+- 🎞️ **Video type** (what kind of video it is; a tutorial about ads is *Ads* first, *Tutorials* second): Tutorials & How-tos · Explainers · Interviews & Talks · Reviews & Comparisons · Motivational Speeches
+- 🎓 **Learn**: English Learning (spoken English, grammar, vocabulary, IELTS…) · Arabic Learning · Quran Learning (Tajweed & Meaning — studying, as opposed to Quran Tilawat, listening to recitation) — left out of **All** like Islamic; pick it to study
+- 🕌 **Islamic**: Quran Tilawat · Waz & Islamic Talks · Nasheed & Gajal — left out of **All**; pick it to see them (mixing Islamic or Learn with other categories starts a new pick).
 
 Change the grouping in `GROUPS` / `group:` in `src/categories.ts`. The library file carries its own category list and the app reads positions from that, so adding or reordering topics is safe (a new topic needs a `LEX` entry in `src/classify.ts`, even an empty one). Moving a keyword between topics re-sorts everything on the next fetch.
 - **Where overlapping words live:** Hook Ideas = the word "hook" and opening-line talk; Branding = the word "brand", identity/strategy/positioning/naming; Marketing keeps only a weak "brand" hint; "viral", "reach", "followers", "algorithm" → Video Growth Tips (weak "viral"); editing/script/camera/b-roll → Video Creation Tips (Design & Creative keeps design tools, logos, thumbnails); "entrepreneur"/"startup" count fully for Business Learning but only as a weak hint for Founders, whose strong words are CEO, founder and famous names; "tutorial", "step by step", "for beginners" count fully for Tutorials, "how to" only weakly.

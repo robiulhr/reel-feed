@@ -1,4 +1,4 @@
-import { type CatId, groupOf, PERSONAL_GROUP } from "./categories";
+import { type CatId, groupOf, isPersonalGroup } from "./categories";
 import type { Shared, State } from "./store";
 import type { Dataset, Short } from "./types";
 
@@ -33,7 +33,7 @@ export function feedFilter(ds: Dataset, st: FilterState): (s: Short) => boolean 
     if (st.lang !== "all" && s.lg !== st.lang) return false;
     const cats = videoCats(s, st);
     if (picked.size) return cats.some((c) => picked.has(c));
-    return !(cats[0] && groupOf(cats[0]) === PERSONAL_GROUP); // Islamic Shorts have their own chips
+    return !(cats[0] && isPersonalGroup(groupOf(cats[0]))); // Islamic and Learn Shorts have their own chips
   };
 }
 

@@ -4,7 +4,7 @@
  * - Filters sheet: time range, views, language and every main category with its topics (with counts), applied with
  *   "Show N Shorts". Tapping a main category picks all its topics; each topic can also be picked on its own.
  */
-import { CATEGORIES, type CatId, catInfo, GROUPS, type GroupId, groupCats, groupOf, type Lang, PERSONAL_GROUP } from "./categories";
+import { CATEGORIES, type CatId, catInfo, GROUPS, type GroupId, groupCats, groupOf, isPersonalGroup, type Lang } from "./categories";
 import { el } from "./dom";
 import { app, feed, resetFeed } from "./feed";
 import { feedFilter, videoCats } from "./rank";
@@ -40,9 +40,9 @@ export const LANG_OPTS: [Lang | "all", string][] = [
 const QUICK = 5;
 
 type Draft = { win: Win; minV: number; lang: Lang | "all"; cats: CatId[]; list: string };
-const isIslamic = (c: CatId) => groupOf(c) === PERSONAL_GROUP;
+const isIslamic = (c: CatId) => isPersonalGroup(groupOf(c));
 
-/** Islamic and other topics don't mix: picking one kind starts a fresh pick. */
+/** Islamic/Learn and other topics don't mix: picking one kind starts a fresh pick. */
 function addCats(cats: CatId[], add: CatId[]): CatId[] {
   if (cats.length && isIslamic(add[0]) !== isIslamic(cats[0])) return [...add];
   return [...cats, ...add.filter((c) => !cats.includes(c))];
@@ -118,7 +118,7 @@ export function renderFilterBar() {
   if (key !== countsKey) {
     countsKey = key;
     const n = counts(state).group;
-    quickOrder = GROUPS.filter((g) => g.id !== PERSONAL_GROUP && (n.get(g.id) ?? 0) >= 8)
+    quickOrder = GROUPS.filter((g) => !isPersonalGroup(g.id) && (n.get(g.id) ?? 0) >= 8)
       .sort((a, b) => (n.get(b.id) ?? 0) - (n.get(a.id) ?? 0))
       .map((g) => g.id);
   }
@@ -269,7 +269,11 @@ export async function openFilters(toTopics = false) {
   topHead.append(el("span", "", "Categories"), clear);
   topics.append(
     topHead,
-    el("p", "filt-hint", "Tap a category for all its topics, or pick single topics. Islamic is kept out of All — pick it to watch."),
+    el(
+      "p",
+      "filt-hint",
+      "Tap a category for all its topics, or pick single topics. Islamic and Learn are kept out of All — pick them to watch.",
+    ),
   );
   const mainBtns = new Map<GroupId, HTMLButtonElement>();
   const topicBtns = new Map<CatId, HTMLButtonElement>();

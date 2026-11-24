@@ -15,6 +15,8 @@ export const GROUPS = [
   { id: "brands", label: "Brands & Companies", icon: "🏷️" },
   { id: "fun", label: "Comedy & Fun", icon: "😂" },
   { id: "facts", label: "Facts & Knowledge", icon: "💡" },
+  { id: "type", label: "Video type", icon: "🎞️" },
+  { id: "learn", label: "Learn", icon: "🎓" },
   { id: "islam", label: "Islamic", icon: "🕌" },
 ] as const;
 export type GroupId = (typeof GROUPS)[number]["id"];
@@ -30,7 +32,7 @@ export const CATEGORIES = [
   { id: "ecom", label: "E-commerce", short: "E-com", group: "sell" },
   { id: "sales", label: "Sales & Customers", short: "Sales", group: "sell" },
   { id: "bizlearn", label: "Business Learning", short: "Biz learn", group: "biz" },
-  { id: "tutorial", label: "Tutorials & How-tos", short: "Tutorials", group: "biz" },
+  { id: "bizideas", label: "Business Ideas & Local Entrepreneurs", short: "Ideas", group: "biz" },
   { id: "stories", label: "Business Stories", short: "Stories", group: "biz" },
   { id: "founders", label: "Founders & Leaders", short: "Founders", group: "biz" },
   { id: "money", label: "Money & Investing", short: "Money", group: "money" },
@@ -44,6 +46,16 @@ export const CATEGORIES = [
   { id: "comedy", label: "Comedy", short: "Comedy", group: "fun" },
   { id: "facts", label: "Facts & Knowledge", short: "Facts", group: "facts" },
   { id: "other", label: "Other", short: "Other", group: "facts" },
+  // what kind of video it is (a Short can be a tutorial about ads: topic first, type second)
+  { id: "tutorial", label: "Tutorials & How-tos", short: "Tutorials", group: "type" },
+  { id: "explainer", label: "Explainers", short: "Explainers", group: "type" },
+  { id: "interview", label: "Interviews & Talks", short: "Interviews", group: "type" },
+  { id: "review", label: "Reviews & Comparisons", short: "Reviews", group: "type" },
+  { id: "speech", label: "Motivational Speeches", short: "Speeches", group: "type" },
+  // things you are learning (kept out of the All feed, like Islamic: pick them to study)
+  { id: "english", label: "English Learning", short: "English", group: "learn" },
+  { id: "arabic", label: "Arabic Learning", short: "Arabic", group: "learn" },
+  { id: "quranlearn", label: "Quran Learning (Tajweed & Meaning)", short: "Learn Quran", group: "learn" },
   { id: "quran", label: "Quran Tilawat", short: "Quran", group: "islam" },
   { id: "waz", label: "Waz & Islamic Talks", short: "Waz", group: "islam" },
   { id: "nasheed", label: "Nasheed & Gajal", short: "Nasheed", group: "islam" },
@@ -60,8 +72,9 @@ export const groupInfo = (id: string) => GROUPS.find((g) => g.id === id);
 /** The topics in a main category, in display order. */
 export const groupCats = (g: GroupId): CatId[] => CATEGORIES.filter((c) => c.group === g).map((c) => c.id);
 
-/** Categories kept out of the "All" feed by default (they have their own chips). */
-export const PERSONAL_GROUP: GroupId = "islam";
+/** Main categories kept out of the "All" feed by default (they have their own chips): what you pick to study or pray. */
+export const PERSONAL_GROUPS: readonly GroupId[] = ["learn", "islam"];
+export const isPersonalGroup = (g: string | undefined) => !!g && (PERSONAL_GROUPS as readonly string[]).includes(g);
 
 /** Old single categories (before multi-category) → new ones. "bangla" was a language, not a topic. */
 export const LEGACY: Record<string, CatId[]> = {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CAT_IDS, CATEGORIES, detectLang, groupOf, normCats } from "../../src/categories";
+import { CAT_IDS, CATEGORIES, detectLang, groupOf, isPersonalGroup, normCats } from "../../src/categories";
 import { channelNoise, channelPrior, ownBrand, pickCats, textScores, type VideoText, withAiLabel } from "../../src/classify";
 import { parse } from "../../src/data";
 import { buildQueue, videoCats } from "../../src/rank";
@@ -67,7 +67,7 @@ describe("sorting a Short into categories", () => {
     expect(groupOf("growth")).toBe("grow");
     expect(groupOf("branding")).toBe("mkt");
     expect(groupOf("bizlearn")).toBe("biz");
-    expect(groupOf("tutorial")).toBe("biz");
+    expect(groupOf("tutorial")).toBe("type"); // a kind of video, not a topic
     // "Other" is picked by hand: no words sort a video into it
     expect(Object.keys(textScores({ title: "other other other" }))).not.toContain("other");
     expect(normCats(undefined, "other")).toEqual(["other"]);
@@ -247,5 +247,58 @@ describe("category feeds", () => {
     ds.videos.push({ ...islamic("islam000002", 1), v: 10 });
     const items = buildQueue(ds, st, opts(), 2).items;
     expect(items[0].id).toBe("islam000001");
+  });
+});
+
+describe("business ideas and local entrepreneurs", () => {
+  const first = (title: string) => sort({ title }).cats;
+  it("sorts small-business ideas and entrepreneur stories into their own category", () => {
+    expect(groupOf("bizideas")).toBe("biz");
+    expect(first("Low investment business idea you can start at home")[0]).toBe("bizideas");
+    expect(first("ছোট ব্যবসা: কম পুঁজিতে লাভজনক ব্যবসার আইডিয়া")[0]).toBe("bizideas");
+    expect(first("কুটির শিল্প থেকে সফল উদ্যোক্তা হয়ে ওঠার গল্প")[0]).toBe("bizideas");
+    expect(first("অন্যরকম উদ্যোক্তা: ঘরে বসে আয়ের নতুন উপায়")[0]).toBe("bizideas");
+  });
+  it("does not swallow other business topics", () => {
+    expect(first("Facebook ads targeting for dentists")[0]).toBe("ads");
+    expect(first("How Nike built its brand identity and positioning")[0]).not.toBe("bizideas");
+  });
+});
+
+describe("learning and video-type categories", () => {
+  const first = (title: string, extra: Partial<VideoText> = {}) => sort({ title, ...extra }).cats;
+
+  it("English, Arabic and Quran learning are sorted by what the video teaches", () => {
+    expect(first("Learn English speaking in 30 days | spoken English grammar")[0]).toBe("english");
+    expect(first("IELTS vocabulary: 20 words for a band 8")[0]).toBe("english");
+    expect(first("ইংরেজি শেখা সহজ করার ৫টি উপায় | স্পোকেন ইংলিশ")[0]).toBe("english");
+    expect(first("Learn Arabic for beginners: the Arabic alphabet and letters")[0]).toBe("arabic");
+    expect(first("আরবি ভাষা শেখা: প্রথম ক্লাস")[0]).toBe("arabic");
+    expect(first("Tajweed rules for beginners: makharij of the letters")[0]).toBe("quranlearn");
+    expect(first("কুরআন শিক্ষা: তাজবিদ ও মাখরাজ")[0]).toBe("quranlearn");
+    expect(first("Surah Rahman beautiful recitation tilawat")[0]).toBe("quran"); // listening is not learning
+  });
+
+  it("they are personal categories: kept out of the All feed, like Islamic", () => {
+    for (const c of ["english", "arabic", "quranlearn", "quran"]) expect(isPersonalGroup(groupOf(c)), c).toBe(true);
+    for (const c of ["tutorial", "ads", "growth"]) expect(isPersonalGroup(groupOf(c)), c).toBe(false);
+  });
+
+  it("video types come after the topic: a tutorial about ads is Ads first", () => {
+    const c = first("Facebook ads tutorial step by step for beginners | meta ads manager");
+    expect(c[0]).toBe("ads");
+    expect(c).toContain("tutorial");
+    expect(groupOf("tutorial")).toBe("type");
+  });
+
+  it("explainers, interviews, reviews and speeches are recognised", () => {
+    expect(first("Podcast interview with the founder: his full story")).toContain("interview");
+    expect(first("iPhone vs Samsung comparison: which is better? honest review")).toContain("review");
+    expect(first("Motivational speech: never give up on your dreams")).toContain("speech");
+    expect(first("How it works: the real reason prices rise, explained")).toContain("explainer");
+  });
+
+  it("an old saved choice of the Tutorial category still works", () => {
+    expect(normCats(["tutorial", "ads"])).toEqual(["tutorial", "ads"]);
   });
 });

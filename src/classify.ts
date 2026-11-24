@@ -13,7 +13,7 @@
  *  5. A guess can be replaced by a label from a one-off AI pass, saved in ai-cats.json (see README).
  */
 
-import { CAT_IDS, type CatId, normCats } from "./categories";
+import { CAT_IDS, type CatId, groupOf, normCats } from "./categories";
 
 /** Topics close enough that a video sitting between them may go in both. */
 const CLOSE: [CatId, CatId][] = [
@@ -62,6 +62,16 @@ const CLOSE: [CatId, CatId][] = [
   ["tutorial", "career"],
   ["quran", "waz"],
   ["waz", "nasheed"],
+  ["bizideas", "stories"],
+  ["bizideas", "founders"],
+  ["bizideas", "bizlearn"],
+  ["bizideas", "ecom"],
+  ["quranlearn", "quran"],
+  ["quranlearn", "waz"],
+  ["quranlearn", "arabic"],
+  ["english", "tutorial"],
+  ["arabic", "tutorial"],
+  ["quranlearn", "tutorial"],
 ];
 const closeSet = new Set(CLOSE.flatMap(([a, b]) => [`${a}|${b}`, `${b}|${a}`]));
 export const areClose = (a: string, b: string) => closeSet.has(`${a}|${b}`);
@@ -147,6 +157,60 @@ const LEX: Record<CatId, string[]> = {
     "complete guide", "full guide", "beginners guide", "how to set up", "how to setup", "full course", "crash course",
     "masterclass", "~how to", "~guide", "~setup", "~learn", "টিউটোরিয়াল", "স্টেপ বাই স্টেপ", "গাইডলাইন", "~গাইড",
     "শিখুন", "শিখে নিন", "শিখবেন", "বিগিনার", "সেটআপ", "~কিভাবে", "~কীভাবে", "মাস্টারক্লাস", "ক্র্যাশ কোর্স",
+  ],
+  // Ideas for small businesses and what real (often small, local) entrepreneurs are doing, how they started and earn
+  bizideas: [
+    "business idea", "business ideas", "small business", "startup idea", "home based business", "home business",
+    "low investment", "low capital", "small capital", "cottage industry", "how he started", "how she started", "how they started",
+    "entrepreneur", "small entrepreneur", "local entrepreneur", "women entrepreneur", "success story", "local business",
+    "start a business", "starting a business", "side hustle", "income idea", "earn from home", "work from home", "profitable business",
+    "business model", "small shop", "street food business", "~startup", "~business", "~income",
+    "ব্যবসার আইডিয়া", "বিজনেস আইডিয়া", "ব্যবসা আইডিয়া", "ছোট ব্যবসা", "ছোট উদ্যোগ", "ক্ষুদ্র ব্যবসা", "কুটির শিল্প", "উদ্যোক্তা", "উদ্দোক্তা",
+    "উদ্যোগ", "ক্ষুদ্র উদ্যোক্তা", "নারী উদ্যোক্তা", "স্বল্প পুঁজি", "কম পুঁজি", "কম পুঁজিতে", "পুঁজিতে ব্যবসা", "বাড়িতে বসে আয়",
+    "ঘরে বসে আয়", "ঘরে বসে ইনকাম", "সফল উদ্যোক্তা", "সাফল্যের গল্প", "সফলতার গল্প", "ব্যবসা শুরু", "নতুন ব্যবসা", "লাভজনক ব্যবসা",
+    "আয়ের উৎস", "আয়ের সুযোগ", "অন্যরকম", "~ব্যবসা", "~ইনকাম", "~ব্যবসায়ী",
+  ],
+  explainer: [
+    "explained", "explainer", "explain", "breakdown", "break down", "the truth about", "the real reason", "behind the scenes",
+    "history of", "the story behind", "how it works", "how does", "how do",
+    "ব্যাখ্যা", "বিশ্লেষণ", "আসল কারণ", "কীভাবে কাজ করে", "কিভাবে কাজ করে",
+  ],
+  interview: [
+    "interview", "podcast", "conversation with", "in conversation", "fireside", "q&a", "q & a", "ask me anything", "=ama",
+    "live session", "panel discussion", "keynote", "ted talk", "=tedx", "talks about", "sits down with", "guest",
+    "সাক্ষাৎকার", "পডকাস্ট", "ইন্টারভিউ", "প্রশ্নোত্তর", "আড্ডা", "লাইভ সেশন", "আলোচনা",
+  ],
+  review: [
+    "review", "unboxing", "comparison", "compared", "=vs", "versus", "which is better", "worth it", "honest opinion",
+    "pros and cons", "i tried", "tested", "best of", "~top 5", "~top 10", "~best",
+    "রিভিউ", "আনবক্সিং", "তুলনা", "ভার্সেস", "কোনটি ভালো", "কোনটা ভালো",
+  ],
+  speech: [
+    "motivational speech", "motivational", "motivation", "inspirational", "inspiring speech", "speech", "never give up",
+    "believe in yourself", "wake up call", "pep talk", "~inspire", "মোটিভেশনাল", "মোটিভেশন", "অনুপ্রেরণা", "বক্তৃতা", "স্পিচ",
+    "হাল ছাড়বেন না", "নিজেকে বিশ্বাস",
+  ],
+  english: [
+    "learn english", "english learning", "spoken english", "english speaking", "speak english", "english grammar",
+    "english vocabulary", "vocabulary", "ielts", "toefl", "=pte", "=gre", "pronunciation", "improve your english",
+    "english fluency", "fluent english", "english conversation", "english lesson", "english class", "english tips",
+    "english words", "idiom", "phrasal verb", "english sentence", "daily english", "english course", "english for",
+    "~english", "ইংরেজি শেখা", "ইংরেজি শিখুন", "ইংরেজি শিখতে", "স্পোকেন ইংলিশ", "ইংলিশ স্পিকিং", "ইংরেজিতে কথা",
+    "ইংরেজি গ্রামার", "ইংলিশ গ্রামার", "ভোকাবুলারি", "আইইএলটিএস", "ইংলিশ শিখ", "ইংরেজি ভাষা", "~ইংরেজি", "~ইংলিশ",
+  ],
+  arabic: [
+    "learn arabic", "arabic language", "arabic grammar", "arabic vocabulary", "arabic speaking", "speak arabic",
+    "arabic lesson", "arabic course", "arabic words", "arabic for beginners", "spoken arabic", "madinah arabic",
+    "madina arabic", "nahw", "=sarf", "arabic alphabet", "arabic letters", "arabic sentence", "~arabic",
+    "আরবি শেখা", "আরবি শিখুন", "আরবি ভাষা", "আরবি গ্রামার", "আরবী ভাষা", "আরবি শব্দ", "স্পোকেন আরবি", "আরবি বলা", "নাহু",
+    "সরফ", "~আরবি", "~আরবী", "تعلم العربية", "اللغة العربية", "تعلم اللغة",
+  ],
+  quranlearn: [
+    "learn quran", "quran learning", "learn to read quran", "tajweed", "tajwid", "quran translation", "quran meaning",
+    "meaning of quran", "tafsir", "tafseer", "noorani qaida", "nurani qaida", "=qaida", "makharij", "quran memoriz",
+    "memorize quran", "hifz", "quran lesson", "quran class", "quran study", "understand quran", "quran with translation",
+    "তাজবিদ", "তাজউইদ", "তাফসীর", "তাফসির", "কুরআন শিক্ষা", "কোরআন শিক্ষা", "কুরআন শেখা", "কোরআন শেখা", "নূরানী", "নুরানী",
+    "মাখরাজ", "হিফজ", "কুরআনের অর্থ", "কুরআন শিখ", "কোরআন শিখ", "تجويد", "تفسير", "تعلم القرآن", "حفظ القرآن",
   ],
   ecom: [
     "ecommerce", "e-commerce", "=ecom", "shopify", "dropship", "amazon fba", "=fba", "=d2c", "=dtc", "online store",
@@ -357,7 +421,7 @@ const YTCAT_SIGNAL: Record<number, Partial<Record<CatId, number>>> = {
   25: { facts: 0.6 }, // News & Politics (business news uses it too)
   28: { facts: 0.3, ai: 0.3 }, // Science & Technology
 };
-const ISLAMIC = new Set<string>(["quran", "waz", "nasheed"]);
+const ISLAMIC = new Set<string>(["quran", "waz", "nasheed", "quranlearn"]);
 /** Arabic or Bengali letters — "Religion" on these channels means Islamic (on Hindi/English ones it can be Hindu, Christian…). */
 const ISLAMIC_SCRIPT = /[؀-ۿঀ-৿]/;
 function addSignals(v: VideoText, out: Partial<Record<string, number>>) {
@@ -459,6 +523,13 @@ export interface Sorted {
 
 const top = (s: Scores) => (Object.entries(s) as [CatId, number][]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
 
+/** A video's topic comes before its type: a tutorial about ads is Ads first, Tutorial second. */
+function topicFirst(cats: CatId[]): CatId[] {
+  if (groupOf(cats[0]) !== "type") return cats;
+  const i = cats.findIndex((c) => groupOf(c) !== "type");
+  return i < 0 ? cats : [cats[i], ...cats.filter((_, j) => j !== i)];
+}
+
 /** Picks a video's categories from its text scores and the channel's usual topics. */
 export function pickCats(text: Scores, prior: Prior): Sorted {
   const best = top(text)[0]?.[1] ?? 0;
@@ -475,7 +546,7 @@ export function pickCats(text: Scores, prior: Prior): Sorted {
       const bar = areClose(main, c) ? 0.5 : 0.8;
       if (own >= 1.5 && sc >= bar * mainScore) cats.push(c);
     }
-    return { cats, guessed: best < CONFIDENT };
+    return { cats: topicFirst(cats), guessed: best < CONFIDENT };
   }
   const p = top(prior);
   if (!p.length) return { cats: [], guessed: true };
