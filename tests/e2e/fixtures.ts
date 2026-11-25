@@ -300,3 +300,13 @@ export async function reload(page: Page) {
   await settled(page);
   return again(() => page.reload());
 }
+
+/** Opens the app's start address. A load that is still finishing from the page before can abort this one (net::ERR_ABORTED): try again once. */
+export async function gotoStart(page: Page) {
+  try {
+    await page.goto("/");
+  } catch {
+    await page.waitForTimeout(300);
+    await page.goto("/");
+  }
+}

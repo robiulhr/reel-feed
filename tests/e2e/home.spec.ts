@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { closeTips, expect, test } from "./fixtures";
+import { closeTips, expect, gotoStart, test } from "./fixtures";
 
 const playing = (page: Page) =>
   page.evaluate(() => {
@@ -11,7 +11,7 @@ const playing = (page: Page) =>
 /** Opens the app on Home (the default choice; the fixtures open the feed so the other tests stay about the feed). */
 async function openHome(page: Page) {
   await page.evaluate(() => localStorage.setItem("rf.openOn", "home"));
-  await page.goto("/"); // (a reload would stay on the Short's own address, /v/…, which opens the feed)
+  await gotoStart(page); // (a reload would stay on the Short's own address, /v/…, which opens the feed)
   await expect(page.locator("#home")).toBeVisible();
 }
 

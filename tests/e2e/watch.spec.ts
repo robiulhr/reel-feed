@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { closeTips, expect, test } from "./fixtures";
+import { closeTips, expect, gotoStart, test } from "./fixtures";
 
 /** The first long video's fake player (the one the player page made). */
 const watched = (page: Page) =>
@@ -19,7 +19,7 @@ async function openFirstLong(page: Page, pos?: number) {
         JSON.stringify(Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`longvid${String(i).padStart(4, "0")}`, [v, Date.now()]]))),
       );
   }, pos ?? 0);
-  await page.goto("/");
+  await gotoStart(page);
   await expect(page.locator("#home")).toBeVisible();
   const card = page.locator("#homeLong .home-long-card").first();
   const title = (await card.locator(".hl-title").textContent()) ?? "";
