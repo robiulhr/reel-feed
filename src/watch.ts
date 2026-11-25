@@ -11,12 +11,13 @@
 import { ago, btn, compact, el } from "./dom";
 import { lengthLabel } from "./home";
 import { loadApi } from "./pool";
-import { dismiss, pushLayer } from "./router";
+import { feed } from "./feed";
+import { dismiss, go, shareLink } from "./router";
 import { similarInLibrary } from "./similar";
 import { call } from "./sync";
-import { MAX_NOTE, noteOf, writeNote } from "./store";
+import { act, MAX_NOTE, noteOf, state, writeNote } from "./store";
 import type { Dataset, Short } from "./types";
-import { confirmDialog, toast } from "./ui";
+import { confirmDialog, infoDialog, toast } from "./ui";
 import { els, thumb } from "./view";
 
 export interface WatchOpen {
@@ -66,7 +67,6 @@ let at = 0; // index in cur.list
 let player: any = null;
 let playerReady = false;
 let timer = 0;
-let layerDone: (() => void) | null = null;
 let speed = Number(read<number>(SPEED_KEY, 1)) || 1;
 let auto = read<boolean>(AUTO_KEY, false);
 let token = 0; // a newer load makes an older one stop
@@ -86,6 +86,7 @@ interface Parts {
   title: HTMLElement;
   meta: HTMLElement;
   desc: HTMLElement;
+  saveBtn: HTMLButtonElement;
   host: HTMLElement;
   speeds: HTMLButtonElement[];
   noteBtn: HTMLButtonElement;
@@ -133,6 +134,12 @@ function build(): Parts {
   speedRow.append(...speeds);
 
   const noteBtn = btn("📝 Note at 0:00", () => void noteAtTime(), "btn sm w-notebtn");
+  const saveBtn = btn("♡ Save", () => toggleSave(), "btn sm w-save");
+  const topicBtn = btn("📚 Topic", () => void topicOf(), "btn sm");
+  const shareBtn = btn("⤴ Share", () => shareIt(), "btn sm");
+  const moreBtn = btn("⋯", () => void moreMenu(), "btn sm w-more-btn");
+  moreBtn.setAttribute("aria-label", "More");
+  saveBtn.setAttribute("aria-pressed", "false");
   const autoLab = el("label", "w-auto");
   const autoBox = el("input");
   autoBox.type = "checkbox";
@@ -146,6 +153,8 @@ function build(): Parts {
   ytLink.target = "_blank";
   ytLink.rel = "noopener";
   const tools = el("div", "w-tools");
+  const acts = el("div", "w-acts");
+  acts.append(saveBtn, topicBtn, shareBtn, moreBtn);
   tools.append(speedRow, noteBtn);
   const more = el("div", "w-more");
   more.append(autoLab, ytLink);
@@ -153,7 +162,7 @@ function build(): Parts {
   const note = el("div", "w-note");
   const next = el("div", "w-next");
   const related = el("div", "w-related");
-  main.append(box, title, meta, tools, desc, note, more);
+  main.append(box, title, meta, acts, tools, desc, note, more);
   side.append(next, related);
   scroll.append(main, side);
 
@@ -165,7 +174,125 @@ function build(): Parts {
 
   r.append(top, scroll, bar);
   ytLink.dataset.yt = "1";
-  return { title, meta, desc, host, speeds, noteBtn, note, next, related, prev, nextBtn, auto: autoBox, fail };
+  return { title, meta, desc, saveBtn, host, speeds, noteBtn, note, next, related, prev, nextBtn, auto: autoBox, fail };
+}
+
+// ---------- save, topic, share, more ----------
+/** A copy the Saved list, topics and playlists can resolve: the channel number is the one in the Shorts library. */
+function remember(s: Short): Short {
+  const name = cur?.ds.channels[s.ch];
+  const i = name ? feed.ds.channels.findIndex((c) => c.h === name.h) : -1;
+  const copy = i >= 0 && i !== s.ch ? { ...s, ch: i } : s;
+  if (!feed.byId.has(copy.id)) feed.byId.set(copy.id, copy);
+  return copy;
+}
+function paintSave() {
+  const s = here();
+  if (!p || !s) return;
+  const on = state.saved.includes(s.id);
+  p.saveBtn.textContent = on ? "♥ Saved" : "♡ Save";
+  p.saveBtn.setAttribute("aria-pressed", String(on));
+  p.saveBtn.classList.toggle("on", on);
+}
+function toggleSave() {
+  const s = here();
+  if (!s) return;
+  if (state.saved.includes(s.id)) {
+    const i = state.saved.indexOf(s.id);
+    act({ t: "unsave", id: s.id });
+    toast("Removed from saved", {
+      label: "Undo",
+      run: () => {
+        act({ t: "save", id: s.id, i });
+        paintSave();
+      },
+    });
+  } else {
+    remember(s);
+    act({ t: "save", id: s.id });
+    toast("Saved");
+  }
+  paintSave();
+}
+async function topicOf() {
+  const s = here();
+  if (!s) return;
+  try {
+    const m = await import("./topics");
+    await m.pickTopic(remember(s));
+  } catch {
+    toast("Couldn't open topics — check your connection and try again");
+  }
+}
+const ytUrl = (id: string) => `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+async function sendLink(url: string, title: string) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, url });
+      return;
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Link copied");
+  } catch {
+    const input = Object.assign(document.createElement("input"), { value: url, readOnly: true });
+    input.setAttribute("aria-label", "Link to this video");
+    input.onfocus = () => input.select();
+    infoDialog("Copy this link", input);
+  }
+}
+function shareIt() {
+  const s = here();
+  if (!s) return;
+  const box = el("div", "share-opts");
+  const option = (title: string, hint: string, url: string) => {
+    const b = el("button", "share-opt");
+    b.type = "button";
+    b.append(el("strong", "", title), el("span", "", hint));
+    b.onclick = () => {
+      for (const x of document.querySelectorAll<HTMLButtonElement>(".dlg-overlay button")) if (x.textContent === "Close") x.click();
+      void sendLink(url, s.t);
+    };
+    return b;
+  };
+  box.append(
+    option("Ecomgy link", "Opens in the app for people with the password.", new URL(shareLink(s.id).replace("/v/", "/w/")).href),
+    option("Original YouTube link", "The video's own page. Works for anyone, no password.", ytUrl(s.id)),
+  );
+  void infoDialog("Share this video", box);
+}
+async function moreMenu() {
+  const s = here();
+  if (!s) return;
+  const box = el("div", "share-opts");
+  const row = (title: string, run: () => void) => {
+    const b = el("button", "share-opt");
+    b.type = "button";
+    b.append(el("strong", "", title));
+    b.onclick = () => {
+      for (const x of document.querySelectorAll<HTMLButtonElement>(".dlg-overlay button")) if (x.textContent === "Close") x.click();
+      setTimeout(run, 160); // after the dialog has closed
+    };
+    return b;
+  };
+  box.append(
+    row("➕ Add to a playlist", () => {
+      void import("./playlists").then((m) => m.pickPlaylist(remember(s)));
+    }),
+    row("Open on YouTube ↗", () => {
+      window.open(ytUrl(s.id), "_blank", "noopener");
+    }),
+    row("Copy YouTube link", () => {
+      void navigator.clipboard.writeText(ytUrl(s.id)).then(
+        () => toast("Link copied"),
+        () => toast("Couldn't copy"),
+      );
+    }),
+  );
+  void infoDialog("More", box);
 }
 
 // ---------- the player ----------
@@ -441,6 +568,8 @@ function show(i: number) {
   if (old && playerReady) savePos(old.id, time());
   at = i;
   const s = cur.list[i];
+  if (root) root.dataset.vid = s.id;
+  go({ k: "watch", v: s.id }, { replace: true }); // (a no-op when this is the address already)
   const ch = cur.ds.channels[s.ch];
   p.title.textContent = s.t;
   p.meta.textContent = [ch?.n, `${compact(s.v)} views`, ago(s.p), s.d ? lengthLabel(s.d) : ""].filter(Boolean).join(" · ");
@@ -448,6 +577,7 @@ function show(i: number) {
   if (yt) yt.href = `https://www.youtube.com/watch?v=${encodeURIComponent(s.id)}`;
   paintSpeeds();
   paintNote();
+  paintSave();
   paintLists();
   void loadDesc(s.id);
   p.noteBtn.textContent = "📝 Note at 0:00";
@@ -483,7 +613,7 @@ export function openWatch(o: WatchOpen) {
     root.hidden = false;
     els.tabbar.hidden = true; // Home sits underneath: its bar and controls are out of reach until you are back
     els.home.inert = true;
-    layerDone = pushLayer(hide);
+    go({ k: "watch", v: o.s.id }); // its own address (/w/ID): Back returns to Home, and a link opens it
     timer = window.setInterval(tick, 1000);
   }
   show(Math.max(i, 0));
@@ -511,15 +641,11 @@ function hide() {
   p = null;
   cur = null;
   lastState = -1;
-  layerDone = null;
   els.home.inert = false;
   els.tabbar.hidden = els.home.hidden; // the bar belongs to Home
 }
 
-/** Closes it from code (not by Back). */
-export function closeWatch() {
-  if (!isWatching()) return;
-  const done = layerDone;
-  hide();
-  done?.();
+/** Closes the page when the address has already moved (Back). */
+export function hideWatch() {
+  if (isWatching()) hide();
 }

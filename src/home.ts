@@ -12,8 +12,9 @@ import { ago, compact, el } from "./dom";
 import { feed, homeHook, playList, resumeFeed } from "./feed";
 import { pool } from "./player";
 import { buildQueue, feedFilter } from "./rank";
-import { go, setBase } from "./router";
+import { go, inList, setBase } from "./router";
 import { state } from "./store";
+import { toast } from "./ui";
 import type { Dataset, Short } from "./types";
 import { els, thumb } from "./view";
 
@@ -50,6 +51,28 @@ let savedTop = 0;
 let lastTop = 0;
 
 export const isHome = () => !els.home.hidden;
+/** A list of Shorts was started from Home: closing it (← or Back) lands on Home, not on the Shorts feed. */
+let fromHome = false;
+
+/** Opens a long video by its id (a link to /w/ID, or Back/Forward onto one): Home stays underneath. */
+export async function openLongById(id: string) {
+  if (!longDs) {
+    const ds = await loadLong();
+    if (ds) {
+      longDs = ds;
+      longState = "ready";
+    }
+  }
+  const s = longDs?.videos.find((v) => v.id === id);
+  if (!longDs || !s) {
+    toast("That video isn't in the library");
+    go({ k: "home" }, { replace: true });
+    return;
+  }
+  const list = longItems.some((x) => x.id === id) ? longItems : [s, ...longItems.filter((x) => x.id !== id)];
+  const m = await import("./watch");
+  m.openWatch({ s, list, ds: longDs });
+}
 
 /** Opens a long video on its own player page (loaded when first needed); ⏮ ⏭ follow `list`. */
 function openLong(s: Short, list: Short[]) {
@@ -113,6 +136,7 @@ function recompute(): { row: boolean; long: boolean } {
  * (that is what "▶ Play all" is for). If the library has few like it, the row's other Shorts fill the rest.
  */
 function playSimilar(s: Short, rowIndex: number) {
+  fromHome = true;
   void import("./similar").then((m) => {
     const like = m.similarInLibrary({ ds: feed.ds }, s, 40).map((r) => r.short);
     const seen = new Set([s.id, ...like.map((x) => x.id)]);
@@ -234,6 +258,7 @@ const layout = () => els.shell.parentElement as HTMLElement;
 
 export function showHome() {
   const wasOpen = isHome();
+  fromHome = false;
   layout().classList.add("is-home");
   els.home.hidden = false;
   els.tabbar.hidden = false;
@@ -260,6 +285,7 @@ export function leaveHome() {
 
 /** The Shorts tab: back to the swipe feed where it was. */
 export function openShortsFeed() {
+  fromHome = false;
   leaveHome();
   resumeFeed();
 }
@@ -273,13 +299,17 @@ function arrows() {
 }
 
 export function initHome() {
-  setBase(() => (isHome() ? { k: "home" } : { k: "feed" }));
+  setBase(() => (isHome() || fromHome ? { k: "home" } : { k: "feed" }));
   homeHook.refresh = () => renderHome();
   homeHook.leave = () => {
     leaveHome();
-    go({ k: "feed" }, { replace: true }); // the address follows what's on screen
+    go({ k: "feed" }, { replace: true, list: inList() }); // the address follows what's on screen (a list stays a list: ← and Back still lead here)
   };
-  els.homeSeeAll.onclick = () => rowItems.length && playList("Home", rowItems, 0);
+  els.homeSeeAll.onclick = () => {
+    if (!rowItems.length) return;
+    fromHome = true;
+    playList("Home", rowItems, 0);
+  };
   els.homeBtn.onclick = () => {
     go({ k: "home" });
     showHome();

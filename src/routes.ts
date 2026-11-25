@@ -4,7 +4,7 @@
  * opened on (a shared link, a refresh on /saved, …).
  */
 import { openChannel } from "./explore";
-import { isHome, openShortsFeed, showHome } from "./home";
+import { isHome, openLongById, openShortsFeed, showHome } from "./home";
 import { openSimilar } from "./similar";
 import { app, exitList, exitListQuiet, feed, playNow, savedShort } from "./feed";
 import { closePage, closePanel, currentPanelTab, openPanel, panelOpen, shownPagePath } from "./panels";
@@ -12,6 +12,21 @@ import { type Route, setFeed, toPath } from "./router";
 import { toast } from "./ui";
 
 export function showRoute(r: Route, e: { list?: boolean }) {
+  // the long-video page is open and the address moved elsewhere (Back): close it
+  const w = document.getElementById("watch");
+  if (w && !w.hidden && (r.k !== "watch" || w.dataset.vid !== r.v)) {
+    if (r.k !== "watch") void import("./watch").then((m) => m.hideWatch());
+  }
+  if (r.k === "watch") {
+    if (!isHome()) {
+      closePage();
+      closePanel();
+      showHome();
+    }
+    if (!(w && !w.hidden && w.dataset.vid === r.v)) void openLongById(r.v);
+    return;
+  }
+
   // Left a list (a channel's Shorts, History, …): the screen it came from comes back below.
   if (!e.list && feed.ctx) {
     if (r.k === "home")

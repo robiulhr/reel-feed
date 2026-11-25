@@ -4403,3 +4403,20 @@ button[aria-busy="true"] {
   grid-column: 1 / -1;
   height: 1px;
 }
+.w-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+.w-tools {
+  padding-top: 2px;
+}
+.w-save.on {
+  color: var(--accent);
+}
+@media (min-width: 700px) {
+  .w-acts {
+    padding-inline: 0;
+  }
+}

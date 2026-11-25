@@ -124,10 +124,12 @@ async function boot() {
   const linked = !!wantShort;
   // the app opens on Home (or, by your choice on this device, straight into the Shorts feed); a link to one Short or
   // a hand-over from the browser extension always goes to the feed
-  const startHome = !linked && !addAtStart.length && (opened.k === "home" || (opened.k === "feed" && openOn() === "home"));
+  const startHome =
+    !linked && !addAtStart.length && (opened.k === "home" || opened.k === "watch" || (opened.k === "feed" && openOn() === "home"));
   if (startHome) {
-    if (opened.k !== "home") go({ k: "home" }, { replace: true });
+    if (opened.k !== "home" && opened.k !== "watch") go({ k: "home" }, { replace: true });
     showHome();
+    if (opened.k === "watch") applyCurrent(); // a link to a long video: Home under it, the video on top
   } else if (wantShort && playLinked(wantShort)) wantShort = undefined;
   else {
     next();

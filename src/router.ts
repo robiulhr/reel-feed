@@ -17,6 +17,7 @@
 export type Route =
   | { k: "feed"; v?: string }
   | { k: "home" }
+  | { k: "watch"; v: string }
   | { k: "panel"; tab: string }
   | { k: "channel"; h: string }
   | { k: "similar"; id: string };
@@ -56,6 +57,7 @@ export function parse(pathname: string, base = BASE): Route {
   });
   if (a === "home" && !b) return { k: "home" };
   if (a === "v" && VIDEO_ID.test(b)) return { k: "feed", v: b };
+  if (a === "w" && VIDEO_ID.test(b)) return { k: "watch", v: b };
   if (a === "channel" && b.replace(/^@/, "")) return { k: "channel", h: b.replace(/^@/, "") }; // old links had the @
   if (a === "similar" && VIDEO_ID.test(b)) return { k: "similar", id: b };
   if (PANEL_BY_PATH[a]) return { k: "panel", tab: PANEL_BY_PATH[a] };
@@ -65,6 +67,7 @@ export function parse(pathname: string, base = BASE): Route {
 export function toPath(r: Route, base = BASE): string {
   const enc = encodeURIComponent;
   if (r.k === "home") return `${base}home`;
+  if (r.k === "watch") return `${base}w/${enc(r.v)}`;
   if (r.k === "feed") return r.v ? `${base}v/${enc(r.v)}` : base;
   if (r.k === "panel") return `${base}${PANEL_PATHS[r.tab] ?? "menu"}`;
   // no "@": Cloudflare redirects /channel/@x to /channel/%40x — an extra round trip and an ugly link
@@ -209,7 +212,7 @@ export function startRouter(handler: OnRoute): Route {
   const e = entry();
   if (first.k !== "feed" && first.k !== "home" && e.d === 0) {
     const path = location.pathname;
-    history.replaceState({ d: 0 }, "", toPath({ k: "feed" }));
+    history.replaceState({ d: 0 }, "", toPath({ k: first.k === "watch" ? "home" : "feed" })); // a long video sits on Home
     history.pushState({ d: 1 }, "", path);
   } else if (e.list || e.layer) {
     // a refresh while in a list or sheet: those aren't restored

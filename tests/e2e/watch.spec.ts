@@ -98,3 +98,53 @@ test.describe("Long-video player page", () => {
     expect(r.violations.map((v) => `${v.id}: ${v.help} → ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
   });
 });
+
+test.describe("Long-video page: address, save, share", () => {
+  test("it has its own address; Back returns to Home; a link and a refresh open it again", async ({ app: page }) => {
+    await closeTips(page);
+    const title = await openFirstLong(page);
+    await expect(page).toHaveURL(/\/w\/longvid\d+$/);
+    const url = page.url();
+    await page.getByRole("button", { name: /Next/ }).click();
+    await expect(page).toHaveURL(/\/w\/longvid\d+$/);
+    expect(page.url()).not.toBe(url);
+    await page.goBack(); // the address followed the video without adding steps: Back lands on Home
+    await expect(page.locator("#watch")).toBeHidden();
+    await expect(page.locator("#home")).toBeVisible();
+    await expect(page).toHaveURL(/\/home$/);
+
+    await page.goto(url); // a link / a refresh on a video
+    await expect(page.locator("#watch")).toBeVisible();
+    await expect(page.locator(".w-title")).toHaveText(title);
+    await page.locator(".w-bar").getByRole("button", { name: /Home/ }).click();
+    await expect(page.locator("#home")).toBeVisible();
+  });
+
+  test("Save, Topic, Share and ⋯ are there", async ({ app: page }) => {
+    await closeTips(page);
+    await openFirstLong(page);
+    const save = page.getByRole("button", { name: /Save/ });
+    await save.click();
+    await expect(page.getByRole("button", { name: /Saved/ })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: /Saved/ }).click();
+    await expect(page.getByRole("button", { name: /^♡ Save/ })).toBeVisible();
+    await page.getByRole("button", { name: /Share/ }).click();
+    await expect(page.locator(".dlg")).toContainText("Ecomgy link");
+    await page.locator(".dlg-actions").getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await expect(page.locator(".dlg")).toContainText("Add to a playlist");
+    await page.locator(".dlg-actions").getByRole("button", { name: "Close" }).click();
+    await expect(page.getByRole("button", { name: /Topic/ })).toBeVisible();
+  });
+});
+
+test("Back from a Short opened on Home returns to Home (the ← button too)", async ({ app: page }) => {
+  await closeTips(page);
+  await page.evaluate(() => localStorage.setItem("rf.openOn", "home"));
+  await gotoStart(page);
+  await page.locator("#homeRow .home-short").first().click();
+  await expect(page.locator("#home")).toBeHidden();
+  await page.locator("#ctxBack").click();
+  await expect(page.locator("#home")).toBeVisible();
+  await expect(page).toHaveURL(/\/home$/);
+});
