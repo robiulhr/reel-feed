@@ -125,6 +125,12 @@ footer {
   border-top: 1px solid var(--line);
   border-bottom: 0;
 }
+.guard-stop {
+  color: #ff8a8a;
+}
+.guard-warn {
+  color: #ffd86b;
+}
 #list li.more {
   display: grid;
   place-items: center;

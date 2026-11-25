@@ -13,11 +13,13 @@
  * /api/fb/* is answered here (worker/src/fb.ts): looking up Facebook videos you add by link.
  */
 import { handleFb } from "./fb";
+import { fbUse, spendFb } from "./fbbudget";
 import { gateLogin, gateLogout, isSignedIn, loginPage, wantsPage } from "./gate";
 
 export interface AppEnv {
   ASSETS: Fetcher;
   SYNC: Fetcher;
+  QUOTA?: KVNamespace; // the shared store: counts the app's requests to Facebook (fbbudget.ts)
 }
 
 const VIDEO_PATH = /^\/v\/([\w-]{6,20})\/?$/;
@@ -42,7 +44,21 @@ export default {
       if (wantsPage(req, url)) return loginPage();
       return Response.json({ error: "Please sign in" }, { status: 401, headers: { "Cache-Control": "no-store" } });
     }
-    if (url.pathname.startsWith("/api/fb/")) return handleFb(req, url);
+    if (url.pathname === "/api/fb/usage") {
+      // today's count of the app's requests to Facebook, for Menu → API usage
+      const [lookup, image] = await Promise.all([fbUse(env.QUOTA, "lookup"), fbUse(env.QUOTA, "image")]);
+      return Response.json({ lookup, image }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (url.pathname.startsWith("/api/fb/")) {
+      const kind = /^\/api\/fb\/(meta|page)$/.test(url.pathname) ? "lookup" : "image";
+      const spend = await spendFb(env.QUOTA, kind);
+      if (!spend.ok)
+        return Response.json(
+          { error: spend.message, retryAfter: spend.wait },
+          { status: 429, headers: { "Retry-After": String(spend.wait), "Cache-Control": "no-store" } },
+        );
+      return handleFb(req, url);
+    }
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return toSync(req, url, env);
     return env.ASSETS.fetch(req);
   },

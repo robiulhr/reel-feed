@@ -113,3 +113,22 @@ test.describe("Facebook pages in Channels", () => {
     await expect(body.locator(".ch-item")).toContainText("1 video added");
   });
 });
+
+test("Menu → API usage shows the app's Facebook requests against their limits", async ({ app: page }) => {
+  await page.route("**/api/fb/usage", (r) =>
+    r.fulfill({
+      json: {
+        lookup: { minute: 3, day: 120, limits: { minute: 40, day: 1500 } },
+        image: { minute: 10, day: 800, limits: { minute: 300, day: 5000 } },
+      },
+    }),
+  );
+  await closeTips(page);
+  await page.locator("#menuBtn").click();
+  await menuPage(page, "api");
+  const body = page.locator("#panelBody");
+  await expect(body).toContainText("Facebook requests today");
+  await expect(body).toContainText("120 / 1,500");
+  await expect(body).toContainText("3 / 40");
+  await expect(body).toContainText("800 / 5,000");
+});

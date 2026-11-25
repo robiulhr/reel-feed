@@ -12,6 +12,11 @@ binding = "ASSETS"
 not_found_handling = "single-page-application" # any page link opens the app
 run_worker_first = ["/*", "!/assets/*"]  # every request runs the password gate first (worker/src/gate.ts) — except the app's own code and styles (/assets, named by content, nothing of yours in them), which are served at once, faster
 
+# the same shared store as the sync Worker: counts the app's requests to Facebook (worker/src/fbbudget.ts)
+[[kv_namespaces]]
+binding = "QUOTA"
+id = "6b32bc97b6b643069fcd92fc65a34815"
+
 # /api/* → the sync Worker, inside Cloudflare (no extra address, no cross-site requests)
 [[services]]
 binding = "SYNC"

@@ -12,6 +12,10 @@ Chrome (or Edge) only.
 
 The side panel explains the steps itself ("How to use this"). After you change these files, click the ↻ on the extension's card in `chrome://extensions`.
 
+## A guard on the auto-scroll
+
+To keep a long session from getting your Facebook account in trouble, **Keep scrolling** counts what it does: at most about 150 steps (5–6 minutes) per run, then a 10-minute break; about 3,000 reels and 30 minutes a day in total. At 80% it warns, at the limit it stops and says when you can go on, and the panel shows today's numbers. If Facebook shows a warning of its own ("temporarily blocked", "try again later"…) it stops at once and stays off for an hour. Scrolling by hand is never limited.
+
 ## Use
 
 1. Open a Facebook page and its **Reels** tab (for example `facebook.com/nike/reels/`).

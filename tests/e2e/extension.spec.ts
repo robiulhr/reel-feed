@@ -252,6 +252,34 @@ test.describe("extension side panel: which reels are already added", () => {
     await expect(page.locator("#list li")).toHaveCount(51);
   });
 
+  test("the guard's note and meter show in the panel; the button stays off while it asks for a break", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as any;
+      const reels = Array.from({ length: 5 }, (_, i) => ({ id: String(2000000000 + i), views: 1000, viewsText: "", thumb: "", pos: i }));
+      const guard = {
+        reels: 1240,
+        ms: 12 * 60000,
+        cooldownUntil: Date.now() + 8 * 60000,
+        limits: { dayReels: 3000, dayMs: 30 * 60000, steps: 150 },
+        note: { level: "stop", text: "Take a break: you can use Keep scrolling again in 8 min." },
+      };
+      const snap = {
+        t: "reels",
+        key: "/g/",
+        running: false,
+        cap: 5000,
+        page: { name: "G", url: "https://www.facebook.com/g/", reelsTab: true },
+        reels,
+        guard,
+      };
+      w.chrome.tabs.sendMessage = async () => snap;
+    });
+    await page.goto(PANEL_URL);
+    await expect(page.locator("#guardNote")).toContainText("Take a break");
+    await expect(page.locator("#guardMeter")).toContainText("1,240 of 3,000 reels · 12 of 30 min");
+    await expect(page.locator("#scrollBtn")).toBeDisabled();
+  });
+
   test("the Show filter: all / not added yet / already added", async ({ page }) => {
     await open(page);
     await setLibrary(page, [IDS[0], IDS[1]]);

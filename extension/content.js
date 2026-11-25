@@ -26,6 +26,59 @@
   }
   const CAP = 5000; // most reels collected from one page (was 300; the panel lists 400 at a time, so a long list stays quick)
   const reels = new Map(); // id -> { id, views, viewsText, thumb, pos }
+
+  // ---- a guard on the auto-scroll, so a long session can't get your Facebook account in trouble.
+  // It counts what the auto-scroll does (steps, minutes, reels found), warns at 80%, stops at the limit
+  // and asks for a break; and stops at once if Facebook shows a warning of its own. Your own scrolling and
+  // clicking are never limited. The numbers are cautious on purpose.
+  const LIMITS = { steps: 150, dayReels: 3000, dayMs: 30 * 60000, cooldownMs: 10 * 60000, warnAt: 0.8 };
+  const FB_WARNING =
+    /temporarily (blocked|restricted|locked)|try again later|going too fast|too many requests|slow down|suspicious activity|confirm (that )?you.?re (a )?human|we limit how often|security check|আপনি খুব দ্রুত|পরে আবার চেষ্টা করুন|সাময়িকভাবে/i;
+  const dayKey = () => new Date().toLocaleDateString("en-CA");
+  let guard = { day: dayKey(), reels: 0, ms: 0, cooldownUntil: 0, reason: "" }; // today's totals (saved in the browser)
+  let guardNote = null; // { level: "warn" | "stop", text }
+  chrome.storage.local.get("guard").then((s) => {
+    if (s.guard?.day === dayKey()) guard = s.guard;
+    push();
+  });
+  const saveGuard = () => chrome.storage.local.set({ guard }).catch(() => {});
+  const minutes = (ms) => Math.max(1, Math.ceil(ms / 60000));
+  /** Facebook's own "slow down" messages (in a dialog or an alert, or a checkpoint page). */
+  function facebookWarns() {
+    if (/\/checkpoint\b/.test(location.pathname)) return true;
+    for (const el of document.querySelectorAll('[role="dialog"], [role="alertdialog"], [role="alert"]')) {
+      if (FB_WARNING.test((el.innerText || "").slice(0, 600))) return true;
+    }
+    return false;
+  }
+  function guardView() {
+    if (!running) {
+      // the note follows the state: a break that is over clears itself
+      const b = mayNotScroll();
+      if (b) guardNote = b;
+      else if (guardNote?.level === "stop") guardNote = null;
+    }
+    return {
+      reels: guard.reels,
+      ms: guard.ms,
+      limits: { dayReels: LIMITS.dayReels, dayMs: LIMITS.dayMs, steps: LIMITS.steps },
+      cooldownUntil: guard.cooldownUntil,
+      note: guardNote,
+    };
+  }
+  /** Why the auto-scroll may not start (or go on) right now, or null. */
+  function mayNotScroll() {
+    if (guard.day !== dayKey()) guard = { day: dayKey(), reels: 0, ms: 0, cooldownUntil: 0, reason: "" };
+    const wait = guard.cooldownUntil - Date.now();
+    if (wait > 0 && guard.reason === "facebook")
+      return { level: "stop", text: `Facebook showed a warning, so auto-scroll is paused for ${minutes(wait)} more min. Scroll by hand until then.` };
+    if (wait > 0) return { level: "stop", text: `Take a break: you can use Keep scrolling again in ${minutes(wait)} min. (Scrolling by hand is always fine.)` };
+    if (guard.reels >= LIMITS.dayReels)
+      return { level: "stop", text: `That's ${LIMITS.dayReels.toLocaleString()} reels collected by auto-scroll today. Stop for today, and carry on tomorrow (scrolling by hand is fine).` };
+    if (guard.ms >= LIMITS.dayMs)
+      return { level: "stop", text: `That's ${minutes(LIMITS.dayMs)} minutes of auto-scroll today. Stop for today, and carry on tomorrow (scrolling by hand is fine).` };
+    return null;
+  }
   let key = "";
   let running = false;
 
@@ -81,7 +134,7 @@
   }
 
   function snapshot() {
-    return { t: "reels", key, page: pageInfo(), reels: [...reels.values()], running, cap: CAP };
+    return { t: "reels", key, page: pageInfo(), reels: [...reels.values()], running, cap: CAP, guard: guardView() };
   }
 
   function push() {
@@ -107,20 +160,67 @@
   /** Scroll down slowly until no new reels come 3 times in a row, the cap, or Stop. */
   async function keepScrolling() {
     if (running) return;
+    const block = mayNotScroll();
+    if (block) {
+      guardNote = block;
+      return push();
+    }
+    guardNote = null;
     running = true;
     const k = key;
     push();
     let idle = 0;
+    let steps = 0;
+    let stopped = null; // why the guard ended this run
+    const started = Date.now();
+    const foundAtStart = reels.size;
+    const settle = () => {
+      // what this run used is added to today's totals
+      guard.ms += Date.now() - started;
+      guard.reels += Math.max(0, reels.size - foundAtStart);
+      if (stopped?.fb) {
+        guard.cooldownUntil = Date.now() + 60 * 60000; // Facebook said slow down: an hour off
+        guard.reason = "facebook";
+      } else if (stopped || steps >= 60) {
+        guard.cooldownUntil = Date.now() + LIMITS.cooldownMs; // a long run needs a rest
+        guard.reason = "";
+      }
+      void saveGuard();
+    };
     while (running && alive() && isReelsTab() && key === k && idle < 3 && reels.size < CAP) {
       const before = reels.size;
       window.scrollBy({ top: Math.round(window.innerHeight * (0.6 + Math.random() * 0.4)), behavior: "smooth" });
       await sleep(1500 + Math.random() * 1000);
       collect();
+      steps++;
       idle = reels.size > before ? 0 : idle + 1;
+      // the guard: Facebook's own warning, this run's limit, today's limits
+      const usedMs = guard.ms + (Date.now() - started);
+      const usedReels = guard.reels + (reels.size - foundAtStart);
+      if (facebookWarns()) {
+        stopped = { level: "stop", fb: true, text: "Facebook is showing a warning, so auto-scroll stopped. It stays off for an hour; scroll by hand until then." };
+      } else if (steps >= LIMITS.steps) {
+        stopped = { level: "stop", text: `That was a long run (${steps} steps). Take a ${minutes(LIMITS.cooldownMs)}-minute break before Keep scrolling again.` };
+      } else if (usedReels >= LIMITS.dayReels || usedMs >= LIMITS.dayMs) {
+        stopped = mayNotScrollAfter(usedReels, usedMs);
+      } else if (usedReels >= LIMITS.dayReels * LIMITS.warnAt || usedMs >= LIMITS.dayMs * LIMITS.warnAt) {
+        guardNote = { level: "warn", text: "You're close to today's limit for auto-scroll. Finish this page and take a break." };
+      }
+      if (stopped) {
+        guardNote = stopped;
+        running = false;
+      }
       push();
     }
+    settle();
     running = false;
     push();
+  }
+  /** The note for hitting a daily limit during a run. */
+  function mayNotScrollAfter(reelsUsed, msUsed) {
+    return reelsUsed >= LIMITS.dayReels
+      ? { level: "stop", text: `That's ${LIMITS.dayReels.toLocaleString()} reels collected by auto-scroll today. Stop for today, and carry on tomorrow (scrolling by hand is fine).` }
+      : { level: "stop", text: `That's ${minutes(LIMITS.dayMs)} minutes of auto-scroll today. Stop for today, and carry on tomorrow (scrolling by hand is fine).` };
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {

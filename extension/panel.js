@@ -166,6 +166,17 @@ function draw() {
   $("pageName").textContent = page?.name || "Reel Feed collector";
   $("scrollBtn").disabled = !data;
   $("scrollBtn").textContent = data?.running ? "Stop scrolling" : "Keep scrolling";
+  // The guard on the auto-scroll: what it has counted today, and why it may be asking for a break
+  const g = data?.guard;
+  const wait = g ? g.cooldownUntil - Date.now() : 0;
+  $("scrollBtn").disabled = !data || (!data.running && (g?.note?.level === "stop" && (wait > 0 || /today/.test(g.note.text))));
+  const gn = $("guardNote");
+  gn.hidden = !g?.note;
+  gn.className = `note guard-${g?.note?.level ?? "warn"}`;
+  gn.textContent = g?.note ? `${g.note.level === "stop" ? "⏸" : "⚠️"} ${g.note.text}` : "";
+  const gm = $("guardMeter");
+  gm.hidden = !g;
+  if (g) gm.textContent = `Auto-scroll today: ${g.reels.toLocaleString()} of ${g.limits.dayReels.toLocaleString()} reels · ${Math.floor(g.ms / 60000)} of ${Math.round(g.limits.dayMs / 60000)} min`;
   // With nothing to list the guide is open and the rest is hidden; once reels appear it folds away
   // (open it again any time with "How to use this").
   const empty = !data || !data.reels.length;
@@ -364,6 +375,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
 chrome.tabs.onActivated.addListener(() => void refresh());
 chrome.tabs.onUpdated.addListener((id, info) => {
   if (id === tabId && (info.status === "complete" || info.url)) void refresh();
+setInterval(() => void refresh(), 30000); // so the break countdown and today's numbers stay current
 });
 
 $("scrollBtn").onclick = () => void ask({ t: data?.running ? "stop" : "scroll" }).then(() => refresh());

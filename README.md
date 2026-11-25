@@ -355,6 +355,11 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **Sync:** `manual` and `fbPages` in user-state.json (file version 4). Older apps refuse to write the file, so they can't drop the videos you added.
 - **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
 
+## 6l. Keeping Facebook happy: limits on the app and the extension
+
+- **Extension (`extension/content.js`):** the **Keep scrolling** auto-scroll is guarded — at most about 150 steps (5–6 min) per run, then a 10-minute break; about 3,000 reels and 30 minutes a day in total. It warns at 80%, stops at the limit and says when you can go on (the panel shows *Auto-scroll today: N of 3,000 reels · M of 30 min*). If Facebook shows a warning of its own ("temporarily blocked", "try again later", a checkpoint page…) it stops at once and stays off for an hour. Scrolling by hand is never limited. The counts live in the browser, so this is a safety net for you, not a lock.
+- **Server (`worker/src/fbbudget.ts`):** the app's own requests to Facebook are counted in the shared KV store: video/page lookups **40 a minute and 1,500 a day**; pictures 300 a minute and 5,000 a day. Over a limit the request gets a 429 with a plain "Slow down… try again in N seconds" (or "today's limit is used up, it starts again at midnight UTC"). The counts show under **Menu → API usage → Facebook requests today**.
+
 ## 6k. Playback: repeat, next, sleep mode and playlists — `src/feed.ts` (`afterEnd`), `src/sleep.ts`, `src/playlists.ts`, `src/playlistdata.ts`
 
 - **When a video ends** (⋯ sheet → *When it ends*): **🔂 Repeat** (the default: it plays again, like Shorts), **⏭ Next** (goes on to the next video by itself, in the feed or in the list you're playing) or **⏹ Stop**. **🔁 Repeat list** starts a list again at its end (it switches to Next). The choice is kept on this device.

@@ -8,6 +8,7 @@ import { state } from "./store";
 import * as sync from "./sync";
 import type { Dataset, UsageRun } from "./types";
 import { el, num as n } from "./dom";
+import { BASE } from "./router";
 
 const DAILY_LIMIT = 10_000;
 const QUOTA_CONSOLE = "https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas";
@@ -185,6 +186,35 @@ function drawBudget(box: HTMLElement, q: QuotaStatus, runs: UsageRun[]) {
   box.append(tips);
 }
 
+type FbUseRow = { minute: number; day: number; limits: { minute: number; day: number } };
+/** "Facebook requests today": what the app's server asked Facebook for, against the limits that protect it. */
+async function showFacebookUse(box: HTMLElement) {
+  try {
+    const r = await fetch(`${BASE}api/fb/usage`, { cache: "no-store" });
+    if (!r.ok) return;
+    const u = (await r.json()) as { lookup: FbUseRow; image: FbUseRow };
+    box.append(el("h3", "u-h", "Facebook requests today"));
+    box.append(
+      table(
+        ["What", "Today", "This minute"],
+        [
+          ["Video and page lookups", `${n(u.lookup.day)} / ${n(u.lookup.limits.day)}`, `${u.lookup.minute} / ${u.lookup.limits.minute}`],
+          ["Pictures", `${n(u.image.day)} / ${n(u.image.limits.day)}`, `${u.image.minute} / ${u.image.limits.minute}`],
+        ],
+      ),
+    );
+    box.append(
+      el(
+        "p",
+        "ch-note",
+        "The app asks Facebook for a video's title and picture when you add one. Over these limits it says “slow down” instead, so Facebook doesn't block it.",
+      ),
+    );
+  } catch {
+    /* offline or an older server: no card */
+  }
+}
+
 export function renderUsagePanel(body: HTMLElement, ds: Dataset, ago: (sec: number) => string) {
   // The live site only contains GitHub's runs; a local copy only contains runs made on the PC.
   const runs = ds.usage ?? [];
@@ -210,6 +240,11 @@ export function renderUsagePanel(body: HTMLElement, ds: Dataset, ago: (sec: numb
     ),
   );
   body.append(hero);
+
+  // ---- the app's own requests to Facebook (video and page lookups, pictures): kept within a limit so Facebook doesn't block it
+  const fbBox = el("div", "u-fb");
+  body.append(fbBox);
+  void showFacebookUse(fbBox);
 
   // ---- budget split (filled in once the sync server answers)
   const budgetBox = el("div", "u-budget");
