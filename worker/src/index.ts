@@ -138,6 +138,8 @@ async function handle(route: string, req: Request, env: Env, cors: Cors): Promis
       return await editChannels(req, env, cors);
     case "POST /lookup":
       return json(await lookup(req, env), 200, cors);
+    case "GET /video-info":
+      return json(await videoInfo(env, new URL(req.url)), 200, cors);
     case "GET /quota":
       return json(await quotaStatus(env), 200, cors);
     case "POST /quota":
@@ -703,6 +705,20 @@ async function lookup(req: Request, env: Env) {
     await addUsed(env, used.units); // count units spent even if something failed
     throw e;
   }
+}
+
+/** A video's description (1 YouTube unit, kept for a day in the edge cache, so a repeat costs nothing). */
+async function videoInfo(env: Env, u: URL) {
+  const id = u.searchParams.get("id") ?? "";
+  if (!/^[w-]{11}$/.test(id)) throw new HttpError(400, "That isn't a video id");
+  const store = typeof caches === "undefined" ? null : (caches as unknown as { default: Cache }).default;
+  const key = new Request(`https://video-info.invalid/${id}`);
+  const hit = await store?.match(key);
+  if (hit) return (await hit.json()) as { desc: string };
+  const j = await yt(env, "videos", { part: "snippet", id }, { units: 0 });
+  const out = { desc: String(j?.items?.[0]?.snippet?.description ?? "").slice(0, 5000) };
+  await store?.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=86400" } }));
+  return out;
 }
 
 async function lookupIds(env: Env, raw: string, q: Query, search: boolean, used: { units: number }): Promise<string[]> {

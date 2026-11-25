@@ -16,6 +16,13 @@
     <link rel="preconnect" href="https://www.google.com" />
     <link rel="preload" as="script" href="https://www.youtube.com/iframe_api" />
     <title>Ecomgy Reel Feed</title>
+    <!-- opening on Home: keep the Shorts feed's bars out of sight until the app has started (no flash of the old screen) -->
+    <script>
+      try {
+        var p = location.pathname;
+        if ((p === "/" || p === "/home") && localStorage.getItem("rf.openOn") !== "feed") document.documentElement.classList.add("boot-home");
+      } catch (e) {}
+    </script>
     <!-- Link preview for the app itself; a shared Short gets its own (worker/src/app.ts) -->
     <meta name="description" content="Shorts from hand-picked business and e-commerce channels, in one feed." />
     <meta property="og:site_name" content="Ecomgy Reel Feed" />
@@ -31,6 +38,7 @@
             <div class="ctx-text"><div class="ctx-title" id="ctxTitle"></div><div class="ctx-sub" id="ctxSub"></div></div>
           </div>
           <div class="row1">
+            <img class="top-logo" src="/icon.svg" alt="Ecomgy Reel Feed" width="32" height="32" />
             <nav class="tabs" id="tabs">
               <button type="button" data-tab="foryou">For You</button>
               <button type="button" data-tab="trending">Trending</button>
@@ -85,6 +93,17 @@
           <div class="scrub-time" id="scrubTime" aria-hidden="true" hidden></div>
           <div class="progress" id="progress" title="Drag to jump"><div class="progress-line"><div id="bar"></div></div></div>
           <div class="empty" id="empty" hidden></div>
+          <div class="actions reel-actions">
+            <div class="vol-pop" id="volPop" hidden>
+              <button class="vol-mute" type="button">🔊 Mute</button>
+              <input class="vol-range" type="range" min="0" max="100" step="1" aria-label="Volume" />
+              <span class="vol-pct">100%</span>
+            </div>
+            <button type="button" class="act" id="muteBtn" aria-label="Sound: tap to mute or unmute, hold for volume" title="Sound (m) · hold for volume (+/−)"><span class="ico">🔇</span></button>
+            <button type="button" class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
+            <button type="button" class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>
+            <button type="button" class="act" id="moreBtn" aria-label="More" title="More like this, channel, hide…"><span class="ico">⋯</span></button>
+          </div>
           <div class="tips" id="tips" hidden>
             <div class="tips-card">
               <h2 class="tips-title">Quick tips</h2>
@@ -100,6 +119,7 @@
         </div>
 
         <nav class="tabbar" id="tabbar" hidden aria-label="Main">
+          <img class="tb-logo" src="/icon.svg" alt="Ecomgy Reel Feed" width="40" height="40" />
           <button type="button" data-go="home" aria-current="page"><span class="tb-ico" aria-hidden="true">⌂</span><span>Home</span></button>
           <button type="button" data-go="shorts"><span class="tb-ico" aria-hidden="true">▶</span><span>Shorts</span></button>
           <button type="button" data-go="search"><span class="tb-ico" aria-hidden="true">🔍</span><span>Search</span></button>
@@ -120,17 +140,8 @@
             <h1 id="title" class="title"></h1>
             <p id="meta" class="meta"></p>
           </div>
-          <div class="actions">
-            <div class="vol-pop" id="volPop" hidden>
-              <button class="vol-mute" type="button">🔊 Mute</button>
-              <input class="vol-range" type="range" min="0" max="100" step="1" aria-label="Volume" />
-              <span class="vol-pct">100%</span>
-            </div>
+          <div class="actions home-act">
             <button type="button" class="act act-home" id="homeBtn" aria-label="Back to Home" title="Back to Home"><span class="ico">←</span><span class="lbl">Home</span></button>
-            <button type="button" class="act" id="muteBtn" aria-label="Sound: tap to mute or unmute, hold for volume" title="Sound (m) · hold for volume (+/−)"><span class="ico">🔇</span></button>
-            <button type="button" class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
-            <button type="button" class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>
-            <button type="button" class="act" id="moreBtn" aria-label="More" title="More like this, channel, hide…"><span class="ico">⋯</span></button>
           </div>
         </footer>
       </div>

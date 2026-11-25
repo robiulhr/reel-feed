@@ -108,6 +108,21 @@ function recompute(): { row: boolean; long: boolean } {
   return out;
 }
 
+/**
+ * Tapping a Short plays it, then Shorts like it, one after another — not the rest of the row
+ * (that is what "▶ Play all" is for). If the library has few like it, the row's other Shorts fill the rest.
+ */
+function playSimilar(s: Short, rowIndex: number) {
+  void import("./similar").then((m) => {
+    const like = m.similarInLibrary({ ds: feed.ds }, s, 40).map((r) => r.short);
+    const seen = new Set([s.id, ...like.map((x) => x.id)]);
+    const fill = like.length < 8 ? rowItems.filter((x) => !seen.has(x.id)).slice(0, 8 - like.length) : [];
+    const list = [s, ...like, ...fill];
+    if (list.length < 2) return playList("Home", rowItems, rowIndex);
+    playList("More like this", list, 0);
+  });
+}
+
 // ---------- drawing ----------
 function shortCard(s: Short, i: number): HTMLElement {
   const b = el("button", "home-short");
@@ -119,7 +134,7 @@ function shortCard(s: Short, i: number): HTMLElement {
   img.decoding = "async";
   thumb(img, s.id);
   b.append(img, el("span", "home-short-t", s.t), el("span", "home-short-m", `${compact(s.v)} views`));
-  b.onclick = () => playList("Home", rowItems, i); // its name is the text on it: title, views
+  b.onclick = () => playSimilar(s, i); // its name is the text on it: title, views
   return b;
 }
 
@@ -159,18 +174,31 @@ function drawLong() {
   if (longState === "none")
     return box.replaceChildren(note("Long videos from your channels will appear here after the next daily update."));
   if (!longItems.length) return box.replaceChildren(note("No long videos match these filters."));
-  const cards = longItems.slice(0, longShown).map(longCard);
-  const rest = longItems.length - longShown;
-  if (rest > 0) {
-    const more = el("button", "btn home-showmore", `Show ${Math.min(LONG_PAGE, rest)} more`);
-    more.type = "button";
-    more.onclick = () => {
+  moreObs?.disconnect();
+  box.replaceChildren(...longItems.slice(0, longShown).map(longCard));
+  watchEnd();
+}
+
+/** The list grows by itself: when you near its end, the next videos are added (no button to tap). */
+let moreObs: IntersectionObserver | null = null;
+function watchEnd() {
+  if (longItems.length <= longShown) return;
+  const end = el("div", "home-end");
+  end.setAttribute("aria-hidden", "true");
+  els.homeLong.append(end);
+  moreObs = new IntersectionObserver(
+    (hits) => {
+      if (!hits.some((h) => h.isIntersecting)) return;
+      moreObs?.disconnect();
+      end.remove();
+      const from = longShown;
       longShown += LONG_PAGE;
-      drawLong();
-    };
-    cards.push(more);
-  }
-  box.replaceChildren(...cards);
+      els.homeLong.append(...longItems.slice(from, longShown).map(longCard));
+      watchEnd();
+    },
+    { root: els.homeScroll, rootMargin: "800px 0px" },
+  );
+  moreObs.observe(end);
 }
 
 /** Draws Home (again). Cheap when nothing changed. */

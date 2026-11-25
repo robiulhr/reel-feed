@@ -4186,7 +4186,7 @@ button[aria-busy="true"] {
   }
   /* the bottom bar becomes a rail down the left side; it stays put while you scroll */
   .is-home .tabbar {
-    top: var(--top-h);
+    top: 0; /* the rail runs the full height; the logo sits at its top */
     right: auto;
     width: 84px;
     flex-direction: column;
@@ -4195,6 +4195,19 @@ button[aria-busy="true"] {
     padding: 12px 6px;
     border-top: 0;
     border-right: 0.5px solid var(--line);
+  }
+  .tb-logo {
+    display: block;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    margin: 2px auto 10px;
+  }
+  .is-home .top {
+    margin-left: 84px; /* the rail is beside the header, not under it */
+  }
+  .is-home .top-logo {
+    display: none;
   }
   .is-home .tabbar.tb-hide {
     transform: none;
@@ -4225,7 +4238,7 @@ button[aria-busy="true"] {
   }
   .home-long {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 22px 16px;
   }
   .home-showmore {
@@ -4280,4 +4293,113 @@ button[aria-busy="true"] {
   .act.act-home {
     width: auto;
   }
+}
+
+/* long videos per row: 2 on a tablet, 3, 4 (like YouTube), 5 on very wide screens */
+@media (min-width: 1000px) {
+  .home-long {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1300px) {
+  .home-long {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (min-width: 2000px) {
+  .home-long {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+/* the logo, top left of Home on phones (on wide screens it is at the top of the rail) */
+.top-logo,
+.tb-logo {
+  display: none;
+}
+@media (max-width: 699px) {
+  .is-home .top-logo {
+    display: block;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    margin-right: 6px;
+  }
+}
+@media (min-width: 700px) {
+  .tb-logo {
+    display: block;
+  }
+}
+
+/* Shorts feed: save, share, sound and ⋯ sit on the video, top right, one below the other; the title gets the whole bottom row */
+.reel-actions {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  z-index: 9;
+  flex-direction: column;
+  gap: 10px;
+}
+.reel-actions .act {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+}
+.reel-actions .vol-pop {
+  right: calc(100% + 10px);
+  bottom: auto;
+  top: 0;
+  width: min(240px, calc(100vw - 90px));
+}
+.home-act {
+  align-self: flex-end;
+}
+
+.w-desc {
+  margin: 12px 12px 0;
+  padding: 10px 12px;
+  background: var(--panel);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.w-desc[hidden] {
+  display: none;
+}
+.w-desc-t {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.w-desc-t.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.w-desc-more {
+  background: none;
+  border: 0;
+  padding: 6px 0 0;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (min-width: 700px) {
+  .w-desc {
+    margin-inline: 0;
+  }
+}
+
+/* the app is starting and will open on Home: don't show the Shorts feed's bars for a moment */
+.boot-home .frame,
+.boot-home .bottom,
+.boot-home .side-nav,
+.boot-home .ctx-bar {
+  visibility: hidden;
+}
+.home-end {
+  grid-column: 1 / -1;
+  height: 1px;
 }

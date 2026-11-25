@@ -136,6 +136,7 @@ async function boot() {
       wantShort = undefined;
     }
   }
+  document.documentElement.classList.remove("boot-home");
   if (opened.k !== "feed" && !startHome) applyCurrent(); // opened on a menu page / channel / More like this
   if (addAtStart.length) void openBulkAdd(addAtStart); // opened from the browser extension
   startExtBridge(); // tells the extension which Facebook videos you already have (and answers its hello)

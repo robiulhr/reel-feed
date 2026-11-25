@@ -13,6 +13,7 @@ import { lengthLabel } from "./home";
 import { loadApi } from "./pool";
 import { dismiss, pushLayer } from "./router";
 import { similarInLibrary } from "./similar";
+import { call } from "./sync";
 import { MAX_NOTE, noteOf, writeNote } from "./store";
 import type { Dataset, Short } from "./types";
 import { confirmDialog, toast } from "./ui";
@@ -84,6 +85,7 @@ const here = () => cur?.list[at] ?? cur?.s;
 interface Parts {
   title: HTMLElement;
   meta: HTMLElement;
+  desc: HTMLElement;
   host: HTMLElement;
   speeds: HTMLButtonElement[];
   noteBtn: HTMLButtonElement;
@@ -118,6 +120,8 @@ function build(): Parts {
 
   const title = el("h1", "w-title");
   const meta = el("div", "w-meta");
+  const desc = el("div", "w-desc");
+  desc.hidden = true;
 
   const speedRow = el("div", "w-speeds");
   speedRow.setAttribute("role", "group");
@@ -149,7 +153,7 @@ function build(): Parts {
   const note = el("div", "w-note");
   const next = el("div", "w-next");
   const related = el("div", "w-related");
-  main.append(box, title, meta, tools, note, more);
+  main.append(box, title, meta, tools, desc, note, more);
   side.append(next, related);
   scroll.append(main, side);
 
@@ -161,7 +165,7 @@ function build(): Parts {
 
   r.append(top, scroll, bar);
   ytLink.dataset.yt = "1";
-  return { title, meta, host, speeds, noteBtn, note, next, related, prev, nextBtn, auto: autoBox, fail };
+  return { title, meta, desc, host, speeds, noteBtn, note, next, related, prev, nextBtn, auto: autoBox, fail };
 }
 
 // ---------- the player ----------
@@ -341,6 +345,38 @@ async function noteAtTime() {
   }
 }
 
+// ---------- the description (from YouTube, fetched when the page opens; 1 API unit, cached for a day) ----------
+const descCache = new Map<string, string>();
+async function loadDesc(id: string) {
+  const box = p?.desc;
+  if (!box) return;
+  box.hidden = true;
+  box.replaceChildren();
+  let text = descCache.get(id);
+  if (text === undefined) {
+    try {
+      text = (await call<{ desc: string }>(`/video-info?id=${encodeURIComponent(id)}`)).desc ?? "";
+      descCache.set(id, text);
+    } catch {
+      return; // no connection to the server: the page just has no description
+    }
+  }
+  if (!text.trim() || here()?.id !== id || !p) return;
+  const body = el("div", "w-desc-t clamped", text.trim());
+  const more = btn(
+    "Show more",
+    () => {
+      const open = body.classList.toggle("clamped");
+      more.textContent = open ? "Show more" : "Show less";
+      more.setAttribute("aria-expanded", String(!open));
+    },
+    "w-desc-more",
+  );
+  more.setAttribute("aria-expanded", "false");
+  p.desc.append(body, more);
+  p.desc.hidden = false;
+}
+
 // ---------- cards: Up next and Related ----------
 function card(s: Short, ds: Dataset, open: () => void): HTMLElement {
   const b = el("button", "home-long-card w-card");
@@ -413,6 +449,7 @@ function show(i: number) {
   paintSpeeds();
   paintNote();
   paintLists();
+  void loadDesc(s.id);
   p.noteBtn.textContent = "📝 Note at 0:00";
   root?.querySelector(".w-scroll")?.scrollTo({ top: 0 });
   const pos = savedPos(s.id);
