@@ -4,19 +4,31 @@
  * opened on (a shared link, a refresh on /saved, …).
  */
 import { openChannel } from "./explore";
+import { isHome, openShortsFeed, showHome } from "./home";
 import { openSimilar } from "./similar";
-import { app, exitList, feed, playNow, savedShort } from "./feed";
+import { app, exitList, exitListQuiet, feed, playNow, savedShort } from "./feed";
 import { closePage, closePanel, currentPanelTab, openPanel, panelOpen, shownPagePath } from "./panels";
 import { type Route, setFeed, toPath } from "./router";
 import { toast } from "./ui";
 
 export function showRoute(r: Route, e: { list?: boolean }) {
   // Left a list (a channel's Shorts, History, …): the screen it came from comes back below.
-  if (!e.list && feed.ctx) exitList(false);
+  if (!e.list && feed.ctx) {
+    if (r.k === "home")
+      exitListQuiet(); // nothing may start playing behind Home
+    else exitList(false);
+  }
 
+  if (r.k === "home") {
+    closePage();
+    closePanel();
+    showHome();
+    return;
+  }
   if (r.k === "feed") {
     closePage();
     closePanel();
+    if (isHome()) openShortsFeed(); // Back/Forward from Home to the feed: the feed carries on where it was
     setFeed(feed.cur?.id);
     return;
   }

@@ -76,6 +76,7 @@ function layered<M extends { open(): void; close(): void; isOpen(): boolean }>(m
 
 /** The page on screen (its address), so Back only re-draws a page that isn't showing already. */
 let shownPage = "";
+let pageLayer: (() => void) | null = null; // the Back step of a page that has no address (see openPage)
 export const shownPagePath = () => (pageModal.isOpen() ? shownPage : "");
 
 /** Full-screen page over the feed (channel page, More like this). `route` = its address. */
@@ -86,6 +87,13 @@ export function openPage(title: string, render: (body: HTMLElement) => void, rou
   if (route) {
     go(route);
     shownPage = toPath(route);
+  } else if (!pageModal.isOpen()) {
+    // a page without an address of its own (Search…): Back still closes it, and ✕ takes that Back step out again
+    pageLayer = pushLayer(() => {
+      pageLayer = null;
+      if (pageModal.isOpen()) pageModal.close();
+      shownPage = "";
+    });
   }
   els.pageTitle.textContent = title;
   els.page.setAttribute("aria-label", title);
@@ -98,6 +106,9 @@ export function openPage(title: string, render: (body: HTMLElement) => void, rou
 export function closePage() {
   pageModal.close();
   shownPage = "";
+  const done = pageLayer;
+  pageLayer = null;
+  done?.();
 }
 
 /** A list starts playing: get every overlay out of the way. */

@@ -3788,3 +3788,234 @@ button[aria-busy="true"] {
 .mh-grid > :last-child:nth-child(odd) {
   grid-column: 1 / -1;
 }
+
+/* ---------- Home: a Shorts row, then the long videos; a bar at the bottom (thumb reach) ---------- */
+.is-home .shell {
+  position: relative;
+}
+.is-home .frame,
+.is-home .bottom,
+.is-home .side-nav,
+.is-home .row1 .icon-btn /* search, refresh and menu are in the bottom bar; the For You / Trending / Most viewed… tabs stay */,
+.is-home .ctx-bar {
+  display: none;
+}
+.home {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.home[hidden] {
+  display: none;
+}
+.home-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 0 calc(76px + env(safe-area-inset-bottom));
+}
+.home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+}
+.home-h {
+  font-size: 17px;
+  font-weight: 700;
+}
+.home-more {
+  background: var(--chip);
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-more[hidden] {
+  display: none;
+}
+.home-row-wrap {
+  position: relative;
+}
+.home-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 12px; /* the first card keeps its left margin when the row snaps */
+  padding: 0 12px 4px;
+}
+.home-row::-webkit-scrollbar {
+  display: none;
+}
+.home-short {
+  flex: none;
+  width: 118px;
+  scroll-snap-align: start;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.home-short img {
+  width: 118px;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--panel);
+}
+.home-short-t {
+  font-size: 12px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.home-short-m {
+  font-size: 11px;
+  color: var(--muted);
+}
+.home-arrow {
+  position: absolute;
+  top: 38%;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.7);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.home-arrow[hidden] {
+  display: none;
+}
+.home-arrow.left {
+  left: 4px;
+}
+.home-arrow.right {
+  right: 4px;
+}
+@media (hover: none) {
+  .home-arrow {
+    display: none; /* on a phone you swipe the row */
+  }
+}
+.home-long {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 12px;
+}
+.home-long-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.hl-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.hl-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hl-dur {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.hl-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hl-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.home-note {
+  padding: 14px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.home-showmore {
+  align-self: center;
+  margin-top: 4px;
+}
+.tabbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-around;
+  background: var(--panel);
+  border-top: 0.5px solid var(--line);
+  padding: 6px 4px max(6px, env(safe-area-inset-bottom));
+  transition: transform 0.2s ease;
+}
+.tabbar[hidden] {
+  display: none;
+}
+.tabbar.tb-hide {
+  transform: translateY(100%);
+}
+.tabbar button {
+  flex: 1;
+  background: none;
+  border: 0;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tabbar button[aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.tb-ico {
+  font-size: 18px;
+  line-height: 1;
+}

@@ -45,7 +45,8 @@ import { initGestures } from "./gestures";
 import { initFullscreen } from "./fullscreen";
 import { currentPanelTab, initPanels, openPanel, renderControls, renderPanel, showTipsIfNew } from "./panels";
 import { applyNetwork } from "./network";
-import { applyCurrent, startRouter } from "./router";
+import { applyCurrent, go, startRouter } from "./router";
+import { initHome, openOn, showHome } from "./home";
 import { playLinked, showRoute } from "./routes";
 import { startExtBridge } from "./extbridge";
 import { openBulkAdd } from "./manual"; // Facebook videos you added: the Add dialog, the Added page, a page's screen
@@ -66,6 +67,7 @@ async function boot() {
   initGestures();
   initFullscreen();
   initPanels();
+  initHome();
   renderControls();
   renderMute();
   startVisit(Math.floor(nowSec()));
@@ -120,7 +122,13 @@ async function boot() {
   setData(first.ds, false);
   initChannels(channelsCtx());
   const linked = !!wantShort;
-  if (wantShort && playLinked(wantShort)) wantShort = undefined;
+  // the app opens on Home (or, by your choice on this device, straight into the Shorts feed); a link to one Short or
+  // a hand-over from the browser extension always goes to the feed
+  const startHome = !linked && !addAtStart.length && (opened.k === "home" || (opened.k === "feed" && openOn() === "home"));
+  if (startHome) {
+    if (opened.k !== "home") go({ k: "home" }, { replace: true });
+    showHome();
+  } else if (wantShort && playLinked(wantShort)) wantShort = undefined;
   else {
     next();
     if (wantShort && first.source !== "starter") {
@@ -128,7 +136,7 @@ async function boot() {
       wantShort = undefined;
     }
   }
-  if (opened.k !== "feed") applyCurrent(); // opened on a menu page / channel / More like this
+  if (opened.k !== "feed" && !startHome) applyCurrent(); // opened on a menu page / channel / More like this
   if (addAtStart.length) void openBulkAdd(addAtStart); // opened from the browser extension
   startExtBridge(); // tells the extension which Facebook videos you already have (and answers its hello)
   window.addEventListener("hashchange", openAddLink);

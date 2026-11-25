@@ -221,6 +221,27 @@ function renderCtxBar() {
   }
 }
 
+/** What the Home screen (home.ts) tells the feed: whether it's showing (nothing may start playing behind it) and how to redraw it. */
+export const homeHook = { open: false, refresh: () => {}, leave: () => {} };
+
+/** Back to the swipe feed: carry on with the video that was playing, or start the feed if it hasn't started. */
+export function resumeFeed() {
+  if (feed.cur) pool.play();
+  else if (!feed.ctx) {
+    const was = feed.history[feed.idx];
+    if (was) show(was);
+    else next();
+  }
+}
+
+/** Back from a list to Home: drop the list without starting the main feed behind Home. */
+export function exitListQuiet() {
+  if (!feed.ctx) return;
+  finishCurrent();
+  feed.ctx = null;
+  renderCtxBar();
+}
+
 /** Start the main feed over (new filters, refresh). */
 export function resetFeed() {
   if (feed.ctx) {
@@ -231,6 +252,10 @@ export function resetFeed() {
   feed.history = [];
   feed.queue = [];
   feed.idx = -1;
+  if (homeHook.open) {
+    homeHook.refresh(); // Home is showing: redraw it; the feed starts when you open it
+    return;
+  }
   next();
 }
 
@@ -258,6 +283,7 @@ playerHooks.onUnplayable = (code) => {
 };
 
 function show(s: Short) {
+  if (homeHook.open) homeHook.leave(); // a video is about to play: the feed must be what is on screen
   els.empty.hidden = true;
   feed.cur = s;
   resetWatch();

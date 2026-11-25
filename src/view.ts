@@ -59,6 +59,16 @@ export const els = {
   closePanel: $<HTMLButtonElement>("closePanel"),
   prevBtn: $<HTMLButtonElement>("prevBtn"),
   nextBtn: $<HTMLButtonElement>("nextBtn"),
+  homeBtn: $<HTMLButtonElement>("homeBtn"),
+  home: $("home"),
+  homeScroll: $("homeScroll"),
+  homeRow: $("homeRow"),
+  homeRowPrev: $<HTMLButtonElement>("homeRowPrev"),
+  homeRowNext: $<HTMLButtonElement>("homeRowNext"),
+  homeSeeAll: $<HTMLButtonElement>("homeSeeAll"),
+  homeLong: $("homeLong"),
+  tabbar: $("tabbar"),
+  shell: document.querySelector<HTMLElement>(".shell")!,
 };
 
 // ---------- banner (new Shorts / offline / new app version) ----------

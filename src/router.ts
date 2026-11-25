@@ -2,6 +2,7 @@
  * Page addresses + the Back button.
  *
  *   /                      the feed            /v/VIDEO_ID         the feed, on that Short (share links)
+ *   /home                  the Home page: a Shorts row and the long videos
  *   /saved, /history, …    a Menu page         /channel/handle     a channel's page (handle without @)
  *   /similar/VIDEO_ID      "More like this"
  *
@@ -13,7 +14,12 @@
  * This module only knows addresses; what each one shows is decided by routes.ts (onRoute).
  */
 
-export type Route = { k: "feed"; v?: string } | { k: "panel"; tab: string } | { k: "channel"; h: string } | { k: "similar"; id: string };
+export type Route =
+  | { k: "feed"; v?: string }
+  | { k: "home" }
+  | { k: "panel"; tab: string }
+  | { k: "channel"; h: string }
+  | { k: "similar"; id: string };
 
 /** Menu tabs and their addresses ("api" can't be /api — that's the sync server). */
 const PANEL_PATHS: Record<string, string> = {
@@ -48,6 +54,7 @@ export function parse(pathname: string, base = BASE): Route {
       return "";
     }
   });
+  if (a === "home" && !b) return { k: "home" };
   if (a === "v" && VIDEO_ID.test(b)) return { k: "feed", v: b };
   if (a === "channel" && b.replace(/^@/, "")) return { k: "channel", h: b.replace(/^@/, "") }; // old links had the @
   if (a === "similar" && VIDEO_ID.test(b)) return { k: "similar", id: b };
@@ -57,6 +64,7 @@ export function parse(pathname: string, base = BASE): Route {
 
 export function toPath(r: Route, base = BASE): string {
   const enc = encodeURIComponent;
+  if (r.k === "home") return `${base}home`;
   if (r.k === "feed") return r.v ? `${base}v/${enc(r.v)}` : base;
   if (r.k === "panel") return `${base}${PANEL_PATHS[r.tab] ?? "menu"}`;
   // no "@": Cloudflare redirects /channel/@x to /channel/%40x — an extra round trip and an ugly link
@@ -114,14 +122,20 @@ export function setFeed(id: string | undefined) {
   if (path !== location.pathname) history.replaceState(entry(), "", path);
 }
 
+/** The screen at the bottom (what closing everything above lands on): the feed, or Home while Home is showing (set by home.ts). */
+let baseOf = (): Route => ({ k: "feed" });
+export const setBase = (f: () => Route) => {
+  baseOf = f;
+};
+
 /** You closed the top screen yourself (✕, tap outside, ← back): same as pressing Back. */
 export function dismiss() {
   if (entry().d > 0) {
     history.back();
     return;
   }
-  // opened straight from a link with nothing underneath: go to the feed in place
-  history.replaceState({ d: 0 }, "", toPath({ k: "feed" }));
+  // opened straight from a link with nothing underneath: go to the bottom screen in place
+  history.replaceState({ d: 0 }, "", toPath(baseOf()));
   apply();
 }
 
@@ -193,7 +207,7 @@ export function startRouter(handler: OnRoute): Route {
   onRoute = handler;
   const first = current();
   const e = entry();
-  if (first.k !== "feed" && e.d === 0) {
+  if (first.k !== "feed" && first.k !== "home" && e.d === 0) {
     const path = location.pathname;
     history.replaceState({ d: 0 }, "", toPath({ k: "feed" }));
     history.pushState({ d: 1 }, "", path);

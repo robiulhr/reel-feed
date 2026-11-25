@@ -73,6 +73,19 @@ export const test = base.extend<{ app: Page; sync: FakeSync }>({
     await page.route("**/data/meta.json", (r) => r.fulfill({ json: { generatedAt: file.generatedAt, videos: file.videos.length } }));
     await page.route("**/data/starter.json", (r) => r.fulfill({ json: file }));
     await page.route("**/data/shorts.json", (r) => r.fulfill({ json: file }));
+    // long videos: the first videos of the library again, with other ids and a length in seconds
+    const longFile = {
+      ...file,
+      videos: file.videos
+        .slice(0, 8)
+        .map((v: unknown[], i: number) => [...v.slice(0, 14), 600 + i * 937])
+        .map((v, i) => [`longvid${String(i).padStart(4, "0")}`, ...v.slice(1)]),
+    };
+    await page.route("**/data/long.json", (r) => r.fulfill({ json: longFile }));
+    // these tests are about the Shorts feed: it opens first, as the "Open on" choice would make it (home.spec.ts picks Home)
+    await page.addInitScript(() => {
+      if (localStorage.getItem("rf.openOn") === null) localStorage.setItem("rf.openOn", "feed");
+    });
     await page.route("https://www.youtube.com/iframe_api", (r) => r.fulfill({ contentType: "text/javascript", body: FAKE_YT }));
     await page.route("https://i.ytimg.com/**", (r) => r.fulfill({ contentType: "image/png", body: PNG }));
     await page.route("https://fonts.googleapis.com/**", (r) => r.abort());

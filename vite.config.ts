@@ -86,7 +86,7 @@ function facebookLookupsInDev(): Plugin {
  * Parts loaded only when used (like "Add several at once") don't slow the start: they don't count in
  * `js`, and each has its own limit, `lazy`.
  */
-export const BUDGET_KB = { js: 68, css: 11, lazy: 10 };
+export const BUDGET_KB = { js: 72, css: 13, lazy: 10 }; // (raised for the Home page: it is the first screen now, so it can't be loaded later)
 
 function sizeBudget(): Plugin {
   return {

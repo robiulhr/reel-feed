@@ -48,6 +48,23 @@
           </div>
         </header>
 
+        <!-- Home: a Shorts row, then the long videos; shown instead of the feed (.shell.is-home) -->
+        <section class="home" id="home" hidden aria-label="Home">
+          <div class="home-scroll" id="homeScroll">
+            <div class="home-head">
+              <h2 class="home-h">Shorts</h2>
+              <button type="button" class="home-more" id="homeSeeAll">▶ Play all</button>
+            </div>
+            <div class="home-row-wrap">
+              <button type="button" class="home-arrow left" id="homeRowPrev" aria-label="Scroll Shorts left" hidden>‹</button>
+              <div class="home-row" id="homeRow" role="list"></div>
+              <button type="button" class="home-arrow right" id="homeRowNext" aria-label="Scroll Shorts right" hidden>›</button>
+            </div>
+            <div class="home-head"><h2 class="home-h">Long videos</h2></div>
+            <div class="home-long" id="homeLong"></div>
+          </div>
+        </section>
+
         <div class="frame" id="frame">
           <div class="track" id="track">
             <img class="peek peek-prev" id="peekPrev" alt="" />
@@ -79,6 +96,13 @@
           </div>
         </div>
 
+        <nav class="tabbar" id="tabbar" hidden aria-label="Main">
+          <button type="button" data-go="home" aria-current="page"><span class="tb-ico" aria-hidden="true">⌂</span><span>Home</span></button>
+          <button type="button" data-go="shorts"><span class="tb-ico" aria-hidden="true">▶</span><span>Shorts</span></button>
+          <button type="button" data-go="search"><span class="tb-ico" aria-hidden="true">🔍</span><span>Search</span></button>
+          <button type="button" data-go="menu"><span class="tb-ico" aria-hidden="true">☰</span><span>Menu</span></button>
+        </nav>
+
         <footer class="bottom">
           <div class="chip-row">
             <button type="button" class="note-chip" id="noteBtn" aria-label="Add note on this video" title="Note (n)" hidden><span class="note-ico" aria-hidden="true">📝</span><span class="note-txt">Add note</span></button>
@@ -99,6 +123,7 @@
               <input class="vol-range" type="range" min="0" max="100" step="1" aria-label="Volume" />
               <span class="vol-pct">100%</span>
             </div>
+            <button type="button" class="act" id="homeBtn" aria-label="Home" title="Home"><span class="ico">⌂</span></button>
             <button type="button" class="act" id="muteBtn" aria-label="Sound: tap to mute or unmute, hold for volume" title="Sound (m) · hold for volume (+/−)"><span class="ico">🔇</span></button>
             <button type="button" class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
             <button type="button" class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>
