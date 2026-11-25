@@ -45,6 +45,32 @@ describe("spending the Facebook budget", () => {
     expect((await spendFb(kv, "image", NOW)).ok).toBe(true);
   });
 
+  it("barely writes to the store (the free plan allows 1,000 writes a day, and saved data needs them), and a full store never breaks it", async () => {
+    const inner = kvOf();
+    let puts = 0;
+    let full = false;
+    const kv = {
+      get: (k: string) => inner.get(k),
+      put: async (k: string, v: string, o?: unknown) => {
+        if (full) throw new Error("KV put() limit exceeded for the day.");
+        puts++;
+        return inner.put(k, v, o as never);
+      },
+    } as unknown as KVNamespace;
+    let t = NOW;
+    for (let i = 0; i < 200; i++) {
+      expect((await spendFb(kv, "lookup", t)).ok).toBe(true);
+      t += 2000;
+    }
+    for (let i = 0; i < 500; i++) {
+      expect((await spendFb(kv, "image", t)).ok).toBe(true);
+      t += 250; // 240 a minute, under the limit
+    }
+    expect(puts).toBeLessThan(40); // 200 lookups + 500 pictures used to be 1,400 writes
+    full = true;
+    for (let i = 0; i < 30; i++) expect((await spendFb(kv, "lookup", t + 120_000 + i * 2000)).ok).toBe(true);
+  });
+
   it("reports the counts, and with no store nothing is limited", async () => {
     const kv = kvOf();
     await spendFb(kv, "lookup", NOW);

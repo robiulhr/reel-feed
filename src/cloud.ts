@@ -6,6 +6,7 @@
 import { ago, btn, el } from "./dom";
 import { state } from "./store";
 import * as sync from "./sync";
+import { busy, toast, toastError } from "./ui";
 
 export type CloudKind = "off" | "ok" | "saving" | "error" | "local";
 export interface Cloud {
@@ -25,6 +26,11 @@ export function cloudState(): Cloud {
       ? { kind: "local", text: "⚠️ Not backed up: sync isn't connected, so your videos and notes exist only in this browser." }
       : { kind: "off", text: "" };
   }
+  if (st.busy && st.lastError) {
+    // a retry is under way: say so instead of repeating the old failure
+    const n = st.unsaved ? ` ${plural(st.unsaved, "change")}` : " your changes";
+    return { kind: "saving", text: `☁️ Trying again to save${n}…` };
+  }
   if (st.lastError && st.pending) {
     const n = st.unsaved ? ` — ${plural(st.unsaved, "change")} not saved yet` : "";
     return { kind: "error", text: `⚠️ Couldn't reach the cloud${n}. Trying again…` };
@@ -32,6 +38,14 @@ export function cloudState(): Cloud {
   if (st.busy || st.unsaved)
     return { kind: "saving", text: st.unsaved ? `☁️ Saving ${plural(st.unsaved, "change")} to the cloud…` : "☁️ Saving to the cloud…" };
   return { kind: "ok", text: `☁️ All saved to the cloud${st.lastSync ? ` · checked ${ago(st.lastSync / 1000)}` : ""}` };
+}
+
+/** "Retry now": the button shows it's working, and you're told how it went (saved, or the reason it still can't). */
+async function retryNow(button: HTMLButtonElement) {
+  await busy(button, "Trying…", () => sync.syncNow());
+  const st = sync.status();
+  if (st.lastError) toastError(`Still can't save: ${st.lastError}`);
+  else toast("☁️ Saved to the cloud ✓");
 }
 
 let connectHook: (() => void) | undefined;
@@ -50,7 +64,7 @@ export function cloudLine(): HTMLElement {
     box.hidden = c.kind === "off";
     box.replaceChildren(el("span", "", c.text));
     if (c.kind === "local") box.append(btn("Connect", () => connectHook?.(), "btn sm primary"));
-    if (c.kind === "error") box.append(btn("Retry now", () => void sync.syncNow(), "btn sm"));
+    if (c.kind === "error") box.append(btn("Retry now", (b) => void retryNow(b), "btn sm"));
   };
   let attached = false;
   let off: () => void = () => {};
