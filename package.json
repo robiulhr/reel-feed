@@ -6,6 +6,7 @@
   "scripts": {
     "fetch": "tsx scripts/fetch.ts",
     "fetch:deep": "tsx scripts/fetch.ts --deep",
+    "fetch:long": "tsx scripts/fetchlong.ts",
     "dev": "vite --host",
     "build": "vite build",
     "typecheck": "tsc --noEmit",

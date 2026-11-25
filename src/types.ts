@@ -33,6 +33,7 @@ export interface Short {
   lg: Lang; // language
   g: boolean; // categories guessed from the channel (the video's own text said nothing)
   fb?: { url: string; note: string; lists: string[]; by: string }; // a Facebook video you added (id "fb…"; p = when added, v/l = views/reactions then)
+  d?: number; // length in seconds — only on long videos (long.json); Shorts don't have it
 }
 
 /** One Shorts refresh and the YouTube API units it spent (written by scripts/fetch.ts). */

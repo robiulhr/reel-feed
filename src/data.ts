@@ -104,6 +104,7 @@ export function parse(raw: RawData): Dataset {
             g: a[13] === 1,
           }
         : { k: channels[a[1]]?.cats ?? [], lg: detectLang(a[2], "", channels[a[1]]?.bn), g: true }),
+      ...(typeof a[14] === "number" && a[14] > 0 ? { d: a[14] } : {}), // long videos carry their length
     })),
   };
 }
@@ -188,6 +189,41 @@ export async function checkForUpdate(current: number, onNew: (ds: Dataset) => vo
   } catch {
     return navigator.onLine ? "same" : "offline";
   }
+}
+
+const LONG_KEY = "long";
+let longLoading: Promise<Dataset | null> | undefined;
+
+/**
+ * The long videos (data/long.json), loaded only when something needs them so the first start stays as fast as
+ * before. The copy saved on this device answers at once; a newer one from the server is saved and handed to
+ * `onFresh`. Null when there are none yet (the daily job hasn't produced the file, or you're offline the first time).
+ */
+export function loadLong(onFresh?: (ds: Dataset) => void): Promise<Dataset | null> {
+  longLoading ??= (async () => {
+    const saved = await idbGet<RawData>(LONG_KEY);
+    const fetchNew = async () => {
+      try {
+        const raw = await getRetry<RawData>(`${BASE}data/long.json`, 15000, 2);
+        if (!raw?.videos?.length) return null;
+        if (saved && raw.generatedAt <= saved.generatedAt) return null;
+        await idbSet(LONG_KEY, raw);
+        return parse(raw);
+      } catch {
+        return null; // no file yet, or offline
+      }
+    };
+    if (saved?.videos?.length) {
+      void fetchNew().then((ds) => {
+        if (ds) onFresh?.(ds);
+      });
+      return parse(saved);
+    }
+    return fetchNew();
+  })().finally(() => {
+    longLoading = undefined; // a later call asks again (it's cheap: the saved copy answers)
+  });
+  return longLoading;
 }
 
 /** Slow connection? (Network Information API where available, e.g. Chrome on Android.) */

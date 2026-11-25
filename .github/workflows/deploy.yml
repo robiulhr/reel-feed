@@ -82,6 +82,14 @@ jobs:
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
 
+      # The long videos of the same channels (public/data/long.json). Separate from the Shorts refresh, so if it
+      # ever fails (or the day's quota is gone) the Shorts still deploy; the app then simply has no long videos yet.
+      - name: Fetch long videos from YouTube
+        run: npm run fetch:long
+        continue-on-error: true
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+
       - uses: actions/cache/save@v6
         if: always() # keep the cache (and the API usage log) even if the fetch failed
         with:
