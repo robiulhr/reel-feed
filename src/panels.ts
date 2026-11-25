@@ -157,6 +157,10 @@ export function renderPanel() {
     void import("./notes").then((m) => {
       if (panelTab === "notes" && mine === drawn) m.renderNotesPage(body, () => openPanel("notes"));
     });
+  else if (panelTab === "playlists")
+    void import("./playlists").then((m) => {
+      if (panelTab === "playlists" && mine === drawn) m.renderPlaylistsPage(body, () => openPanel("playlists"), app);
+    });
   else if (panelTab === "topics")
     void import("./topics").then((m) => {
       if (panelTab === "topics" && mine === drawn) m.renderTopicsPage(body, () => openPanel("topics"), app);
@@ -456,10 +460,31 @@ function renderSpeedRow() {
   });
 }
 
+/** The "When it ends" and "Repeat list" buttons show what is chosen. */
+function renderEndRow() {
+  for (const b of els.moreSheet.querySelectorAll<HTMLButtonElement>("button[data-m]")) {
+    const on = b.dataset.m === state.endMode;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  }
+  const lr = els.moreSheet.querySelector<HTMLButtonElement>("button[data-lr]");
+  if (lr) {
+    lr.classList.toggle("on", state.listRepeat);
+    lr.setAttribute("aria-pressed", String(state.listRepeat));
+  }
+}
+
+/**
+ * Runs `open` a moment after the ⋯ sheet closed. The sheet closes by going back one step in the history;
+ * a dialog that opened just before that step arrived would be closed by it (code already loaded = instant).
+ */
+const afterSheet = (open: () => Promise<unknown>) => new Promise<void>((r) => setTimeout(r, 160)).then(open);
+
 function bindSheet() {
   els.moreBtn.onclick = () => {
     if (feed.cur) {
       renderSpeedRow();
+      renderEndRow();
       renderSheetFor(feed.cur);
       sheetModal.open();
     }
@@ -469,6 +494,28 @@ function bindSheet() {
     if (rateBtn) {
       setRate(Number(rateBtn.dataset.r));
       renderSpeedRow();
+      return;
+    }
+    const modeBtn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-m]");
+    if (modeBtn) {
+      state.endMode = modeBtn.dataset.m as typeof state.endMode;
+      persist();
+      renderEndRow();
+      toast(
+        state.endMode === "loop"
+          ? "Each video repeats"
+          : state.endMode === "next"
+            ? "Plays the next one when a video ends"
+            : "Stops when a video ends",
+      );
+      return;
+    }
+    if ((e.target as HTMLElement).closest("button[data-lr]")) {
+      state.listRepeat = !state.listRepeat;
+      if (state.listRepeat) state.endMode = "next"; // repeating a list means going from one to the next
+      persist();
+      renderEndRow();
+      toast(state.listRepeat ? "Lists start again at the end" : "Lists stop at the end");
       return;
     }
     const a = (e.target as HTMLElement).closest("button")?.dataset.a;
@@ -487,6 +534,8 @@ function bindSheet() {
       const m = state.manual.find((x) => `fb${x.id}` === cur.id);
       if (m) deleteManual(m, () => {});
     } else if (a === "lists") listCurrentChannel(cur);
+    else if (a === "sleep") void afterSheet(() => import("./sleep").then((m) => m.openSleep()));
+    else if (a === "playlist") void afterSheet(() => import("./playlists").then((m) => m.pickPlaylist(cur)));
     else if (a === "hide") hideChannel();
     else if (a === "open")
       cur.fb ? openOnFacebook(cur.fb.url) : window.open(`https://www.youtube.com/shorts/${cur.id}`, "_blank", "noopener");

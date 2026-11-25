@@ -65,10 +65,10 @@ describe("notes", () => {
     expect(s.notes.v1.x).toHaveLength(MAX_NOTE);
   });
 
-  it("goes to the GitHub file (version 7) and back; broken entries are dropped", () => {
+  it("goes to the GitHub file (version 8) and back; broken entries are dropped", () => {
     applyOp(s, { t: "note", id: "v1", x: "keep", at: 10, ti: "T" });
     const file = JSON.parse(JSON.stringify(toFile(s)));
-    expect(file.v).toBe(7);
+    expect(file.v).toBe(8);
     expect(fromFile(file).notes).toEqual({ v1: { x: "keep", at: 10, ti: "T" } });
     expect(normNotes({ ok: { x: "yes", at: 1 }, empty: { x: "  ", at: 2 }, bad: 5, "": { x: "no id", at: 1 } })).toEqual({
       ok: { x: "yes", at: 1, ti: "" },

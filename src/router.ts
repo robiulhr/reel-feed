@@ -23,6 +23,7 @@ const PANEL_PATHS: Record<string, string> = {
   saved: "saved",
   notes: "notes",
   topics: "topics",
+  playlists: "playlists",
   activity: "activity",
   added: "added",
   sorting: "sorting",

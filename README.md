@@ -355,6 +355,12 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **Sync:** `manual` and `fbPages` in user-state.json (file version 4). Older apps refuse to write the file, so they can't drop the videos you added.
 - **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
 
+## 6k. Playback: repeat, next, sleep mode and playlists — `src/feed.ts` (`afterEnd`), `src/sleep.ts`, `src/playlists.ts`, `src/playlistdata.ts`
+
+- **When a video ends** (⋯ sheet → *When it ends*): **🔂 Repeat** (the default: it plays again, like Shorts), **⏭ Next** (goes on to the next video by itself, in the feed or in the list you're playing) or **⏹ Stop**. **🔁 Repeat list** starts a list again at its end (it switches to Next). The choice is kept on this device.
+- **🌙 Sleep timer & dim screen** (⋯ sheet): stop after 15–120 minutes, with no timer, or when the list ends. The volume fades out over the last 20 seconds. The screen is kept awake (Screen Wake Lock — a locked phone stops the embedded players) and can be dimmed to a black screen with a small clock; tap it to show **☀ Wake up · +15 min · Stop**. Pick *Repeat* or *Next* so it doesn't stop earlier. Leave the phone on charge.
+- **Playlists** (Menu → Playlists; synced, file version 8): make one, add videos from a video's ⋯ → **🎵 Add to a playlist**, put them in order with ▲ ▼, remove, **▶ Play** (from the start or from a video), **🔁 Repeat playlist**, **🔀 Shuffle**, **🌙 Sleep timer**, Rename, Delete (with Undo). Playing a playlist switches *When it ends* to Next.
+
 ## 6j. Editing several videos at once — `src/bulkedit.ts`, `selectableGrid` in `src/explore.ts`
 
 On a **Facebook page's screen** and on a **YouTube channel's screen** (when the channel is in your library) there is a **☑ Select videos** button above the grid. Tap videos to pick them (a tick shows on each; **All**, **None** and **Cancel** are there too), then **✎ Edit N**:

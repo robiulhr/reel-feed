@@ -115,6 +115,41 @@ export function next() {
   show(feed.history[feed.idx]);
 }
 
+/**
+ * A video finished: play it again (the default, like Shorts), go to the next one, or stop — as chosen under
+ * ⋯ → When it ends. In a list, "Repeat list" starts it over at the end. Returns false when it should repeat.
+ */
+/** Set by sleep mode when it should stop at the end of the list that is playing. */
+export const sleepGate = { atListEnd: false };
+
+export function afterEnd(): boolean {
+  if (state.endMode === "loop") return false;
+  if (state.endMode === "stop") {
+    pool.pause();
+    return true;
+  }
+  const ctx = feed.ctx;
+  if (ctx && ctx.i >= ctx.items.length - 1) {
+    window.dispatchEvent(new Event("reel-list-ended"));
+    if (sleepGate.atListEnd) {
+      pool.pause();
+      return true;
+    }
+    if (state.listRepeat && ctx.items.length) {
+      finishCurrent();
+      ctx.i = 0;
+      show(ctx.items[0]);
+      return true;
+    }
+    pool.pause();
+    toast("That was the last one in the list");
+    return true;
+  }
+  next();
+  return true;
+}
+playerHooks.onVideoEnded = afterEnd;
+
 export function prev() {
   const ctx = feed.ctx;
   if (ctx) {

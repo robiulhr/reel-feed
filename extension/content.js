@@ -24,7 +24,7 @@
     observer?.disconnect();
     if (window.__reelFeedCollector?.alive === alive) window.__reelFeedCollector = null;
   }
-  const CAP = 300; // most reels collected from one page
+  const CAP = 2000; // most reels collected from one page (was 300: pages have many more; Select top 60 new makes a long list easy)
   const reels = new Map(); // id -> { id, views, viewsText, thumb, pos }
   let key = "";
   let running = false;

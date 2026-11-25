@@ -68,7 +68,7 @@ describe("added Facebook videos", () => {
     const back = fromFile(JSON.parse(JSON.stringify(toFile(st))));
     expect(back.manual.map((m) => m.id)).toEqual(["2222222222"]);
     expect(back.fbPages).toEqual([page()]);
-    expect(toFile(st).v).toBe(7);
+    expect(toFile(st).v).toBe(8);
     expect(fromFile({ v: 4, manual: [{ id: "x" }, video("3333333333")] } as never).manual.map((m) => m.id)).toEqual(["3333333333"]);
 
     const base = emptyShared();
@@ -78,8 +78,8 @@ describe("added Facebook videos", () => {
     expect(base.fbPages.map((p) => p.key)).toEqual(["fb:boost"]);
   });
 
-  it("a file from a newer app is refused, not overwritten (this app writes version 7)", () => {
-    expect(() => fromFile({ v: 8 } as never)).toThrow();
+  it("a file from a newer app is refused, not overwritten (this app writes version 8)", () => {
+    expect(() => fromFile({ v: 9 } as never)).toThrow();
   });
 
   it("join the library as Shorts: their own Facebook page, or the YouTube channel you linked", () => {

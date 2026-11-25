@@ -82,8 +82,7 @@ function watch(id) {
     const f = document.createElement("iframe");
     f.src = `${APP}embed/fb?id=${encodeURIComponent(id)}`; // (the site answers /embed/fb.html with a redirect to this)
     f.title = "Facebook reel";
-    f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-    f.allowFullscreen = true;
+    f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; // (the allow list already covers fullscreen: Chrome warns if allowFullscreen is set too)
     const row = document.createElement("div");
     row.className = "row";
     const win = document.createElement("button");

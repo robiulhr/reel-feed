@@ -17,7 +17,7 @@ The side panel explains the steps itself ("How to use this"). After you change t
 1. Open a Facebook page and its **Reels** tab (for example `facebook.com/nike/reels/`).
 2. Click the extension's button: the side panel opens and lists the reels on screen.
 3. Scroll the page to load more, or click **Keep scrolling**. It scrolls this one page slowly
-   (every 1.5–2.5 s), stops when nothing new comes 3 times in a row, at 300 reels, or when you
+   (every 1.5–2.5 s), stops when nothing new comes 3 times in a row, at 2,000 reels, or when you
    click **Stop scrolling**. It never runs by itself or in the background.
 4. Narrow it down: **Min views** (e.g. `10K`, `1.5M`), **Sort** (page order, most or fewest views),
    **Search** (titles, captions, ids). Each reel shows its title and caption as they arrive.

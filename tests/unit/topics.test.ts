@@ -125,10 +125,10 @@ describe("topics: cleaning and merging", () => {
 });
 
 describe("topics: in the synced file", () => {
-  it("go to the file (version 7) and back; an older file without topics still loads", () => {
+  it("go to the file (version 8) and back; an older file without topics still loads", () => {
     applyOp(s, { t: "topicNote", id: "t1", n: { i: "n1", x: "keep me", at: T0 + 1 } });
     const file = toFile(s);
-    expect(file.v).toBe(7);
+    expect(file.v).toBe(8);
     const back = fromFile(JSON.parse(JSON.stringify(file)));
     expect(back.topics[0].notes[0].x).toBe("keep me");
     expect(fromFile({ v: 6, saved: ["x"] } as never).topics).toEqual([]);

@@ -2882,6 +2882,113 @@ button[aria-busy="true"] {
   overflow-wrap: anywhere;
 }
 
+/* ---------- playlists and sleep mode ---------- */
+.pl-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--chip);
+}
+.pl-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pl-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.pl-opts {
+  margin: 8px 0;
+}
+.pl-rows {
+  display: flex;
+  flex-direction: column;
+}
+.sleep-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  background: #000;
+  color: #7a7a7a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+.sleep-clock {
+  font-size: 44px;
+  font-weight: 300;
+  letter-spacing: 2px;
+}
+.sleep-left,
+.sleep-hint {
+  font-size: 14px;
+}
+.sleep-hint {
+  position: absolute;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  font-size: 12px;
+  color: #4a4a4a;
+}
+.sleep-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  opacity: 0;
+  pointer-events: none;
+}
+.sleep-screen.show-btns .sleep-btns {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sleep-pill {
+  position: fixed;
+  left: 12px;
+  bottom: calc(var(--bottom-h) + 70px);
+  z-index: 80;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 20, 30, 0.9);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+.sleep-dim {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.sleep-dim input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.sleep-btns-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* ---------- topics ---------- */
 /* the note and topic chips share one line; a long note (or topic name) is cut with … instead of wrapping */
 .chip-row {

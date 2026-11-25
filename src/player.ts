@@ -38,6 +38,8 @@ export const playerHooks = {
   onPlaying: () => {},
   onSoundBlocked: () => {},
   onSoundUnlocked: () => {},
+  /** A video ended. Return true when the feed took care of it (went on, or stopped); false = play it again. */
+  onVideoEnded: (): boolean => false,
 };
 
 export function stopClock() {
@@ -72,10 +74,11 @@ export const pool = new PlayerPool(
       showSpinner(true);
     },
     onEnded() {
-      // Loop like Shorts do. A replay is a strong "I like this" signal.
+      // Loop like Shorts do (unless you chose Next or Stop). A replay is a strong "I like this" signal.
       stopClock();
-      playback.watch.loops++;
       playback.watch.maxT = pool.duration();
+      if (playerHooks.onVideoEnded()) return;
+      playback.watch.loops++;
       pool.restart();
     },
     onError(code) {
