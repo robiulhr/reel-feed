@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { closeTips, expect, menuPage, swipe, test } from "./fixtures";
+import { closeTips, expect, menuPage, reload, swipe, test } from "./fixtures";
 
 /** The video on screen finishes (the test player's "ended" event). */
 const endVideo = (page: Page) =>
@@ -48,7 +48,7 @@ test.describe("when a video ends", () => {
   test("the choice is remembered after a reload", async ({ app: page }) => {
     await closeTips(page);
     await setEnd(page, /^⏭ Next/);
-    await page.reload();
+    await reload(page);
     await closeTips(page);
     await more(page);
     await expect(page.locator("#moreSheet").getByRole("button", { name: /^⏭ Next/ })).toHaveAttribute("aria-pressed", "true");
