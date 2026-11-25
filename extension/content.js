@@ -24,7 +24,7 @@
     observer?.disconnect();
     if (window.__reelFeedCollector?.alive === alive) window.__reelFeedCollector = null;
   }
-  const CAP = 2000; // most reels collected from one page (was 300: pages have many more; Select top 60 new makes a long list easy)
+  const CAP = 5000; // most reels collected from one page (was 300; the panel lists 400 at a time, so a long list stays quick)
   const reels = new Map(); // id -> { id, views, viewsText, thumb, pos }
   let key = "";
   let running = false;

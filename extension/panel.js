@@ -5,6 +5,8 @@
  */
 const APP = "https://reel-feed.robiulhr2201.workers.dev/";
 const MAX_SEND = 60; // the app adds up to 60 at a time
+const PAGE_ROWS = 400; // reels drawn in the list at once (the rest are one tap away); picking and filtering use them all
+let rows = PAGE_ROWS;
 
 const $ = (id) => document.getElementById(id);
 let tabId = null;
@@ -213,10 +215,11 @@ function draw() {
     `This page's ids (first 3): ${sample(data.reels.map((r) => r.id))}`,
   ].join("\n");
   const list = shown();
-  void fillInfo(list);
+  const visible = list.slice(0, rows);
+  void fillInfo(visible); // titles are looked up for the rows on screen only
   const counts = () => `${list.length} shown · ${picked.size} selected`;
   $("counts").textContent = counts();
-  const items = list.map((r) => {
+  const items = visible.map((r) => {
     const isAdded = added.has(r.id);
     const li = document.createElement("li");
     li.className = isAdded ? "added" : picked.has(r.id) ? "on" : "";
@@ -272,6 +275,19 @@ function draw() {
     li.append(label, play);
     return li;
   });
+  if (list.length > visible.length) {
+    const li = document.createElement("li");
+    li.className = "more";
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = `Show ${Math.min(PAGE_ROWS, list.length - visible.length)} more (${list.length - visible.length} not drawn)`;
+    b.onclick = () => {
+      rows += PAGE_ROWS;
+      draw();
+    };
+    li.append(b);
+    items.push(li);
+  }
   ul.replaceChildren(...items);
   updateSend();
 }
@@ -351,7 +367,11 @@ chrome.tabs.onUpdated.addListener((id, info) => {
 });
 
 $("scrollBtn").onclick = () => void ask({ t: data?.running ? "stop" : "scroll" }).then(() => refresh());
-for (const id of ["search", "minViews", "sort", "show"]) $(id).addEventListener("input", draw);
+for (const id of ["search", "minViews", "sort", "show"])
+  $(id).addEventListener("input", () => {
+    rows = PAGE_ROWS; // a new filter starts the list from the top again
+    draw();
+  });
 // The most viewed reels that aren't added yet (among those the filters show), as many as Reel Feed adds at once.
 // Add them, and the next press picks the next 60: the ones just added are marked and skipped.
 $("topBtn").textContent = `Select top ${MAX_SEND} new`;

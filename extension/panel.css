@@ -125,6 +125,11 @@ footer {
   border-top: 1px solid var(--line);
   border-bottom: 0;
 }
+#list li.more {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+}
 #list li {
   display: flex;
   gap: 6px;

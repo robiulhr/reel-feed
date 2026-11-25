@@ -221,6 +221,37 @@ test.describe("extension side panel: which reels are already added", () => {
     await expect(page.locator("#sendBtn")).toHaveText("Add 1 to Reel Feed");
   });
 
+  test("a long list (450 reels) is drawn 400 at a time; Select top 60 and the filters still use all of them", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as any;
+      const reels = Array.from({ length: 450 }, (_, i) => ({
+        id: String(1000000000 + i),
+        views: (i + 1) * 1000,
+        viewsText: "",
+        thumb: "",
+        pos: i,
+      }));
+      const snap = {
+        t: "reels",
+        key: "/big/",
+        running: false,
+        cap: 5000,
+        page: { name: "Big", url: "https://www.facebook.com/big/", reelsTab: true },
+        reels,
+      };
+      w.chrome.tabs.sendMessage = async () => snap; // (this runs after the base setup above)
+    });
+    await page.goto(PANEL_URL);
+    await expect(page.locator("#list li")).toHaveCount(401); // 400 reels and the "Show more" row
+    await expect(page.locator("#counts")).toContainText("450 shown");
+    await page.getByRole("button", { name: /^Show 50 more/ }).click();
+    await expect(page.locator("#list li")).toHaveCount(450);
+    await page.getByRole("button", { name: "Select top 60 new" }).click();
+    await expect(page.locator("#sendBtn")).toHaveText("Add 60 to Reel Feed");
+    await page.locator("#minViews").fill("400K");
+    await expect(page.locator("#list li")).toHaveCount(51);
+  });
+
   test("the Show filter: all / not added yet / already added", async ({ page }) => {
     await open(page);
     await setLibrary(page, [IDS[0], IDS[1]]);
