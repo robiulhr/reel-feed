@@ -185,13 +185,16 @@ function bindTouch() {
   tap.addEventListener("mouseleave", () => endHold());
 }
 
+/** Home or the long-video page is on screen: the feed's wheel and keys must leave it alone (scrolling Home must not start the Shorts feed). */
+const onOtherScreen = () => !els.home.hidden || document.getElementById("watch")?.hidden === false;
+
 function bindWheel() {
   let wheelAcc = 0,
     wheelLock = 0;
   window.addEventListener(
     "wheel",
     (e) => {
-      if (anyModalOpen() || !els.tips.hidden) return;
+      if (anyModalOpen() || !els.tips.hidden || onOtherScreen()) return;
       const t = Date.now();
       if (t < wheelLock) return;
       wheelAcc += e.deltaY;
@@ -209,6 +212,7 @@ function bindWheel() {
 function bindKeys() {
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return; // browser shortcuts
+    if (onOtherScreen()) return;
     if (anyModalOpen()) return;
     const target = e.target as HTMLElement;
     if (["SELECT", "INPUT", "TEXTAREA"].includes(target.tagName)) return;

@@ -65,6 +65,9 @@
           </div>
         </section>
 
+        <!-- the long-video player page (src/watch.ts fills it); it sits over Home -->
+        <section class="watch" id="watch" hidden aria-label="Video"></section>
+
         <div class="frame" id="frame">
           <div class="track" id="track">
             <img class="peek peek-prev" id="peekPrev" alt="" />
@@ -123,7 +126,7 @@
               <input class="vol-range" type="range" min="0" max="100" step="1" aria-label="Volume" />
               <span class="vol-pct">100%</span>
             </div>
-            <button type="button" class="act" id="homeBtn" aria-label="Home" title="Home"><span class="ico">⌂</span></button>
+            <button type="button" class="act act-home" id="homeBtn" aria-label="Back to Home" title="Back to Home"><span class="ico">←</span><span class="lbl">Home</span></button>
             <button type="button" class="act" id="muteBtn" aria-label="Sound: tap to mute or unmute, hold for volume" title="Sound (m) · hold for volume (+/−)"><span class="ico">🔇</span></button>
             <button type="button" class="act" id="saveBtn" aria-label="Save" title="Save (s)"><span class="ico">♡</span></button>
             <button type="button" class="act" id="shareBtn" aria-label="Share link" title="Share link"><span class="ico">⤴</span></button>

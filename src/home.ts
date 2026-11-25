@@ -51,12 +51,12 @@ let lastTop = 0;
 
 export const isHome = () => !els.home.hidden;
 
-/** What opening a long video does. The player page replaces this (it opens the video on YouTube until then). */
-export const longHook = {
-  open: (s: Short) => {
-    window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(s.id)}`, "_blank", "noopener");
-  },
-};
+/** Opens a long video on its own player page (loaded when first needed); ⏮ ⏭ follow `list`. */
+function openLong(s: Short, list: Short[]) {
+  const ds = longDs;
+  if (!ds) return;
+  void import("./watch").then((m) => m.openWatch({ s, list, ds }));
+}
 
 /** "1:02:03" / "42:10". */
 export function lengthLabel(sec: number): string {
@@ -137,7 +137,7 @@ function longCard(s: Short): HTMLElement {
   if (s.d) box.append(el("span", "hl-dur", lengthLabel(s.d)));
   const meta = [ch?.n, `${compact(s.v)} views`, ago(s.p)].filter(Boolean).join(" · ");
   b.append(box, el("span", "hl-title", s.t), el("span", "hl-meta", meta));
-  b.onclick = () => longHook.open(s); // its name is the text on it: length, title, channel, views
+  b.onclick = () => openLong(s, longItems); // its name is the text on it: length, title, channel, views
   return b;
 }
 

@@ -7,6 +7,7 @@ import { busy, confirmDialog, toast, toastError } from "./ui";
 import { renderHealth } from "./health";
 import { ago, btn, compact, el, para } from "./dom";
 import { feed } from "./feed";
+import { type OpenOn, openOn, setOpenOn } from "./home";
 import { playback } from "./player";
 import { isStandalone } from "./fullscreen";
 import { applyNetwork } from "./network";
@@ -69,7 +70,23 @@ export function renderAbout(body: HTMLElement, opts: { showTips: () => void }) {
     renderPanel();
   };
   saverRow.append(el("span", "", "Data saver:"), sel);
+  // where the app opens (this device only)
+  const openRow = el("label", "u-budget-form");
+  const openSel = el("select");
+  openSel.setAttribute("aria-label", "Open the app on");
+  for (const [v, l] of [
+    ["home", "Home (Shorts row and long videos)"],
+    ["feed", "The Shorts feed"],
+  ])
+    openSel.append(new Option(l, v));
+  openSel.value = openOn();
+  openSel.onchange = () => {
+    setOpenOn(openSel.value as OpenOn);
+    toast(openSel.value === "home" ? "The app will open on Home" : "The app will open on the Shorts feed");
+  };
+  openRow.append(el("span", "", "Open the app on:"), openSel);
   body.append(
+    openRow,
     saverRow,
     para(
       playback.dataSaver

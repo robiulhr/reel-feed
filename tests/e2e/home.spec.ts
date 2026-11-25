@@ -121,6 +121,16 @@ test.describe("Home", () => {
     expect(r.violations.map((v) => `${v.id}: ${v.help} → ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
   });
 
+  test("scrolling Home with the mouse wheel or the arrow keys stays on Home", async ({ app: page }) => {
+    await closeTips(page);
+    await openHome(page);
+    await page.mouse.move(400, 400);
+    await page.mouse.wheel(0, 400);
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(700);
+    await expect(page.locator("#home")).toBeVisible();
+    expect(await playing(page)).toBe(false);
+  });
   test("a link to one Short opens the feed, not Home", async ({ app: page }) => {
     await closeTips(page);
     await openHome(page);

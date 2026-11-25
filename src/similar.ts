@@ -277,7 +277,7 @@ function queryVector(ix: Index, text: string) {
 }
 
 /** Free, instant: Shorts in your library about the same topic. */
-export function similarInLibrary(app: AppApi, s: Short, limit = 40): { short: Short; score: number }[] {
+export function similarInLibrary(app: Pick<AppApi, "ds">, s: Short, limit = 40): { short: Short; score: number }[] {
   const ix = getIndex(app);
   const { vec, norm } = queryVector(ix, s.t);
   const scores = new Map<number, number>();
