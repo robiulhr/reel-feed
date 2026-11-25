@@ -3,7 +3,10 @@
  * search and pick, then opens Reel Feed with the picked ones ("#add=id,id,…"), where you choose
  * categories and lists and add them.
  */
-const APP = "https://reel-feed.robiulhr2201.workers.dev/";
+// Reel Feed lives at both addresses while it moves to its own domain: the panel finds an open tab at either.
+// APP is the one it opens and asks for lookups; when the new domain is live, put it first.
+const APPS = ["https://reel-feed.robiulhr2201.workers.dev/", "https://reel-feed.ecomgy.com/"];
+const APP = APPS[0];
 const MAX_SEND = 60; // the app adds up to 60 at a time
 const PAGE_ROWS = 400; // reels drawn in the list at once (the rest are one tap away); picking and filtering use them all
 let rows = PAGE_ROWS;
@@ -37,7 +40,7 @@ async function connect() {
   const before = libraryAt;
   let tabs = [];
   try {
-    tabs = await chrome.tabs.query({ url: `${APP}*` });
+    tabs = await chrome.tabs.query({ url: APPS.map((a) => `${a}*`) });
   } catch {}
   appTabIds = tabs.map((t) => t.id);
   for (const t of tabs) {

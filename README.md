@@ -355,6 +355,17 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **Sync:** `manual` and `fbPages` in user-state.json (file version 4). Older apps refuse to write the file, so they can't drop the videos you added.
 - **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
 
+## 6m. Moving to your own domain (reel-feed.ecomgy.com) — checklist
+
+The Worker can only take an address of yours when the domain's DNS is managed by Cloudflare. `ecomgy.com` is currently on `dnsowl.com` nameservers, and `reel-feed.ecomgy.com` already points somewhere, so:
+
+1. **Cloudflare dashboard → Add a site → ecomgy.com (Free).** It copies the existing DNS records. Compare them with what the domain serves today (website, email MX/TXT, other subdomains) and fix any difference *before* the next step.
+2. **At the registrar:** replace the nameservers with the two Cloudflare gives. Wait until Cloudflare says the site is active.
+3. **Remove or replace** the existing `reel-feed` DNS record (it points at another host).
+4. **In `worker/app.wrangler.toml` add** `routes = [{ pattern = "reel-feed.ecomgy.com", custom_domain = true }]` (not before step 2 is done: the deploy fails while the domain isn't on Cloudflare) and deploy.
+5. **Already prepared in the code:** the sync Worker allows `https://reel-feed.ecomgy.com` (`ALLOWED_ORIGINS`); the extension (1.4.1) recognises both addresses. After the move, put the new address first in `APPS` in `extension/panel.js`, and sign in once more; reinstall the phone's installed app from the new address.
+6. The sign-in cookie stays **host-only** (it is not shared with other `*.ecomgy.com` sites, e.g. your website, which could read it).
+
 ## 6l. Keeping Facebook happy: limits on the app and the extension
 
 - **Extension (`extension/content.js`):** the **Keep scrolling** auto-scroll is guarded — at most about 150 steps (5–6 min) per run, then a 10-minute break; about 3,000 reels and 30 minutes a day in total. It warns at 80%, stops at the limit and says when you can go on (the panel shows *Auto-scroll today: N of 3,000 reels · M of 30 min*). If Facebook shows a warning of its own ("temporarily blocked", "try again later", a checkpoint page…) it stops at once and stays off for an hour. Scrolling by hand is never limited. The counts live in the browser, so this is a safety net for you, not a lock.
