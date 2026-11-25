@@ -5,6 +5,8 @@ main = "src/app.ts"
 compatibility_date = "2025-06-01"
 workers_dev = true
 preview_urls = false
+# the address on your own domain (the zone ecomgy.com is on Cloudflare); the workers.dev address keeps working too
+routes = [{ pattern = "reel-feed.ecomgy.com", custom_domain = true }]
 
 [assets]
 directory = "../dist"

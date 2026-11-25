@@ -355,9 +355,9 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 - **Sync:** `manual` and `fbPages` in user-state.json (file version 4). Older apps refuse to write the file, so they can't drop the videos you added.
 - **Dev:** `npm run dev` answers `/api/fb/*` with the same Worker code (vite.config.ts).
 
-## 6m. Moving to your own domain (reel-feed.ecomgy.com) — checklist
+## 6m. Your own domain (reel-feed.ecomgy.com)
 
-The Worker can only take an address of yours when the domain's DNS is managed by Cloudflare. `ecomgy.com` is currently on `dnsowl.com` nameservers, and `reel-feed.ecomgy.com` already points somewhere, so:
+**Done:** `ecomgy.com` is on Cloudflare, the app answers at **https://reel-feed.ecomgy.com** (custom domain in `worker/app.wrangler.toml`), the extension (1.4.2) opens that address first, and the old `reel-feed.robiulhr2201.workers.dev` address keeps working. Sign in once at the new address and reinstall the phone's installed app from it. The original checklist, for the record:
 
 1. **Cloudflare dashboard → Add a site → ecomgy.com (Free).** It copies the existing DNS records. Compare them with what the domain serves today (website, email MX/TXT, other subdomains) and fix any difference *before* the next step.
 2. **At the registrar:** replace the nameservers with the two Cloudflare gives. Wait until Cloudflare says the site is active.

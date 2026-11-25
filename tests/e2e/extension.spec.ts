@@ -10,7 +10,7 @@ import { closeTips, expect, test } from "./fixtures";
  */
 const BRIDGE = readFileSync(resolve("extension/bridge.js"), "utf8");
 const PANEL_URL = pathToFileURL(resolve("extension/panel.html")).href;
-const APP = "https://reel-feed.robiulhr2201.workers.dev/";
+const APP = "https://reel-feed.ecomgy.com/";
 
 const IDS = ["1000000000001", "1000000000002", "1000000000003", "1000000000004", "1000000000005"];
 
