@@ -4182,7 +4182,7 @@ button[aria-busy="true"] {
 /* ---------- Wide screens (tablet and desktop): Home and the player page use the width ---------- */
 @media (min-width: 700px) {
   .layout.is-home .shell {
-    width: min(calc(100vw - 32px), 1500px);
+    width: calc(100vw - 24px); /* the whole screen (a small margin), not a capped column */
   }
   /* the bottom bar becomes a rail down the left side; it stays put while you scroll */
   .is-home .tabbar {
