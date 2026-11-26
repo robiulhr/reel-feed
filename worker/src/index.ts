@@ -140,6 +140,8 @@ async function handle(route: string, req: Request, env: Env, cors: Cors): Promis
       return json(await lookup(req, env), 200, cors);
     case "GET /video-info":
       return json(await videoInfo(env, new URL(req.url)), 200, cors);
+    case "GET /video-comments":
+      return json(await videoComments(env, new URL(req.url)), 200, cors);
     case "GET /quota":
       return json(await quotaStatus(env), 200, cors);
     case "POST /quota":
@@ -707,18 +709,71 @@ async function lookup(req: Request, env: Env) {
   }
 }
 
-/** A video's description (1 YouTube unit, kept for a day in the edge cache, so a repeat costs nothing). */
-async function videoInfo(env: Env, u: URL) {
-  const id = u.searchParams.get("id") ?? "";
-  if (!/^[w-]{11}$/.test(id)) throw new HttpError(400, "That isn't a video id");
+/** What the player page shows about a video: description, numbers, channel (2 YouTube units; kept a day in the edge cache, so a repeat costs nothing and nothing is written to KV). */
+const num = (x: unknown) => (x === undefined || x === null || x === "" ? null : Number(x));
+async function cached<T>(name: string, id: string, make: () => Promise<T>): Promise<T> {
   const store = typeof caches === "undefined" ? null : (caches as unknown as { default: Cache }).default;
-  const key = new Request(`https://video-info.invalid/${id}`);
+  const key = new Request(`https://${name}.invalid/${id}`);
   const hit = await store?.match(key);
-  if (hit) return (await hit.json()) as { desc: string };
-  const j = await yt(env, "videos", { part: "snippet", id }, { units: 0 });
-  const out = { desc: String(j?.items?.[0]?.snippet?.description ?? "").slice(0, 5000) };
+  if (hit) return (await hit.json()) as T;
+  const out = await make();
   await store?.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=86400" } }));
   return out;
+}
+async function videoInfo(env: Env, u: URL) {
+  const id = u.searchParams.get("id") ?? "";
+  if (!/^[\w-]{11}$/.test(id)) throw new HttpError(400, "That isn't a video id");
+  return cached("video-info2", id, async () => {
+    const used = { units: 0 };
+    const v = (await yt(env, "videos", { part: "snippet,statistics", id }, used))?.items?.[0];
+    const sn = v?.snippet ?? {};
+    const st = v?.statistics ?? {};
+    let ch: { id: string; n: string; img: string; subs: number | null } | null = null;
+    if (sn.channelId) {
+      const c = (await yt(env, "channels", { part: "snippet,statistics", id: sn.channelId }, used))?.items?.[0];
+      ch = {
+        id: String(sn.channelId),
+        n: String(c?.snippet?.title ?? sn.channelTitle ?? ""),
+        img: String(c?.snippet?.thumbnails?.default?.url ?? ""),
+        subs: c?.statistics?.hiddenSubscriberCount ? null : num(c?.statistics?.subscriberCount),
+      };
+    }
+    return {
+      desc: String(sn.description ?? "").slice(0, 5000),
+      ch,
+      v: num(st.viewCount),
+      l: num(st.likeCount),
+      c: num(st.commentCount),
+      p: String(sn.publishedAt ?? ""),
+      tags: Array.isArray(sn.tags) ? sn.tags.slice(0, 8).map(String) : [],
+    };
+  });
+}
+
+/** The top comments of a video (1 unit, only when someone opens them; a day in the edge cache). */
+async function videoComments(env: Env, u: URL) {
+  const id = u.searchParams.get("id") ?? "";
+  if (!/^[\w-]{11}$/.test(id)) throw new HttpError(400, "That isn't a video id");
+  return cached("video-comments", id, async () => {
+    try {
+      const j = await yt(env, "commentThreads", { part: "snippet", videoId: id, order: "relevance", maxResults: 20, textFormat: "plainText" }, { units: 0 });
+      const items = (j?.items ?? []).map((it: any) => {
+        const c = it.snippet?.topLevelComment?.snippet ?? {};
+        return {
+          a: String(c.authorDisplayName ?? ""),
+          img: String(c.authorProfileImageUrl ?? ""),
+          t: String(c.textDisplay ?? "").slice(0, 1200),
+          l: num(c.likeCount) ?? 0,
+          p: String(c.publishedAt ?? ""),
+          r: num(it.snippet?.totalReplyCount) ?? 0,
+        };
+      });
+      return { items, off: false };
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 429) throw e;
+      return { items: [], off: true }; // comments are switched off on that video
+    }
+  });
 }
 
 async function lookupIds(env: Env, raw: string, q: Query, search: boolean, used: { units: number }): Promise<string[]> {

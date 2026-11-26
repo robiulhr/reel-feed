@@ -86,6 +86,8 @@ interface Parts {
   title: HTMLElement;
   meta: HTMLElement;
   desc: HTMLElement;
+  chan: HTMLElement;
+  comments: HTMLElement;
   saveBtn: HTMLButtonElement;
   host: HTMLElement;
   speeds: HTMLButtonElement[];
@@ -123,6 +125,10 @@ function build(): Parts {
   const meta = el("div", "w-meta");
   const desc = el("div", "w-desc");
   desc.hidden = true;
+  const chan = el("div", "w-chan");
+  chan.hidden = true;
+  const comments = el("div", "w-comments");
+  comments.hidden = true;
 
   const speedRow = el("div", "w-speeds");
   speedRow.setAttribute("role", "group");
@@ -162,7 +168,7 @@ function build(): Parts {
   const note = el("div", "w-note");
   const next = el("div", "w-next");
   const related = el("div", "w-related");
-  main.append(box, title, meta, acts, tools, desc, note, more);
+  main.append(box, title, meta, chan, acts, tools, desc, comments, note, more);
   side.append(next, related);
   scroll.append(main, side);
 
@@ -174,7 +180,7 @@ function build(): Parts {
 
   r.append(top, scroll, bar);
   ytLink.dataset.yt = "1";
-  return { title, meta, desc, saveBtn, host, speeds, noteBtn, note, next, related, prev, nextBtn, auto: autoBox, fail };
+  return { title, meta, desc, chan, comments, saveBtn, host, speeds, noteBtn, note, next, related, prev, nextBtn, auto: autoBox, fail };
 }
 
 // ---------- save, topic, share, more ----------
@@ -472,36 +478,158 @@ async function noteAtTime() {
   }
 }
 
-// ---------- the description (from YouTube, fetched when the page opens; 1 API unit, cached for a day) ----------
-const descCache = new Map<string, string>();
-async function loadDesc(id: string) {
-  const box = p?.desc;
-  if (!box) return;
-  box.hidden = true;
-  box.replaceChildren();
-  let text = descCache.get(id);
-  if (text === undefined) {
+// ---------- about the video (from YouTube, fetched when the page opens; 2 API units, cached for a day) ----------
+interface Info {
+  desc: string;
+  ch: { id: string; n: string; img: string; subs: number | null } | null;
+  v: number | null;
+  l: number | null;
+  c: number | null;
+  p: string;
+  tags: string[];
+}
+interface Comment {
+  a: string;
+  img: string;
+  t: string;
+  l: number;
+  p: string;
+  r: number;
+}
+const infoCache = new Map<string, Info>();
+const dateLabel = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+};
+const ytPath = (path: string) => `https://www.youtube.com/${path}`;
+
+async function loadInfo(id: string) {
+  if (!p) return;
+  for (const b of [p.desc, p.chan, p.comments]) {
+    b.hidden = true;
+    b.replaceChildren();
+  }
+  let info = infoCache.get(id);
+  if (!info) {
     try {
-      text = (await call<{ desc: string }>(`/video-info?id=${encodeURIComponent(id)}`)).desc ?? "";
-      descCache.set(id, text);
+      info = await call<Info>(`/video-info?id=${encodeURIComponent(id)}`);
+      infoCache.set(id, info);
     } catch {
-      return; // no connection to the server: the page just has no description
+      return; // no connection to the server: the page just shows what the library knows
     }
   }
-  if (!text.trim() || here()?.id !== id || !p) return;
-  const body = el("div", "w-desc-t clamped", text.trim());
-  const more = btn(
-    "Show more",
-    () => {
-      const open = body.classList.toggle("clamped");
-      more.textContent = open ? "Show more" : "Show less";
-      more.setAttribute("aria-expanded", String(!open));
-    },
-    "w-desc-more",
+  if (here()?.id !== id || !p) return;
+  paintChannel(info);
+  paintDesc(info);
+  paintComments(id, info);
+}
+
+function paintChannel(info: Info) {
+  if (!p || !info.ch) return;
+  const c = info.ch;
+  const row = p.chan;
+  if (c.img) {
+    const img = el("img", "w-chan-img");
+    img.alt = "";
+    img.src = c.img;
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    row.append(img);
+  }
+  const txt = el("div", "w-chan-t");
+  txt.append(el("div", "w-chan-n", c.n), el("div", "w-chan-s", c.subs == null ? "" : `${compact(c.subs)} subscribers`));
+  const open = el("a", "btn sm w-chan-open", "Channel ↗");
+  open.href = ytPath(`channel/${encodeURIComponent(c.id)}`);
+  open.target = "_blank";
+  open.rel = "noopener";
+  row.append(txt, open);
+  row.hidden = false;
+}
+
+function paintDesc(info: Info) {
+  if (!p) return;
+  const box = p.desc;
+  const stats = [
+    info.v != null ? `${compact(info.v)} views` : "",
+    info.p ? dateLabel(info.p) : "",
+    info.l != null ? `👍 ${compact(info.l)}` : "",
+  ].filter(Boolean);
+  if (stats.length) box.append(el("div", "w-desc-stats", stats.join("  ·  ")));
+  const text = info.desc.trim();
+  if (text) {
+    const body = el("div", "w-desc-t clamped", text);
+    const more = btn(
+      "Show more",
+      () => {
+        const open = body.classList.toggle("clamped");
+        more.textContent = open ? "Show more" : "Show less";
+        more.setAttribute("aria-expanded", String(!open));
+      },
+      "w-desc-more",
+    );
+    more.setAttribute("aria-expanded", "false");
+    box.append(body, more);
+  }
+  if (info.tags.length) box.append(el("div", "w-desc-tags", info.tags.map((t) => `#${t.replace(/\s+/g, "")}`).join(" ")));
+  box.hidden = !box.childElementCount;
+}
+
+/** Comments are read-only and loaded only when you open them (1 more API unit, cached for a day). */
+function paintComments(id: string, info: Info) {
+  if (!p || info.c === 0) return;
+  const box = p.comments;
+  const head = btn(info.c != null ? `💬 Comments · ${compact(info.c)}` : "💬 Comments", () => void open(), "w-comments-h");
+  head.setAttribute("aria-expanded", "false");
+  const list = el("div", "w-comments-l");
+  list.hidden = true;
+  box.append(head, list);
+  box.hidden = false;
+  let loaded = false;
+  async function open() {
+    const show = list.hidden;
+    list.hidden = !show;
+    head.setAttribute("aria-expanded", String(show));
+    if (!show || loaded) return;
+    loaded = true;
+    list.append(el("div", "w-comment-note", "Loading…"));
+    try {
+      const r = await call<{ items: Comment[]; off: boolean }>(`/video-comments?id=${encodeURIComponent(id)}`);
+      if (here()?.id !== id) return;
+      list.replaceChildren();
+      if (!r.items.length) list.append(el("div", "w-comment-note", r.off ? "Comments are turned off for this video." : "No comments yet."));
+      for (const c of r.items) list.append(commentRow(c));
+      const all = el("a", "w-comment-note w-comment-all", "See all comments on YouTube ↗");
+      all.href = ytUrl(id);
+      all.target = "_blank";
+      all.rel = "noopener";
+      list.append(all);
+    } catch {
+      loaded = false;
+      list.replaceChildren(el("div", "w-comment-note", "Couldn't load the comments — try again."));
+    }
+  }
+}
+
+function commentRow(c: Comment): HTMLElement {
+  const row = el("div", "w-comment");
+  const img = el("img", "w-comment-img");
+  img.alt = "";
+  img.src = c.img;
+  img.loading = "lazy";
+  img.referrerPolicy = "no-referrer";
+  const body = el("div", "w-comment-b");
+  const when = c.p ? dateLabel(c.p) : "";
+  body.append(
+    el("div", "w-comment-a", [c.a, when].filter(Boolean).join(" · ")),
+    el("div", "w-comment-t", c.t),
+    el(
+      "div",
+      "w-comment-m",
+      [c.l ? `👍 ${compact(c.l)}` : "", c.r ? `${compact(c.r)} ${c.r === 1 ? "reply" : "replies"}` : ""].filter(Boolean).join("  ·  "),
+    ),
   );
-  more.setAttribute("aria-expanded", "false");
-  p.desc.append(body, more);
-  p.desc.hidden = false;
+  row.append(img, body);
+  return row;
 }
 
 // ---------- cards: Up next and Related ----------
@@ -579,7 +707,7 @@ function show(i: number) {
   paintNote();
   paintSave();
   paintLists();
-  void loadDesc(s.id);
+  void loadInfo(s.id);
   p.noteBtn.textContent = "📝 Note at 0:00";
   root?.querySelector(".w-scroll")?.scrollTo({ top: 0 });
   const pos = savedPos(s.id);
