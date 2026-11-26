@@ -95,6 +95,7 @@ export function openPage(title: string, render: (body: HTMLElement) => void, rou
       shownPage = "";
     });
   }
+  els.page.classList.toggle("over-watch", document.getElementById("watch")?.hidden === false); // opened from the player page: above it
   els.pageTitle.textContent = title;
   els.page.setAttribute("aria-label", title);
   els.pageBody.replaceChildren();
@@ -113,6 +114,8 @@ export function closePage() {
 
 /** A list starts playing: get every overlay out of the way. */
 export function closeOverlaysForPlayback() {
+  const w = document.getElementById("watch");
+  if (w && !w.hidden) void import("./watch").then((m) => m.hideWatch()); // a Short starts: the player page gives way
   closePage();
   panelModal.close();
   sheetModal.close();

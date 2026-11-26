@@ -26,11 +26,23 @@ test.describe("search", () => {
         ?.replace(/\W/g, "") ?? title;
     await input.fill(word.slice(0, word.length - 1)); // a half-typed word still matches (it matches from the start)
     await expect(body.locator(".scard").first()).toBeVisible();
-    await expect(body.locator(".u-h", { hasText: "Videos" })).toBeVisible();
+    await expect(body.locator(".u-h", { hasText: /Videos|Shorts/ }).first()).toBeVisible();
 
     await body.locator(".scard").first().click();
     await expect(page.locator("#pageBody")).toBeHidden();
     await expect(page.locator("#ctxBar")).toBeVisible(); // playing the results as a list
+  });
+
+  test("long videos are searched too, and one opens on its player page", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#searchBtn").click();
+    const body = page.locator("#pageBody");
+    // (the first long videos of the test library: "How Rolex controls its prices" is one)
+    await body.getByLabel(BOX).fill("Rolex");
+    await expect(body.locator(".u-h", { hasText: "Long videos" })).toBeVisible();
+    await body.locator(".cp-videos-l .home-long-card").first().click();
+    await expect(page.locator("#watch")).toBeVisible();
+    await expect(page.locator("#pageBody")).toBeHidden();
   });
 
   test("nothing found: says so and offers a YouTube search; the filters can be switched", async ({ app: page }) => {

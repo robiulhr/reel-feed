@@ -9,6 +9,7 @@
  */
 import { loadLong } from "./data";
 import { ago, compact, el } from "./dom";
+import { setLongSource } from "./explore";
 import { feed, homeHook, playList, resumeFeed } from "./feed";
 import { pool } from "./player";
 import { buildQueue, feedFilter } from "./rank";
@@ -73,6 +74,25 @@ export async function openLongById(id: string) {
   const m = await import("./watch");
   m.openWatch({ s, list, ds: longDs });
 }
+
+/** A long video opened from somewhere else (a channel page, search): Home goes underneath the player page, so Back lands there. */
+export function openLongFrom(s: Short, list: Short[], ds: Dataset) {
+  if (!isHome()) showHome();
+  void import("./watch").then((m) => m.openWatch({ s, list, ds }));
+}
+
+/** The channel page lists a channel's long videos from here, and opens one (loaded when first asked). */
+setLongSource(async () => {
+  if (!longDs) {
+    const ds = await loadLong();
+    if (ds) {
+      longDs = ds;
+      longState = "ready";
+    }
+  }
+  const ds = longDs;
+  return ds ? { ds, open: (s, list) => openLongFrom(s, list, ds) } : null;
+});
 
 /** Opens a long video on its own player page (loaded when first needed); ⏮ ⏭ follow `list`. */
 function openLong(s: Short, list: Short[]) {

@@ -7,11 +7,13 @@
  */
 import type { AppApi } from "./app";
 import { btn, el } from "./dom";
-import { shortGrid } from "./explore";
+import { loadLong } from "./data";
+import { longCards, shortGrid } from "./explore";
+import { openLongFrom } from "./home";
 import { openPanel } from "./panels";
 import { openTopicSearch } from "./similar";
 import { searchNotes, searchTopics, searchVideos, type Only, wordsOf } from "./searchcore";
-import type { Short } from "./types";
+import type { Dataset, Short } from "./types";
 
 // ---------- recent searches (this device) ----------
 const RECENT_KEY = "ecomgy-reel-feed.recent-searches";
@@ -54,6 +56,8 @@ const FILTERS: [Only, string][] = [
 export function openSearch(app: AppApi) {
   app.openPage("Search", (body) => renderSearch(body, app));
 }
+
+let longDs: Dataset | null = null; // the long videos, loaded when search opens (they are searched too)
 
 function renderSearch(body: HTMLElement, app: AppApi) {
   const input = el("input", "ch-search search-input");
@@ -129,6 +133,7 @@ function renderSearch(body: HTMLElement, app: AppApi) {
     const topics = searchTopics(q).slice(0, 4);
     const notes = searchNotes(q).slice(0, 4);
     const videos = searchVideos(app, q, view.only);
+    const longs = longDs ? searchVideos({ ds: longDs }, q, view.only) : [];
 
     if (topics.length) {
       out.append(el("div", "u-h", "Topics"));
@@ -152,14 +157,21 @@ function renderSearch(body: HTMLElement, app: AppApi) {
       out.append(el("div", "u-h", "Notes"));
       for (const [id, n] of notes) {
         const s = app.ds.videos.find((v) => v.id === id) ?? feedShort(app, id);
+        const ls = s ? undefined : longDs?.videos.find((v) => v.id === id);
         const row = el("button", "search-row");
         row.type = "button";
         row.append(
           el("span", "search-row-ico", "📝"),
-          el("span", "search-row-txt", n.ti || s?.t || "Video"),
+          el("span", "search-row-txt", n.ti || s?.t || ls?.t || "Video"),
           el("span", "search-note", n.x.replace(/\s+/g, " ").slice(0, 120)),
         );
         row.onclick = () => {
+          if (!s && ls && longDs) {
+            remember(q);
+            app.closePage();
+            openLongFrom(ls, [ls], longDs);
+            return;
+          }
           if (!s) return;
           remember(q);
           app.playList("Search", [s], 0, () => openSearch(app));
@@ -168,7 +180,25 @@ function renderSearch(body: HTMLElement, app: AppApi) {
       }
     }
 
-    out.append(el("div", "u-h", `Videos · ${videos.length.toLocaleString()}`));
+    out.append(el("div", "u-h", `${longs.length ? "Shorts" : "Videos"} · ${videos.length.toLocaleString()}`));
+    const drawLongs = () => {
+      if (!longs.length || !longDs) return;
+      const ds = longDs;
+      out.append(el("div", "u-h", `Long videos · ${longs.length.toLocaleString()}`));
+      const list = el("div", "cp-videos-l");
+      list.append(
+        ...longCards(app, longs.slice(0, 24), (s) => {
+          remember(q);
+          app.closePage();
+          openLongFrom(s, longs, ds);
+        }),
+      );
+      out.append(list);
+    };
+    if (!videos.length && longs.length) {
+      out.append(el("p", "ch-note", "No Shorts match — see the long videos below."));
+      return drawLongs();
+    }
     if (!videos.length) {
       out.append(el("p", "ch-note", `Nothing in your library for “${q}”${view.only === "all" ? "" : " with this filter"}.`));
       if (view.only !== "all")
@@ -209,6 +239,7 @@ function renderSearch(body: HTMLElement, app: AppApi) {
           "btn sm",
         ),
       );
+    drawLongs();
     out.append(
       btn("🔎 Search YouTube instead", () => openTopicSearch(app, { id: `q${wordsOf(q).join("-").slice(0, 30)}`, name: q, kw: [q] })),
     );
@@ -229,6 +260,12 @@ function renderSearch(body: HTMLElement, app: AppApi) {
     }
   });
   draw();
+  void loadLong().then((ds) => {
+    if (ds && body.isConnected) {
+      longDs = ds;
+      draw();
+    }
+  });
   setTimeout(() => input.focus(), 50);
 }
 

@@ -18,6 +18,7 @@ export function showRoute(r: Route, e: { list?: boolean }) {
     if (r.k !== "watch") void import("./watch").then((m) => m.hideWatch());
   }
   if (r.k === "watch") {
+    closePage(); // a channel page opened from the player page: Back lands on the player page
     if (!isHome()) {
       closePage();
       closePanel();

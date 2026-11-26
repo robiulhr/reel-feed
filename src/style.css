@@ -4779,3 +4779,29 @@ button[aria-busy="true"] {
     margin-inline: 0;
   }
 }
+.page.over-watch {
+  z-index: 45;
+}
+.cp-kinds {
+  margin-top: 10px;
+}
+.cp-videos-l {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  margin-top: 8px;
+}
+.w-chan-go {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}

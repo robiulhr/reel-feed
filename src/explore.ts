@@ -12,7 +12,7 @@ import { COST, confirmCost, noteSpend, spendToast } from "./quota";
 import { videoCats } from "./rank";
 import { act, state } from "./store";
 import * as sync from "./sync";
-import type { Channel, Short } from "./types";
+import type { Channel, Dataset, Short } from "./types";
 import { el, btn } from "./dom";
 import { listSummary, listsOf, pickLists } from "./lists";
 import { pageHref } from "./fbdata";
@@ -215,6 +215,66 @@ export const setFbPageOpener = (fn: (chIndex: number) => void) => {
   openFbPage = fn;
 };
 
+/** The long videos (Home's library) — set by home.ts, which loads them; so this module doesn't. */
+export interface LongSource {
+  ds: Dataset;
+  open(s: Short, list: Short[]): void;
+}
+let longSource: () => Promise<LongSource | null> = async () => null;
+export const setLongSource = (fn: () => Promise<LongSource | null>) => {
+  longSource = fn;
+};
+const kind = { h: "", k: "shorts" as "shorts" | "videos" }; // which list the channel page shows
+const clock = (sec: number) => {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const t = (n: number) => String(n).padStart(2, "0");
+  return h ? `${h}:${t(m)}:${t(Math.floor(sec % 60))}` : `${m}:${t(Math.floor(sec % 60))}`;
+};
+
+/** Long videos as the cards Home uses (thumbnail, length, title, views). */
+export function longCards(app: AppApi, vids: Short[], open: (s: Short) => void): HTMLElement[] {
+  return vids.map((s) => {
+    const b = el("button", "home-long-card");
+    b.type = "button";
+    const thumbBox = el("span", "hl-thumb");
+    const img = el("img");
+    img.alt = "";
+    img.loading = "lazy";
+    app.thumb(img, s.id);
+    thumbBox.append(img);
+    if (s.d) thumbBox.append(el("span", "hl-dur", clock(s.d)));
+    b.append(thumbBox, el("span", "hl-title", s.t), el("span", "hl-meta", `${app.fmt(s.v)} views · ${app.ago(s.p)}`));
+    b.onclick = () => open(s);
+    return b;
+  });
+}
+
+/** The channel's long videos, newest first, as the same cards Home uses. */
+function drawVideos(app: AppApi, body: HTMLElement, info: ExternalChannelInfo) {
+  const box = el("div", "cp-videos");
+  box.append(el("p", "ch-note", "Loading videos…"));
+  body.append(box);
+  void longSource().then((src) => {
+    if (!box.isConnected) return;
+    const ci = src
+      ? src.ds.channels.findIndex((c) => (info.id && c.id === info.id) || (info.handle && c.h.toLowerCase() === info.handle.toLowerCase()))
+      : -1;
+    const vids = src && ci >= 0 ? src.ds.videos.filter((v) => v.ch === ci).sort((a, b) => b.p - a.p) : [];
+    if (!src || !vids.length) {
+      box.replaceChildren(el("p", "ch-note", "No long videos from this channel in your library yet."));
+      return;
+    }
+    const cards = longCards(app, vids, (s) => {
+      app.closePage();
+      src.open(s, vids);
+    });
+    const list = el("div", "cp-videos-l");
+    list.append(...cards);
+    box.replaceChildren(el("p", "ch-note", `${vids.length} long video${vids.length === 1 ? "" : "s"}`), list);
+  });
+}
+
 export function openChannel(app: AppApi, target: { chIndex?: number; info?: ExternalChannelInfo }, sort: Sort = sortPref) {
   const ds = app.ds;
   let chIndex = target.chIndex;
@@ -353,6 +413,27 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       if (fbPage) actions.append(btn("↗ Facebook page", () => window.open(pageHref(fbPage), "_blank", "noopener")));
       body.append(actions);
       if (addError) body.append(addError);
+
+      // ---- Shorts | Videos
+      if (kind.h !== info.handle) Object.assign(kind, { h: info.handle, k: "shorts" });
+      const kinds = el("div", "cp-tabs cp-kinds");
+      for (const [k, label] of [
+        ["shorts", "Shorts"],
+        ["videos", "Videos"],
+      ] as const) {
+        const b = btn(
+          label,
+          () => {
+            kind.k = k;
+            reopen(sort);
+          },
+          `cp-tab${kind.k === k ? " on" : ""}`,
+        );
+        b.setAttribute("aria-pressed", String(kind.k === k));
+        kinds.append(b);
+      }
+      body.append(kinds);
+      if (kind.k === "videos") return drawVideos(app, body, info);
 
       // ---- Shorts
       let items: Short[] = [];

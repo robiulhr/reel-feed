@@ -11,7 +11,8 @@
 import { ago, btn, compact, el } from "./dom";
 import { lengthLabel } from "./home";
 import { loadApi } from "./pool";
-import { feed } from "./feed";
+import { openChannel } from "./explore";
+import { app, feed } from "./feed";
 import { dismiss, go, shareLink } from "./router";
 import { similarInLibrary } from "./similar";
 import { call } from "./sync";
@@ -505,7 +506,7 @@ const ytPath = (path: string) => `https://www.youtube.com/${path}`;
 
 async function loadInfo(id: string) {
   if (!p) return;
-  for (const b of [p.desc, p.chan, p.comments]) {
+  for (const b of [p.desc, p.comments]) {
     b.hidden = true;
     b.replaceChildren();
   }
@@ -519,31 +520,60 @@ async function loadInfo(id: string) {
     }
   }
   if (here()?.id !== id || !p) return;
-  paintChannel(info);
+  const lib = here() && cur ? cur.ds.channels[here()!.ch] : undefined;
+  if (info.ch)
+    paintChannel({
+      id: info.ch.id,
+      n: info.ch.n,
+      h: lib?.id === info.ch.id ? lib.h : "",
+      img: info.ch.img || lib?.thumb || "",
+      subs: info.ch.subs,
+    });
   paintDesc(info);
   paintComments(id, info);
 }
 
-function paintChannel(info: Info) {
-  if (!p || !info.ch) return;
-  const c = info.ch;
+interface Who {
+  id: string;
+  n: string;
+  h: string;
+  img: string;
+  subs: number | null;
+}
+/** The channel row: picture and name open the channel in the app (all its videos); ↗ opens it on YouTube. */
+function paintChannel(c: Who) {
+  if (!p || !c.n) return;
   const row = p.chan;
+  row.replaceChildren();
+  const go = btn("", () => openWho(c), "w-chan-go");
+  go.title = "Open the channel";
   if (c.img) {
     const img = el("img", "w-chan-img");
     img.alt = "";
     img.src = c.img;
     img.loading = "lazy";
     img.referrerPolicy = "no-referrer";
-    row.append(img);
+    go.append(img);
   }
   const txt = el("div", "w-chan-t");
-  txt.append(el("div", "w-chan-n", c.n), el("div", "w-chan-s", c.subs == null ? "" : `${compact(c.subs)} subscribers`));
-  const open = el("a", "btn sm w-chan-open", "Channel ↗");
-  open.href = ytPath(`channel/${encodeURIComponent(c.id)}`);
-  open.target = "_blank";
-  open.rel = "noopener";
-  row.append(txt, open);
+  txt.append(el("div", "w-chan-n", c.n), el("div", "w-chan-s", c.subs ? `${compact(c.subs)} subscribers` : ""));
+  go.append(txt);
+  const yt = el("a", "btn sm w-chan-open", "↗");
+  yt.title = "Open the channel on YouTube";
+  yt.setAttribute("aria-label", "Open the channel on YouTube");
+  yt.href = c.id ? ytPath(`channel/${encodeURIComponent(c.id)}`) : ytPath(`@${encodeURIComponent(c.h.replace(/^@/, ""))}`);
+  yt.target = "_blank";
+  yt.rel = "noopener";
+  row.append(go, yt);
   row.hidden = false;
+}
+function openWho(c: Who) {
+  try {
+    player?.pauseVideo?.();
+  } catch {
+    /* ignore */
+  }
+  openChannel(app, { info: { id: c.id, name: c.n, handle: c.h, thumb: c.img, subs: c.subs ?? 0, suggestedCats: [] } });
 }
 
 function paintDesc(info: Info) {
@@ -707,6 +737,9 @@ function show(i: number) {
   paintNote();
   paintSave();
   paintLists();
+  if (ch)
+    paintChannel({ id: ch.id, n: ch.n, h: ch.h, img: ch.thumb, subs: ch.subs }); // from the library now; YouTube's numbers replace it when they arrive
+  else p.chan.hidden = true;
   void loadInfo(s.id);
   p.noteBtn.textContent = "📝 Note at 0:00";
   root?.querySelector(".w-scroll")?.scrollTo({ top: 0 });
