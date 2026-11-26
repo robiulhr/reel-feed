@@ -211,7 +211,7 @@ body.empty footer {
   border-radius: 8px;
   background: #000;
 }
-/* reels you already added in Reel Feed: dimmed, with a green mark, and can't be ticked */
+/* reels you already added in Freed: dimmed, with a green mark, and can't be ticked */
 #list li.added label {
   cursor: default;
   border-style: dashed;
@@ -236,7 +236,7 @@ body.empty footer {
   white-space: nowrap;
 }
 #list li.added input {
-  visibility: hidden; /* nothing to tick: it's already in Reel Feed (keeps the rows lined up) */
+  visibility: hidden; /* nothing to tick: it's already in Freed (keeps the rows lined up) */
 }
 #diag {
   font-size: 12px;

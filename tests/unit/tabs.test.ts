@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ManualVideo } from "../../src/store";
 
 /**
- * Several Reel Feed tabs open at once (the browser extension opens a new one for every batch of videos).
+ * Several Freed tabs open at once (the browser extension opens a new one for every batch of videos).
  * Each tab holds its own copy of your data and saves it to the same place on the device, so without care
  * the last tab to save wipes what the others added. Every `open()` below is one tab: a fresh copy of the
  * store that reads what's on the device when it starts, like a real tab does.

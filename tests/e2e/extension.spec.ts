@@ -14,7 +14,7 @@ const APP = "https://reel-feed.ecomgy.com/";
 
 const IDS = ["1000000000001", "1000000000002", "1000000000003", "1000000000004", "1000000000005"];
 
-test.describe("extension bridge (runs on Reel Feed's own site)", () => {
+test.describe("extension bridge (runs on Freed's own site)", () => {
   const install = (page: Page) =>
     page.evaluate((code) => {
       const w = window as any;
@@ -73,7 +73,7 @@ test.describe("extension side panel: which reels are already added", () => {
     });
     await page.addInitScript((ids) => {
       const w = window as any;
-      const opts = () => w.__opts ?? {}; // what the test says about Reel Feed's tabs
+      const opts = () => w.__opts ?? {}; // what the test says about Freed's tabs
       const store: Record<string, unknown> = {};
       const listeners: ((ch: unknown, area: string) => void)[] = [];
       w.__created = [];
@@ -109,7 +109,7 @@ test.describe("extension side panel: which reels are already added", () => {
           onChanged: { addListener: (f: (ch: unknown, area: string) => void) => listeners.push(f) },
         },
         tabs: {
-          // Reel Feed's tabs when asked by address, otherwise the Facebook tab you're on
+          // Freed's tabs when asked by address, otherwise the Facebook tab you're on
           query: async (q?: { url?: string }) =>
             q?.url ? (opts().appTabs ?? []) : [{ id: 1, url: "https://www.facebook.com/nike/reels/" }],
           sendMessage: async () => snapshot,
@@ -132,7 +132,7 @@ test.describe("extension side panel: which reels are already added", () => {
     }, IDS);
   });
 
-  /** Opens the panel; `opts` says what Reel Feed's tabs do (none open / open and answer / open, silent). */
+  /** Opens the panel; `opts` says what Freed's tabs do (none open / open and answer / open, silent). */
   const open = async (page: Page, opts: { appTabs?: { id: number }[]; answers?: boolean; ids?: string[] } = {}) => {
     await page.addInitScript((o) => {
       (window as any).__opts = o;
@@ -143,21 +143,21 @@ test.describe("extension side panel: which reels are already added", () => {
   const setLibrary = (page: Page, ids: string[], at = Date.now()) =>
     page.evaluate(([i, t]) => (window as any).__setLibrary({ ids: i, at: t }), [ids, at] as const);
 
-  test("Reel Feed isn't open: says so, offers to open it, marks nothing, blocks nothing", async ({ page }) => {
+  test("Freed isn't open: says so, offers to open it, marks nothing, blocks nothing", async ({ page }) => {
     await open(page);
-    await expect(page.locator("#syncNote")).toContainText("Reel Feed isn't open in a tab");
-    await expect(page.locator("#openApp")).toHaveText("Open Reel Feed");
+    await expect(page.locator("#syncNote")).toContainText("Freed isn't open in a tab");
+    await expect(page.locator("#openApp")).toHaveText("Open Freed");
     await expect(page.locator(".badge")).toHaveCount(0);
     await page.getByRole("button", { name: "Select shown" }).click();
-    await expect(page.locator("#sendBtn")).toHaveText("Add 5 to Reel Feed");
+    await expect(page.locator("#sendBtn")).toHaveText("Add 5 to Freed");
     await page.locator("#openApp").click();
     expect(await page.evaluate(() => (window as any).__created)).toEqual([`${APP}added`]);
   });
 
-  test("a Reel Feed tab that was already open: the panel puts the bridge in and gets the marks by itself", async ({ page }) => {
+  test("a Freed tab that was already open: the panel puts the bridge in and gets the marks by itself", async ({ page }) => {
     await open(page, { appTabs: [{ id: 7 }], answers: true, ids: [IDS[1], IDS[3]] });
     await expect(page.locator(".badge")).toHaveCount(2);
-    await expect(page.locator("#syncNote")).toContainText("Reel Feed says you've added 2 videos");
+    await expect(page.locator("#syncNote")).toContainText("Freed says you've added 2 videos");
     expect(await page.evaluate(() => (window as any).__injected)).toEqual([7]);
     await expect(page.locator("#openApp")).toHaveText("↻ Refresh");
     await expect(page.locator("#openApp")).toBeEnabled(); // the first check has finished
@@ -165,10 +165,10 @@ test.describe("extension side panel: which reels are already added", () => {
     await expect.poll(() => page.evaluate(() => (window as any).__injected)).toEqual([7, 7]);
   });
 
-  test("a Reel Feed tab that doesn't answer (old version): says so and offers to reload it", async ({ page }) => {
+  test("a Freed tab that doesn't answer (old version): says so and offers to reload it", async ({ page }) => {
     await open(page, { appTabs: [{ id: 7 }] }); // open, but nobody answers the bridge
     await expect(page.locator("#syncNote")).toContainText("didn't answer");
-    await expect(page.locator("#openApp")).toHaveText("Reload Reel Feed tab");
+    await expect(page.locator("#openApp")).toHaveText("Reload Freed tab");
     await page.locator("#openApp").click();
     expect(await page.evaluate(() => (window as any).__reloaded)).toEqual([7]);
   });
@@ -181,7 +181,7 @@ test.describe("extension side panel: which reels are already added", () => {
     await expect(page.locator("#list li.added")).toHaveCount(2);
     for (const li of await page.locator("#list li.added").all()) await expect(li.locator("input")).toBeDisabled();
     await expect(page.locator("#status")).toContainText("2 already added · 3 not added yet");
-    await expect(page.locator("#syncNote")).toContainText("Reel Feed says you've added 2 videos");
+    await expect(page.locator("#syncNote")).toContainText("Freed says you've added 2 videos");
     // the marked ones really are the two sent
     await expect(page.locator("#list li.added")).toContainText(["Reel title 2", "Reel title 4"]);
   });
@@ -192,9 +192,9 @@ test.describe("extension side panel: which reels are already added", () => {
     await page.getByText("Marks not showing? Details").click();
     const text = page.locator("#diagText");
     await expect(text).toContainText("Extension version: 9.9.9");
-    await expect(text).toContainText("Reel Feed tabs found: 1   (check: ok)");
+    await expect(text).toContainText("Freed tabs found: 1   (check: ok)");
     await expect(text).toContainText("videos it reports: 2");
-    await expect(text).toContainText(`Reel Feed's ids (first 3): ${IDS[1]}, ${IDS[3]}`);
+    await expect(text).toContainText(`Freed's ids (first 3): ${IDS[1]}, ${IDS[3]}`);
     await expect(text).toContainText("Reels on this page: 5   · marked as added: 2");
     await expect(text).toContainText(`This page's ids (first 3): ${IDS.slice(0, 3).join(", ")}`);
   });
@@ -203,7 +203,7 @@ test.describe("extension side panel: which reels are already added", () => {
     await open(page);
     await setLibrary(page, [IDS[1], IDS[3]]);
     await page.getByRole("button", { name: "Select shown" }).click();
-    await expect(page.locator("#sendBtn")).toHaveText("Add 3 to Reel Feed");
+    await expect(page.locator("#sendBtn")).toHaveText("Add 3 to Freed");
     await page.locator("#sendBtn").click();
     const urls = await page.evaluate(() => (window as any).__created);
     expect(urls).toHaveLength(1);
@@ -214,11 +214,11 @@ test.describe("extension side panel: which reels are already added", () => {
     await open(page);
     await setLibrary(page, [IDS[1], IDS[3]]);
     await page.getByRole("button", { name: "Select top 60 new" }).click();
-    await expect(page.locator("#sendBtn")).toHaveText("Add 3 to Reel Feed"); // 5 reels, 2 already added
+    await expect(page.locator("#sendBtn")).toHaveText("Add 3 to Freed"); // 5 reels, 2 already added
     await expect(page.locator("#list li.added input:checked")).toHaveCount(0);
     await setLibrary(page, [IDS[0], IDS[1], IDS[2], IDS[3]]);
     await page.getByRole("button", { name: "Select top 60 new" }).click();
-    await expect(page.locator("#sendBtn")).toHaveText("Add 1 to Reel Feed");
+    await expect(page.locator("#sendBtn")).toHaveText("Add 1 to Freed");
   });
 
   test("a long list (450 reels) is drawn 400 at a time; Select top 60 and the filters still use all of them", async ({ page }) => {
@@ -247,7 +247,7 @@ test.describe("extension side panel: which reels are already added", () => {
     await page.getByRole("button", { name: /^Show 50 more/ }).click();
     await expect(page.locator("#list li")).toHaveCount(450);
     await page.getByRole("button", { name: "Select top 60 new" }).click();
-    await expect(page.locator("#sendBtn")).toHaveText("Add 60 to Reel Feed");
+    await expect(page.locator("#sendBtn")).toHaveText("Add 60 to Freed");
     await page.locator("#minViews").fill("400K");
     await expect(page.locator("#list li")).toHaveCount(51);
   });
@@ -293,12 +293,12 @@ test.describe("extension side panel: which reels are already added", () => {
     await expect(page.locator("#list li")).toHaveCount(5);
   });
 
-  test("it updates the moment Reel Feed reports a change, even for a reel you had ticked", async ({ page }) => {
+  test("it updates the moment Freed reports a change, even for a reel you had ticked", async ({ page }) => {
     await open(page);
     await page.getByRole("button", { name: "Select shown" }).click();
-    await expect(page.locator("#sendBtn")).toHaveText("Add 5 to Reel Feed");
-    await setLibrary(page, [IDS[2]]); // you finished adding one in Reel Feed
-    await expect(page.locator("#sendBtn")).toHaveText("Add 4 to Reel Feed"); // it came off the selection
+    await expect(page.locator("#sendBtn")).toHaveText("Add 5 to Freed");
+    await setLibrary(page, [IDS[2]]); // you finished adding one in Freed
+    await expect(page.locator("#sendBtn")).toHaveText("Add 4 to Freed"); // it came off the selection
     await expect(page.locator("#list li.added")).toHaveCount(1);
     await setLibrary(page, []); // …and deleted it there
     await expect(page.locator(".badge")).toHaveCount(0);

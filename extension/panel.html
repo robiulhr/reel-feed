@@ -2,12 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Reel Feed collector</title>
+    <title>Freed collector</title>
     <link rel="stylesheet" href="panel.css" />
   </head>
   <body>
     <header>
-      <h1 id="pageName">Reel Feed collector</h1>
+      <h1 id="pageName">Freed collector</h1>
       <p id="status" class="note" aria-live="polite">Open a Facebook page's Reels tab.</p>
       <p id="guardNote" class="note" role="status" hidden></p>
       <p id="guardMeter" class="note" hidden></p>
@@ -23,8 +23,8 @@
         <li>On Facebook, open a <strong>page</strong> (for example a competitor's) and click its <strong>Reels</strong> tab.</li>
         <li>This panel lists the reels. Scroll the page to load more, or click <strong>Keep scrolling</strong> and it scrolls slowly for you.</li>
         <li>Narrow them down: <strong>Min views</strong>, <strong>Sort</strong>, <strong>Search</strong>. Press <strong>▶</strong> on a reel to watch it here and see what it is about.</li>
-        <li>Tick the reels you want (or <strong>Select shown</strong>), then click <strong>Add to Reel Feed</strong>.</li>
-        <li>Reel Feed opens in a new tab. There you choose categories and lists, for all of them or one by one, and click <strong>Add</strong>.</li>
+        <li>Tick the reels you want (or <strong>Select shown</strong>), then click <strong>Add to Freed</strong>.</li>
+        <li>Freed opens in a new tab. There you choose categories and lists, for all of them or one by one, and click <strong>Add</strong>.</li>
       </ol>
       <p class="note">It only works on a page's Reels tab, and only reads what you can already see there. Nothing is sent anywhere until you click Add.</p>
     </details>
@@ -51,14 +51,14 @@
         </label>
       </div>
       <div class="row">
-        <button id="topBtn" type="button" title="The most viewed reels that aren't added yet, up to what Reel Feed adds at a time">Select top 60 new</button>
+        <button id="topBtn" type="button" title="The most viewed reels that aren't added yet, up to what Freed adds at a time">Select top 60 new</button>
         <button id="allBtn" type="button">Select shown</button>
         <button id="noneBtn" type="button">Unselect all</button>
         <span id="counts" class="note"></span>
       </div>
       <div class="row">
         <p id="syncNote" class="note"></p>
-        <button id="openApp" type="button" hidden>Open Reel Feed</button>
+        <button id="openApp" type="button" hidden>Open Freed</button>
       </div>
       <details id="diag">
         <summary>Marks not showing? Details</summary>
@@ -70,7 +70,7 @@
 
     <footer>
       <p id="footNote" class="note"></p>
-      <button id="sendBtn" type="button" class="primary" disabled>Add to Reel Feed</button>
+      <button id="sendBtn" type="button" class="primary" disabled>Add to Freed</button>
     </footer>
     <script src="panel.js"></script>
   </body>

@@ -1,9 +1,9 @@
 /**
  * The side panel: shows the reels collected from the Facebook tab you're on, lets you filter, sort,
- * search and pick, then opens Reel Feed with the picked ones ("#add=id,id,…"), where you choose
+ * search and pick, then opens Freed with the picked ones ("#add=id,id,…"), where you choose
  * categories and lists and add them.
  */
-// Reel Feed lives at both addresses while it moves to its own domain: the panel finds an open tab at either.
+// Freed lives at both addresses while it moves to its own domain: the panel finds an open tab at either.
 // APP is the one it opens and asks for lookups; when the new domain is live, put it first.
 const APPS = ["https://reel-feed.ecomgy.com/", "https://reel-feed.robiulhr2201.workers.dev/"];
 const APP = APPS[0];
@@ -18,7 +18,7 @@ const picked = new Set();
 let info = {}; // id -> { t: title, d: rest of the caption } (kept on this computer)
 let fetching = false;
 
-let added = new Set(); // numbers of the reels you've already added in Reel Feed (the app sends them)
+let added = new Set(); // numbers of the reels you've already added in Freed (the app sends them)
 let libraryAt = 0; // when the app last sent that list (ms); 0 = never
 
 function setLibrary(lib) {
@@ -26,11 +26,11 @@ function setLibrary(lib) {
   libraryAt = lib?.at || 0;
   for (const id of added) picked.delete(id); // can't add what you already have
 }
-let link = "unknown"; // Reel Feed: unknown | checking | ok (it answers) | closed (no tab) | silent (open, no answer)
+let link = "unknown"; // Freed: unknown | checking | ok (it answers) | closed (no tab) | silent (open, no answer)
 let appTabIds = [];
 let connecting = false;
 
-/** Gets in touch with Reel Feed: puts the bridge script into every open Reel Feed tab (Chrome only adds
+/** Gets in touch with Freed: puts the bridge script into every open Freed tab (Chrome only adds
  *  it to tabs opened after the extension was installed or reloaded) and waits for the app's answer. */
 async function connect() {
   if (connecting) return;
@@ -166,7 +166,7 @@ let guideFolded = false; // folded once by itself (after that it stays as you le
 function draw() {
   const ul = $("list");
   const page = data?.page;
-  $("pageName").textContent = page?.name || "Reel Feed collector";
+  $("pageName").textContent = page?.name || "Freed collector";
   $("scrollBtn").disabled = !data;
   $("scrollBtn").textContent = data?.running ? "Stop scrolling" : "Keep scrolling";
   // The guard on the auto-scroll: what it has counted today, and why it may be asking for a break
@@ -206,15 +206,15 @@ function draw() {
   // Where the "already added" marks come from, and what to do when they can't
   const since = linked ? ` (updated ${ago(libraryAt)})` : "";
   const note = {
-    checking: "Checking Reel Feed…",
-    ok: `✓ Reel Feed says you've added ${added.size} video${added.size === 1 ? "" : "s"}${since}.`,
+    checking: "Checking Freed…",
+    ok: `✓ Freed says you've added ${added.size} video${added.size === 1 ? "" : "s"}${since}.`,
     closed: linked
-      ? `Reel Feed isn't open in a tab, so these marks may be out of date${since}.`
-      : "Reel Feed isn't open in a tab, so I can't see what you've added yet. Open it:",
-    silent: "Reel Feed is open but didn't answer (it may be an older version). Reload that tab:",
+      ? `Freed isn't open in a tab, so these marks may be out of date${since}.`
+      : "Freed isn't open in a tab, so I can't see what you've added yet. Open it:",
+    silent: "Freed is open but didn't answer (it may be an older version). Reload that tab:",
   };
-  $("syncNote").textContent = note[link] ?? "Looking for Reel Feed…";
-  const action = { ok: "↻ Refresh", closed: "Open Reel Feed", silent: "Reload Reel Feed tab" }[link];
+  $("syncNote").textContent = note[link] ?? "Looking for Freed…";
+  const action = { ok: "↻ Refresh", closed: "Open Freed", silent: "Reload Freed tab" }[link];
   $("openApp").hidden = !action;
   if (action) $("openApp").textContent = action;
   $("openApp").disabled = connecting; // (a check is already running)
@@ -222,9 +222,9 @@ function draw() {
   const sample = (ids) => [...ids].slice(0, 3).join(", ") || "none";
   $("diagText").textContent = [
     `Extension version: ${chrome.runtime.getManifest().version}`,
-    `Reel Feed tabs found: ${appTabIds.length}   (check: ${link})`,
-    `Last list from Reel Feed: ${libraryAt ? ago(libraryAt) : "never"}   · videos it reports: ${added.size}`,
-    `Reel Feed's ids (first 3): ${sample(added)}`,
+    `Freed tabs found: ${appTabIds.length}   (check: ${link})`,
+    `Last list from Freed: ${libraryAt ? ago(libraryAt) : "never"}   · videos it reports: ${added.size}`,
+    `Freed's ids (first 3): ${sample(added)}`,
     `Reels on this page: ${n}   · marked as added: ${nAdded}`,
     `This page's ids (first 3): ${sample(data.reels.map((r) => r.id))}`,
   ].join("\n");
@@ -241,7 +241,7 @@ function draw() {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.checked = !isAdded && picked.has(r.id);
-    box.disabled = isAdded; // already in Reel Feed
+    box.disabled = isAdded; // already in Freed
     box.onchange = () => {
       if (box.checked) picked.add(r.id);
       else picked.delete(r.id);
@@ -310,12 +310,12 @@ function updateSend() {
   const n = picked.size;
   const btn = $("sendBtn");
   btn.disabled = !n || n > MAX_SEND;
-  btn.textContent = n ? `Add ${n} to Reel Feed` : "Add to Reel Feed";
+  btn.textContent = n ? `Add ${n} to Freed` : "Add to Freed";
   $("footNote").textContent =
     n > MAX_SEND
-      ? `Reel Feed adds up to ${MAX_SEND} at a time — unselect ${n - MAX_SEND}.`
+      ? `Freed adds up to ${MAX_SEND} at a time — unselect ${n - MAX_SEND}.`
       : n
-        ? "Reel Feed opens; pick categories and lists there, then Add."
+        ? "Freed opens; pick categories and lists there, then Add."
         : "";
 }
 
@@ -387,7 +387,7 @@ for (const id of ["search", "minViews", "sort", "show"])
     rows = PAGE_ROWS; // a new filter starts the list from the top again
     draw();
   });
-// The most viewed reels that aren't added yet (among those the filters show), as many as Reel Feed adds at once.
+// The most viewed reels that aren't added yet (among those the filters show), as many as Freed adds at once.
 // Add them, and the next press picks the next 60: the ones just added are marked and skipped.
 $("topBtn").textContent = `Select top ${MAX_SEND} new`;
 $("topBtn").onclick = () => {

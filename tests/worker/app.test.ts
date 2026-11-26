@@ -8,9 +8,9 @@ import app, { type AppEnv, isPreviewBot, withPreview } from "../../worker/src/ap
 const PAGE = `<!doctype html>
 <html lang="en">
   <head>
-    <title>Ecomgy Reel Feed</title>
+    <title>Freed</title>
     <meta name="description" content="General" />
-    <meta property="og:title" content="Ecomgy Reel Feed" />
+    <meta property="og:title" content="Freed" />
   </head>
   <body></body>
 </html>`;
@@ -75,7 +75,7 @@ describe("link previews", () => {
     const html = await r.text();
     expect(String(oembed.mock.calls[0][0])).toContain(encodeURIComponent("https://www.youtube.com/shorts/abcDEF12345"));
     expect(html).toContain('<meta property="og:title" content="Why brands win" />');
-    expect(html).toContain('<meta property="og:description" content="Ads Lab · Ecomgy Reel Feed" />');
+    expect(html).toContain('<meta property="og:description" content="Ads Lab · Freed" />');
     expect(html).toContain('<meta property="og:image" content="https://i.ytimg.com/vi/abcDEF12345/hqdefault.jpg" />');
     expect(html).toContain('<meta property="og:url" content="https://reel.test/v/abcDEF12345" />');
     expect(html).toContain("<title>Why brands win</title>");
@@ -87,14 +87,14 @@ describe("link previews", () => {
     const html = withPreview(PAGE, { id: "abcDEF12345", title: `"><script>alert(1)</script>`, channel: "A & B" }, "https://x/v/1");
     expect(html).not.toContain("<script>");
     expect(html).toContain("&#34;&#62;&#60;script&#62;");
-    expect(html).toContain("A &#38; B · Ecomgy Reel Feed");
+    expect(html).toContain("A &#38; B · Freed");
   });
 
   it("if YouTube doesn't answer, the card still has the thumbnail and a general title", async () => {
     fakeOembed({ error: "Not Found" }, 404);
     const { e } = env();
     const html = await (await app.fetch(anon("/v/abcDEF12345", FACEBOOK), e)).text();
-    expect(html).toContain('og:title" content="A Short on Ecomgy Reel Feed"');
+    expect(html).toContain('og:title" content="A Short on Freed"');
     expect(html).toContain("hqdefault.jpg");
   });
 

@@ -1,6 +1,6 @@
-# Reel Feed collector (Chrome extension)
+# Freed collector (Chrome extension)
 
-Pick reels from a Facebook page's **Reels** tab and add them to Reel Feed in one go. Laptop/desktop
+Pick reels from a Facebook page's **Reels** tab and add them to Freed in one go. Laptop/desktop
 Chrome (or Edge) only.
 
 ## Install (once)
@@ -8,7 +8,7 @@ Chrome (or Edge) only.
 1. Open `chrome://extensions` (Edge: `edge://extensions`).
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and choose this `extension` folder.
-4. Pin it: puzzle-piece icon → pin **Reel Feed — collect page reels**.
+4. Pin it: puzzle-piece icon → pin **Freed — collect page reels**.
 
 The side panel explains the steps itself ("How to use this"). After you change these files, click the ↻ on the extension's card in `chrome://extensions`.
 
@@ -30,54 +30,54 @@ To keep a long session from getting your Facebook account in trouble, **Keep scr
 6. **Reels you've already added are marked.** Each one shows a green **✓ Added**, is dimmed and can't
    be ticked, and the top line counts them ("12 already added · 48 not added yet"). **Show** lets you
    see only the ones **not added yet** (or only the added ones). **Select shown** skips the added ones.
-   The marks update by themselves as soon as you add or delete videos in Reel Feed.
+   The marks update by themselves as soon as you add or delete videos in Freed.
 7. Tick the ones you want. **Select top 60 new** ticks the 60 most viewed reels that aren't added yet (among
    those the filters show); add them, and pressing it again picks the next 60. **Select shown** ticks everything
    the filters show that isn't added yet.
-8. **Add N to Reel Feed**: Reel Feed opens on the Added page with them. There each one shows its
+8. **Add N to Freed**: Freed opens on the Added page with them. There each one shows its
    title and caption, has **▶ Watch**, and its own **✎ Categories & lists** (starting from the
    guess). **Set categories & lists for all selected** sets them on many at once. Untick any you
    don't want, then **Add**. Ones you already have are left out.
 
-Reel Feed adds up to 60 at a time.
+Freed adds up to 60 at a time.
 
-**How the panel finds Reel Feed:** when you open it, it looks for Reel Feed in your open tabs, puts its
+**How the panel finds Freed:** when you open it, it looks for Freed in your open tabs, puts its
 small bridge script into them (Chrome only adds it to tabs opened *after* the extension was installed or
 reloaded, so this also covers tabs that were already open) and waits for the app's answer. The note under
 the filters says what happened:
-- **✓ Reel Feed says you've added N videos (updated …)**: working; **↻ Refresh** asks again.
-- **Reel Feed isn't open in a tab**: press **Open Reel Feed**; the marks arrive by themselves once it loads.
-- **Reel Feed is open but didn't answer**: that tab is an older version of the app; press **Reload Reel Feed tab**.
+- **✓ Freed says you've added N videos (updated …)**: working; **↻ Refresh** asks again.
+- **Freed isn't open in a tab**: press **Open Freed**; the marks arrive by themselves once it loads.
+- **Freed is open but didn't answer**: that tab is an older version of the app; press **Reload Freed tab**.
 If you just reloaded the extension (↻ on `chrome://extensions`), **close the side panel and open it again**:
 a panel that was already open keeps running the old code.
 
 **Marks not showing?** Open **Marks not showing? Details** under the filters. It lists the extension version,
-how many Reel Feed tabs it found, how many added videos Reel Feed reported (and the first few of their
+how many Freed tabs it found, how many added videos Freed reported (and the first few of their
 numbers), and the first few reel numbers on the page, so a mismatch is easy to see. "videos it reports: 0"
-means the Reel Feed in that browser has no added videos saved (or they haven't synced to it yet).
+means the Freed in that browser has no added videos saved (or they haven't synced to it yet).
 
 ## What it reads and sends
 
 - It reads only the reel tiles on the Facebook tab you're looking at: link, view count, thumbnail.
-- It sends nothing by itself. **Add** opens Reel Feed with the picked reel ids in the address
+- It sends nothing by itself. **Add** opens Freed with the picked reel ids in the address
   (`/added#add=id,id,…`); the app looks each one up the same way as adding one by link.
-- The "added" marks: Reel Feed (the app) posts the numbers of your added Facebook videos to its own page;
-  a small script (`bridge.js`) that runs **only on Reel Feed's own address** stores them in the
+- The "added" marks: Freed (the app) posts the numbers of your added Facebook videos to its own page;
+  a small script (`bridge.js`) that runs **only on Freed's own address** stores them in the
   extension. Only those public video numbers travel, and only inside your browser. It doesn't read
   Facebook or anything else on the app's page.
-- Titles and captions come from Reel Feed's own lookup (`/api/fb/meta`), two at a time, only for
+- Titles and captions come from Freed's own lookup (`/api/fb/meta`), two at a time, only for
   the reels the panel shows. They're kept in the extension's storage on this computer (up to
   3,000), so they aren't looked up again.
 
 ## Files
 
 - `manifest.json`: Manifest V3; permissions are the side panel, its own storage, putting its script
-  into a tab (`scripting`), and access to facebook.com and Reel Feed's address. Its only
-  content script is `bridge.js`, on Reel Feed's own address; nothing is loaded into Facebook pages
+  into a tab (`scripting`), and access to facebook.com and Freed's address. Its only
+  content script is `bridge.js`, on Freed's own address; nothing is loaded into Facebook pages
   by itself.
 - `content.js`: the panel puts it into a Facebook tab only when you open the panel on a page's Reels
   tab. It collects the tiles (and does the slow scroll) and does nothing on any other page.
-- `bridge.js`: runs on Reel Feed's own site; keeps the list of videos you've added for the panel's marks.
+- `bridge.js`: runs on Freed's own site; keeps the list of videos you've added for the panel's marks.
 - `panel.html`, `panel.css`, `panel.js`: the side panel.
 - `background.js`: opens the side panel when you click the button.
 
@@ -96,6 +96,6 @@ the extension's Errors page.
 
 `npm run check:extension` starts Microsoft Edge with a throwaway profile and this extension, opens Reel
 Feed with one added video, and checks the whole chain: the app's list reaches the extension, the panel
-connects to the open Reel Feed tab, and the panel marks the reel; then it reads a real Facebook Reels page
+connects to the open Freed tab, and the panel marks the reel; then it reads a real Facebook Reels page
 and checks that a reel you "add" there is marked. Needs Edge (Chrome 137+ ignores `--load-extension`);
-`BROWSER=path` and `APP=address` change the browser and the Reel Feed address.
+`BROWSER=path` and `APP=address` change the browser and the Freed address.

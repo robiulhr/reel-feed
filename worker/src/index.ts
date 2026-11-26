@@ -1,5 +1,5 @@
 /**
- * Reel Feed sync server (Cloudflare Worker).
+ * Freed sync server (Cloudflare Worker).
  *
  * - Login with APP_PASSWORD → signed 180-day session. Devices never see any token.
  * - /state           read/write user-state.json in the private data repo (saves, history, learning)

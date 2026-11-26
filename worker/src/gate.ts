@@ -77,7 +77,7 @@ const LOGIN_HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
 <meta name="theme-color" content="#14151a" />
-<title>Ecomgy Reel Feed</title>
+<title>Freed</title>
 <style>
   :root { color-scheme: dark light; --bg: #14151a; --fg: #fff; --muted: #a0a3b1; --card: #22232b; --line: #3a3c48; --accent: #ff3b5c; }
   @media (prefers-color-scheme: light) { :root { --bg: #f5f5f7; --fg: #15161a; --muted: #5d6070; --card: #fff; --line: #cfd1da; --accent: #d6153a; } }
@@ -97,7 +97,7 @@ const LOGIN_HTML = `<!doctype html>
 </head>
 <body>
 <main>
-  <h1>Ecomgy Reel Feed</h1>
+  <h1>Freed</h1>
   <p>This is a private app. Enter the password to continue.</p>
   <form id="f">
     <label for="pw">Password</label>

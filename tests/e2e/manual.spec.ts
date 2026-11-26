@@ -56,7 +56,7 @@ test.describe("Facebook videos you add by link", () => {
     await page.route("**/api/fb/thumb/**", (r) => r.fulfill({ status: 404, body: "" }));
   });
 
-  test("several Reel Feed tabs open at once: nothing one tab added is lost when another saves", async ({ app: page }) => {
+  test("several Freed tabs open at once: nothing one tab added is lost when another saves", async ({ app: page }) => {
     test.setTimeout(90_000); // three tabs at once: slow on a small CI machine
     const file = asFile(makeDataset());
     // every tab answers lookups with the video number in the link

@@ -82,7 +82,7 @@ async function boot() {
   pool.setRate(state.rate ?? 1);
   pool.setVolume(state.volume ?? 100);
   sync.startSync(onSyncUpdate);
-  onOtherTab(onSyncUpdate); // another Reel Feed tab saved something: show it here too
+  onOtherTab(onSyncUpdate); // another Freed tab saved something: show it here too
   // the device refused to save (storage full or blocked): say so instead of losing changes quietly
   onSaveFailed(() => {
     addLocalLog("system", false, "The browser refused to save your changes (its storage is full or blocked)");

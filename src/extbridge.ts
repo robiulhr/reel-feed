@@ -1,5 +1,5 @@
 /**
- * Tells the Reel Feed browser extension which Facebook videos you've already added, so its panel can
+ * Tells the Freed browser extension which Facebook videos you've already added, so its panel can
  * mark them. The extension has one small script that runs only on this site; it listens for this
  * message and keeps the list of ids. Only the public Facebook video numbers are sent, and only to this
  * very page (same origin) — the extension never gets your account, notes or anything else.

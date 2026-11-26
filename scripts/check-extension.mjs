@@ -1,6 +1,6 @@
 /**
  * Checks the browser extension for real: starts Microsoft Edge (or another Chromium) with a throwaway
- * profile and the extension loaded from `extension/`, opens Reel Feed with one added video in its saved
+ * profile and the extension loaded from `extension/`, opens Freed with one added video in its saved
  * data, and verifies the whole chain: the app announces it → the bridge script stores it → the side
  * panel connects and marks that reel "✓ Added". Nothing of your own browser profile is touched.
  *
@@ -66,12 +66,12 @@ try {
   const lib = (await sw.evaluate(() => chrome.storage.local.get("library"))).library;
   check(JSON.stringify(lib?.ids) === JSON.stringify([ID]), "the app's list reached the extension", JSON.stringify(lib));
 
-  // 2. the panel (opened as a tab here): it must find the open Reel Feed tab and show the answer
+  // 2. the panel (opened as a tab here): it must find the open Freed tab and show the answer
   const panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${extId}/panel.html`);
   await sleep(4000);
   const st = await panel.evaluate(() => ({ link, added: [...added], tabs: appTabIds.length }));
-  check(st.link === "ok" && st.tabs >= 1 && st.added.includes(ID), "the panel connected to the open Reel Feed tab", JSON.stringify(st));
+  check(st.link === "ok" && st.tabs >= 1 && st.added.includes(ID), "the panel connected to the open Freed tab", JSON.stringify(st));
 
   // 3. pretend the panel is looking at a Reels page with 3 reels, one of them added
   await panel.evaluate((id) => {

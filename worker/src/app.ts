@@ -90,13 +90,13 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /** The <head> tags a preview card is drawn from. */
 export function previewTags(v: VideoInfo, pageUrl: string): string {
-  const title = v.title || "A Short on Ecomgy Reel Feed";
-  const desc = v.channel ? `${v.channel} · Ecomgy Reel Feed` : "Ecomgy Reel Feed — Shorts from business channels";
+  const title = v.title || "A Short on Freed";
+  const desc = v.channel ? `${v.channel} · Freed` : "Freed — Shorts from business channels";
   const img = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`; // 480×360, always exists
   const m = (attr: "property" | "name", key: string, value: string) => `<meta ${attr}="${key}" content="${esc(value)}" />`;
   return [
     m("property", "og:type", "video.other"),
-    m("property", "og:site_name", "Ecomgy Reel Feed"),
+    m("property", "og:site_name", "Freed"),
     m("property", "og:title", title),
     m("property", "og:description", desc),
     m("property", "og:url", pageUrl),
@@ -116,7 +116,7 @@ export function previewTags(v: VideoInfo, pageUrl: string): string {
 export function withPreview(html: string, v: VideoInfo, pageUrl: string): string {
   const cleaned = html
     .replace(/\s*<meta\s+(?:property="og:[^"]*"|name="(?:twitter:[^"]*|description)")[^>]*>/g, "")
-    .replace(/<title>[^<]*<\/title>/, `<title>${esc(v.title || "Ecomgy Reel Feed")}</title>`);
+    .replace(/<title>[^<]*<\/title>/, `<title>${esc(v.title || "Freed")}</title>`);
   return cleaned.replace("</head>", `    ${previewTags(v, pageUrl)}\n  </head>`);
 }
 

@@ -1,4 +1,4 @@
-# Ecomgy Reel Feed
+# Freed
 
 A personal, YouTube-Shorts-style feed that shows **only Shorts from a hand-picked list of channels** (business, marketing, e-commerce, founders, Bangla business creators…). Built for Ecomgy research: see what's working in short-form business content, save good examples, and let the feed learn what you like.
 
@@ -163,7 +163,7 @@ Shown once (Swipe up/down, swipe left, double-tap, ⋯, ↻). About → *Show th
 | GitHub token (for the data repo) | Cloudflare Worker secret `GITHUB_TOKEN` only | – |
 | App password | Cloudflare Worker secret `APP_PASSWORD` only | – |
 
-**Several tabs at once** (`src/store.ts`): every tab keeps its own copy of your data and saves all of it to the same place in the browser (`localStorage`). The browser extension opens a new Reel Feed tab for each batch of videos, so tabs overlap often. Saving therefore **never overwrites**: before a tab saves, it takes in whatever another tab saved since it last looked (a union — nothing is removed; the other tab's unsent changes, such as a delete, are applied too), and tabs hear about each other's saves at once (the `storage` event), so a video added in one tab appears in the others without a reload. If the browser refuses to save (storage full or blocked) the app first drops the least useful data (old "seen" marks, watch history, API log) and retries, and if it still can't it shows a ⚠️ banner instead of failing silently. Tests: `tests/unit/tabs.test.ts` (several tabs as separate copies of the store) and an e2e with three real tabs. Before this (until the fix of 24 Nov 2026) the last tab to save wiped the others' additions — hundreds of videos could vanish.
+**Several tabs at once** (`src/store.ts`): every tab keeps its own copy of your data and saves all of it to the same place in the browser (`localStorage`). The browser extension opens a new Freed tab for each batch of videos, so tabs overlap often. Saving therefore **never overwrites**: before a tab saves, it takes in whatever another tab saved since it last looked (a union — nothing is removed; the other tab's unsent changes, such as a delete, are applied too), and tabs hear about each other's saves at once (the `storage` event), so a video added in one tab appears in the others without a reload. If the browser refuses to save (storage full or blocked) the app first drops the least useful data (old "seen" marks, watch history, API log) and retries, and if it still can't it shows a ⚠️ banner instead of failing silently. Tests: `tests/unit/tabs.test.ts` (several tabs as separate copies of the store) and an e2e with three real tabs. Before this (until the fix of 24 Nov 2026) the last tab to save wiped the others' additions — hundreds of videos could vanish.
 
 Note: because playback uses YouTube's player, YouTube counts the view, and if you're logged into YouTube in that browser it may appear in your YouTube watch history. Saves/hides/skips are **not** YouTube likes/subscriptions.
 
@@ -184,7 +184,7 @@ name `reel-feed-sync` · resource owner `robiulhr` · **Only select repositories
 Why: Contents on `reel-feed-data` = your synced data; Contents on `reel-feed` = editing `channels.json`; Actions on `reel-feed` = "Refresh now" and refresh status. The Worker code only ever touches `user-state.json` and `channels.json`.
 When it expires, sync stops with "GitHub token is invalid or expired" → create a new one with the same settings and run `npx wrangler secret put GITHUB_TOKEN`.
 
-**YouTube API key**: Google Cloud project "Ecomgy Reel Feed", YouTube Data API v3 enabled, key restricted to *YouTube Data API v3*, application restriction *None*. Free quota 10,000 units/day (resets midnight Pacific).
+**YouTube API key**: Google Cloud project "Freed", YouTube Data API v3 enabled, key restricted to *YouTube Data API v3*, application restriction *None*. Free quota 10,000 units/day (resets midnight Pacific).
 
 **Account safety** (these are the real master keys): turn on 2-factor authentication for **GitHub**, **Cloudflare** and **Google**, and keep their recovery codes safe.
 
@@ -357,7 +357,7 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 
 ## 6m. Your own domain (reel-feed.ecomgy.com)
 
-**Done:** `ecomgy.com` is on Cloudflare, the app answers at **https://reel-feed.ecomgy.com** (custom domain in `worker/app.wrangler.toml`), the extension (1.4.2) opens that address first, and the old `reel-feed.robiulhr2201.workers.dev` address keeps working. Sign in once at the new address and reinstall the phone's installed app from it. The original checklist, for the record:
+**Done:** `ecomgy.com` is on Cloudflare, the app answers at **https://reel-feed.ecomgy.com** (custom domain in `worker/app.wrangler.toml`), the extension (1.4.3) opens that address first, and the old `reel-feed.robiulhr2201.workers.dev` address keeps working. Sign in once at the new address and reinstall the phone's installed app from it. The original checklist, for the record:
 
 1. **Cloudflare dashboard → Add a site → ecomgy.com (Free).** It copies the existing DNS records. Compare them with what the domain serves today (website, email MX/TXT, other subdomains) and fix any difference *before* the next step.
 2. **At the registrar:** replace the nameservers with the two Cloudflare gives. Wait until Cloudflare says the site is active.

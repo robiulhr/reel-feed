@@ -1,9 +1,9 @@
 /**
- * Runs only on Reel Feed's own site (see manifest.json) — never on Facebook or any other site.
+ * Runs only on Freed's own site (see manifest.json) — never on Facebook or any other site.
  * The app posts the numbers of the Facebook videos you've already added; this keeps them for the side
  * panel, which marks those reels. Nothing else is read from the page, and nothing is sent anywhere.
  *
- * The panel also puts this script into Reel Feed tabs that were already open when the extension was
+ * The panel also puts this script into Freed tabs that were already open when the extension was
  * installed or reloaded (Chrome only adds it to tabs opened afterwards) — so it can run twice in a
  * tab: a copy that's still connected just asks the app again.
  */
