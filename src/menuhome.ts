@@ -114,6 +114,22 @@ function row(i: Item, open: (tab: string) => void) {
   return b;
 }
 
+/** The section list beside the Menu page on wide screens. */
+export function renderNav(nav: HTMLElement, current: string, open: (tab: string) => void) {
+  nav.replaceChildren();
+  for (const g of items()) {
+    nav.append(el("div", "pn-h", g.title));
+    for (const i of g.rows) {
+      const b = el("button", `pn-item${i.tab === current ? " on" : ""}`);
+      b.type = "button";
+      b.append(el("span", "mh-icon", i.icon), el("span", "mh-label", i.label));
+      if (i.tab === current) b.setAttribute("aria-current", "page");
+      b.onclick = () => open(i.tab);
+      nav.append(b);
+    }
+  }
+}
+
 export function renderHome(body: HTMLElement, open: (tab: string) => void) {
   body.classList.add("mh");
   body.append(cloudLine());

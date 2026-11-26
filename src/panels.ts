@@ -41,7 +41,7 @@ import { fbPageOf } from "./fbdata";
 import { deleteManual, fbVideoDialog, openBulkAdd, openOnFacebook, renderAdded } from "./manual";
 import { shortInList } from "./rank";
 import type { Short, Tab, Win } from "./types";
-import { PAGE_TITLES, renderHome } from "./menuhome";
+import { PAGE_TITLES, renderHome, renderNav } from "./menuhome";
 import { dismiss, go, pushLayer, type Route, toPath } from "./router";
 
 // ---------- overlays ----------
@@ -126,7 +126,10 @@ let panelTab = "home"; // the Menu opens on its home screen; each page has a bac
 export const currentPanelTab = () => panelTab;
 export const panelOpen = () => panelModal.isOpen();
 
+const wideMenu = () => matchMedia("(min-width: 900px)").matches; // the sections sit in a sidebar, so the Menu opens on one of them
+
 export function openPanel(tab = "home") {
+  if (tab === "home" && wideMenu()) tab = "saved";
   if (tab === "added") {
     // the videos you added now live in Channels & pages → Facebook → Videos (old links and the extension still open this address)
     showFacebook("videos");
@@ -157,6 +160,7 @@ export function renderPanel() {
   const body = els.panelBody;
   body.replaceChildren();
   body.classList.toggle("mh", panelTab === "home");
+  if (wideMenu()) renderNav(document.getElementById("panelNav") as HTMLElement, panelTab, (t) => openPanel(t));
   body.scrollTop = 0;
 
   if (panelTab === "home") renderHome(body, (t) => openPanel(t));

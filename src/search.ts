@@ -43,7 +43,11 @@ function forgetRecent() {
 }
 
 // ---------- the page ----------
-const view = { q: "", only: "all" as Only, shown: 24 };
+const view = { q: "", only: "all" as Only, kind: "all" as "all" | "shorts" | "long", shown: 24 };
+const KINDS: ["shorts" | "long", string][] = [
+  ["shorts", "Shorts"],
+  ["long", "Long videos"],
+];
 const FILTERS: [Only, string][] = [
   ["all", "All"],
   ["saved", "Saved"],
@@ -89,6 +93,19 @@ function renderSearch(body: HTMLElement, app: AppApi) {
       b.setAttribute("aria-pressed", String(view.only === id));
       chips.append(b);
     }
+    for (const [id, label] of KINDS) {
+      const b = btn(
+        label,
+        () => {
+          view.kind = view.kind === id ? "all" : id; // tap again to show both
+          view.shown = 24;
+          draw();
+        },
+        view.kind === id ? "on" : "",
+      );
+      b.setAttribute("aria-pressed", String(view.kind === id));
+      chips.append(b);
+    }
   };
 
   const draw = () => {
@@ -132,8 +149,8 @@ function renderSearch(body: HTMLElement, app: AppApi) {
 
     const topics = searchTopics(q).slice(0, 4);
     const notes = searchNotes(q).slice(0, 4);
-    const videos = searchVideos(app, q, view.only);
-    const longs = longDs ? searchVideos({ ds: longDs }, q, view.only) : [];
+    const videos = view.kind === "long" ? [] : searchVideos(app, q, view.only);
+    const longs = longDs && view.kind !== "shorts" ? searchVideos({ ds: longDs }, q, view.only) : [];
 
     if (topics.length) {
       out.append(el("div", "u-h", "Topics"));
