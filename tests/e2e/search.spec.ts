@@ -49,6 +49,7 @@ test.describe("search", () => {
     await page.locator("#noteBtn").click();
     await page.locator(".dlg").getByLabel("Your note on this video").fill("zebra stripes opening idea");
     await page.locator(".dlg").getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".dlg")).toBeHidden(); // (on a slow machine the key arrived while the sheet was still closing)
     await page.keyboard.press("/");
     const body = page.locator("#pageBody");
     await body.getByLabel(BOX).fill("zebra");

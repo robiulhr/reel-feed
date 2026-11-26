@@ -4420,3 +4420,48 @@ button[aria-busy="true"] {
     padding-inline: 0;
   }
 }
+
+/* Shorts feed, like YouTube: the buttons are bigger and start at the bottom of the video; the title is on the video, bottom left */
+.reel-actions {
+  top: auto;
+  bottom: 28px;
+  right: 8px;
+  flex-direction: column-reverse;
+  gap: 14px;
+}
+.reel-actions .act {
+  width: 52px;
+  height: 52px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.reel-actions .act .ico {
+  font-size: 26px;
+}
+.reel-actions .vol-pop {
+  top: auto;
+  bottom: 0;
+}
+.reel-info {
+  position: absolute;
+  left: 12px;
+  right: 76px;
+  bottom: 26px;
+  z-index: 9;
+  isolation: isolate;
+  pointer-events: none;
+}
+.reel-info a,
+.reel-info button {
+  pointer-events: auto;
+}
+.reel-info::before {
+  content: "";
+  position: absolute;
+  inset: -90px -76px -26px -12px;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.7));
+  z-index: -1;
+  pointer-events: none;
+}
+.bottom {
+  justify-content: flex-end;
+}
