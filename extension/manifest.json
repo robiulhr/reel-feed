@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Freed — collect page reels",
   "description": "Pick reels from a Facebook page's Reels tab and add them to Freed in one go.",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "action": {
     "default_title": "Open Freed collector",
@@ -15,11 +15,12 @@
     "https://www.facebook.com/*",
     "https://web.facebook.com/*",
     "https://reel-feed.robiulhr2201.workers.dev/*",
+    "https://freed.ecomgy.com/*",
     "https://reel-feed.ecomgy.com/*"
   ],
   "content_scripts": [
     {
-      "matches": ["https://reel-feed.robiulhr2201.workers.dev/*", "https://reel-feed.ecomgy.com/*"],
+      "matches": ["https://reel-feed.robiulhr2201.workers.dev/*", "https://reel-feed.ecomgy.com/*", "https://freed.ecomgy.com/*"],
       "js": ["bridge.js"],
       "run_at": "document_idle"
     }

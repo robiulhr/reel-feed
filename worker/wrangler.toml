@@ -11,7 +11,7 @@ DATA_REPO = "robiulhr/reel-feed-data"
 CODE_REPO = "robiulhr/reel-feed"
 WORKFLOW_FILE = "deploy.yml"
 # Sites allowed to call this Worker (local dev addresses are always allowed)
-ALLOWED_ORIGINS = "https://reel-feed.robiulhr2201.workers.dev,https://reel-feed.ecomgy.com,https://robiulhr.github.io"
+ALLOWED_ORIGINS = "https://reel-feed.robiulhr2201.workers.dev,https://freed.ecomgy.com,https://reel-feed.ecomgy.com,https://robiulhr.github.io"
 
 # Free KV store: daily YouTube-quota counter, budget setting, cached channel previews & searches
 [[kv_namespaces]]

@@ -5,7 +5,7 @@
  */
 // Freed lives at both addresses while it moves to its own domain: the panel finds an open tab at either.
 // APP is the one it opens and asks for lookups; when the new domain is live, put it first.
-const APPS = ["https://reel-feed.ecomgy.com/", "https://reel-feed.robiulhr2201.workers.dev/"];
+const APPS = ["https://freed.ecomgy.com/", "https://reel-feed.ecomgy.com/", "https://reel-feed.robiulhr2201.workers.dev/"];
 const APP = APPS[0];
 const MAX_SEND = 60; // the app adds up to 60 at a time
 const PAGE_ROWS = 400; // reels drawn in the list at once (the rest are one tap away); picking and filtering use them all

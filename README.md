@@ -357,7 +357,7 @@ Measured: a normal refresh dropped from **~590 to ~17 units**. About once a week
 
 ## 6m. Your own domain (reel-feed.ecomgy.com)
 
-**Done:** `ecomgy.com` is on Cloudflare, the app answers at **https://reel-feed.ecomgy.com** (custom domain in `worker/app.wrangler.toml`), the extension (1.4.3) opens that address first, and the old `reel-feed.robiulhr2201.workers.dev` address keeps working. Sign in once at the new address and reinstall the phone's installed app from it. The original checklist, for the record:
+**Done:** `ecomgy.com` is on Cloudflare, the app answers at **https://reel-feed.ecomgy.com** (custom domain in `worker/app.wrangler.toml`), the extension (1.4.4) opens that address first; it is now also reachable at **https://freed.ecomgy.com** (the app's new main address; the old one keeps working), and the old `reel-feed.robiulhr2201.workers.dev` address keeps working. Sign in once at the new address and reinstall the phone's installed app from it. The original checklist, for the record:
 
 1. **Cloudflare dashboard → Add a site → ecomgy.com (Free).** It copies the existing DNS records. Compare them with what the domain serves today (website, email MX/TXT, other subdomains) and fix any difference *before* the next step.
 2. **At the registrar:** replace the nameservers with the two Cloudflare gives. Wait until Cloudflare says the site is active.
