@@ -756,7 +756,12 @@ async function videoComments(env: Env, u: URL) {
   if (!/^[\w-]{11}$/.test(id)) throw new HttpError(400, "That isn't a video id");
   return cached("video-comments", id, async () => {
     try {
-      const j = await yt(env, "commentThreads", { part: "snippet", videoId: id, order: "relevance", maxResults: 20, textFormat: "plainText" }, { units: 0 });
+      const j = await yt(
+        env,
+        "commentThreads",
+        { part: "snippet", videoId: id, order: "relevance", maxResults: 20, textFormat: "plainText" },
+        { units: 0 },
+      );
       const items = (j?.items ?? []).map((it: any) => {
         const c = it.snippet?.topLevelComment?.snippet ?? {};
         return {
