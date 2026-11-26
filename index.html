@@ -53,10 +53,14 @@
 
         <!-- Home: a Shorts row, then the long videos; shown instead of the feed (.shell.is-home) -->
         <section class="home" id="home" hidden aria-label="Home">
+          <div class="home-pull" id="homePull" aria-hidden="true">↻</div>
           <div class="home-scroll" id="homeScroll">
             <div class="home-head">
               <h2 class="home-h">Shorts</h2>
-              <button type="button" class="home-more" id="homeSeeAll">▶ Play all</button>
+              <span class="home-head-btns">
+                <button type="button" class="home-more" id="homeRefresh" aria-label="Refresh Home">↻ Refresh</button>
+                <button type="button" class="home-more" id="homeSeeAll">▶ Play all</button>
+              </span>
             </div>
             <div class="home-row-wrap">
               <button type="button" class="home-arrow left" id="homeRowPrev" aria-label="Scroll Shorts left" hidden>‹</button>

@@ -131,6 +131,31 @@ test.describe("Home", () => {
     await expect(page.locator("#home")).toBeVisible();
     expect(await playing(page)).toBe(false);
   });
+  test("↻ Refresh and pulling down at the top both refresh Home", async ({ app: page }) => {
+    await closeTips(page);
+    await openHome(page);
+    await page.locator("#homeRefresh").click();
+    await expect(page.locator(".toast")).toContainText("Fresh feed");
+    await expect(page.locator("#homeRow .home-short").first()).toBeVisible();
+    await expect(page.locator("#home")).toBeVisible();
+    await page.waitForTimeout(3500); // the toast goes away
+    // a pull: finger down 160px from the top of the list
+    await page.evaluate(() => {
+      const el = document.getElementById("homeScroll") as HTMLElement;
+      const t = (y: number) => new Touch({ identifier: 1, target: el, clientX: 100, clientY: y });
+      const fire = (type: string, y: number) =>
+        el.dispatchEvent(
+          new TouchEvent(type, { bubbles: true, cancelable: true, touches: type === "touchend" ? [] : [t(y)], changedTouches: [t(y)] }),
+        );
+      fire("touchstart", 200);
+      fire("touchmove", 280);
+      fire("touchmove", 380);
+      fire("touchend", 380);
+    });
+    await expect(page.locator(".toast")).toContainText("Fresh feed");
+    await expect(page.locator("#home")).toBeVisible();
+  });
+
   test("a link to one Short opens the feed, not Home", async ({ app: page }) => {
     await closeTips(page);
     await openHome(page);

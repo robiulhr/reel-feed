@@ -66,6 +66,8 @@ export const els = {
   homeRowPrev: $<HTMLButtonElement>("homeRowPrev"),
   homeRowNext: $<HTMLButtonElement>("homeRowNext"),
   homeSeeAll: $<HTMLButtonElement>("homeSeeAll"),
+  homeRefresh: $<HTMLButtonElement>("homeRefresh"),
+  homePull: $("homePull"),
   homeLong: $("homeLong"),
   tabbar: $("tabbar"),
   shell: document.querySelector<HTMLElement>(".shell")!,

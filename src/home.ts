@@ -308,7 +308,76 @@ function arrows() {
   els.homeRowNext.hidden = !wide || r.scrollLeft + r.clientWidth >= r.scrollWidth - 8;
 }
 
+// ---------- refresh: pull down at the top (touch), or the ↻ button ----------
+let pulling = false;
+async function refreshHome() {
+  if (pulling) return;
+  pulling = true;
+  els.homeRefresh.disabled = true;
+  els.homePull.classList.add("spin");
+  try {
+    const { refreshFeed } = await import("./controls");
+    await refreshFeed(); // looks for newer Shorts and starts a fresh pick
+    rowKey = "";
+    longKey = ""; // pick the row and the long list again, even if nothing new arrived
+    void loadLong((ds) => {
+      if (ds) longDs = ds;
+      if (isHome()) renderHome();
+    }).then((ds) => {
+      if (ds) longDs = ds;
+      if (isHome()) renderHome();
+    });
+    renderHome();
+  } finally {
+    pulling = false;
+    els.homeRefresh.disabled = false;
+    els.homePull.classList.remove("spin");
+    els.homePull.style.transform = "";
+    els.homePull.style.opacity = "";
+  }
+}
+
+function bindPull() {
+  const sc = els.homeScroll;
+  const pull = els.homePull;
+  let y0 = -1;
+  let dy = 0;
+  sc.addEventListener(
+    "touchstart",
+    (e) => {
+      y0 = sc.scrollTop <= 0 && !pulling ? e.touches[0].clientY : -1;
+      dy = 0;
+    },
+    { passive: true },
+  );
+  sc.addEventListener(
+    "touchmove",
+    (e) => {
+      if (y0 < 0) return;
+      dy = Math.max(0, e.touches[0].clientY - y0);
+      if (dy <= 0 || sc.scrollTop > 0) return;
+      const shown = Math.min(dy * 0.5, 72);
+      pull.style.transform = `translateY(${shown - 44}px) rotate(${shown * 4}deg)`;
+      pull.style.opacity = String(Math.min(1, shown / 48));
+    },
+    { passive: true },
+  );
+  const end = () => {
+    if (y0 >= 0 && dy * 0.5 >= 56) void refreshHome();
+    else {
+      pull.style.transform = "";
+      pull.style.opacity = "";
+    }
+    y0 = -1;
+    dy = 0;
+  };
+  sc.addEventListener("touchend", end, { passive: true });
+  sc.addEventListener("touchcancel", end, { passive: true });
+}
+
 export function initHome() {
+  els.homeRefresh.onclick = () => void refreshHome();
+  bindPull();
   markRail("shorts"); // until Home shows, the rail (wide screens) marks the Shorts feed
   setBase(() => (isHome() || fromHome ? { k: "home" } : { k: "feed" }));
   homeHook.refresh = () => renderHome();
