@@ -68,6 +68,13 @@ async function boot() {
   initFullscreen();
   initPanels();
   initHome();
+  // wide screens get a panel beside the Shorts video (loaded only then)
+  const wide = matchMedia("(min-width: 900px)");
+  const loadSide = () => {
+    if (wide.matches) void import("./sidepanel");
+  };
+  loadSide();
+  wide.addEventListener("change", loadSide);
   renderControls();
   renderMute();
   startVisit(Math.floor(nowSec()));

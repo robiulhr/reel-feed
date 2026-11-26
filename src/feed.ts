@@ -222,6 +222,9 @@ function renderCtxBar() {
 }
 
 /** What the Home screen (home.ts) tells the feed: whether it's showing (nothing may start playing behind it) and how to redraw it. */
+/** The wide-screen side panel (sidepanel.ts, loaded only on wide screens) redraws when the video changes. */
+export const sideHook = { refresh: () => {} };
+
 export const homeHook = { open: false, refresh: () => {}, leave: () => {} };
 
 /** Back to the swipe feed: carry on with the video that was playing, or start the feed if it hasn't started. */
@@ -350,6 +353,7 @@ export function renderMeta() {
 
 /** The amber note chip above the title: "Add note", or the start of the note you wrote. */
 export function renderNote() {
+  sideHook.refresh(); // (the wide-screen panel shows the note too)
   const b = els.noteBtn;
   const cur = feed.cur;
   b.hidden = !cur;

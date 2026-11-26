@@ -253,6 +253,14 @@ function ensureLong() {
   void loadLong(arrived).then(arrived);
 }
 
+/** Which rail/bar button shows as the current page. */
+function markRail(go: "home" | "shorts") {
+  for (const b of els.tabbar.querySelectorAll<HTMLButtonElement>("button[data-go]")) {
+    if (b.dataset.go === go) b.setAttribute("aria-current", "page");
+    else if (b.dataset.go === "home" || b.dataset.go === "shorts") b.removeAttribute("aria-current");
+  }
+}
+
 // ---------- showing and hiding ----------
 const layout = () => els.shell.parentElement as HTMLElement;
 
@@ -263,6 +271,7 @@ export function showHome() {
   els.home.hidden = false;
   els.tabbar.hidden = false;
   homeHook.open = true;
+  markRail("home");
   if (!wasOpen) pool.pause(); // nothing plays behind Home
   els.tabbar.classList.remove("tb-hide");
   renderHome();
@@ -279,8 +288,9 @@ export function leaveHome() {
   savedTop = els.homeScroll.scrollTop;
   layout().classList.remove("is-home");
   els.home.hidden = true;
-  els.tabbar.hidden = true;
+  els.tabbar.hidden = true; // (on wide screens the rail stays visible beside the feed: see style.css)
   homeHook.open = false;
+  markRail("shorts");
 }
 
 /** The Shorts tab: back to the swipe feed where it was. */
@@ -299,6 +309,7 @@ function arrows() {
 }
 
 export function initHome() {
+  markRail("shorts"); // until Home shows, the rail (wide screens) marks the Shorts feed
   setBase(() => (isHome() || fromHome ? { k: "home" } : { k: "feed" }));
   homeHook.refresh = () => renderHome();
   homeHook.leave = () => {
@@ -325,11 +336,17 @@ export function initHome() {
     if (!b) return;
     switch (b.dataset.go) {
       case "home":
-        els.homeScroll.scrollTo({ top: 0, behavior: "smooth" });
+        if (isHome()) els.homeScroll.scrollTo({ top: 0, behavior: "smooth" });
+        else {
+          go({ k: "home" }); // the wide-screen rail is also beside the Shorts feed
+          showHome();
+        }
         break;
       case "shorts":
-        go({ k: "feed" });
-        openShortsFeed();
+        if (isHome()) {
+          go({ k: "feed" });
+          openShortsFeed();
+        }
         break;
       case "search":
         els.searchBtn.click();

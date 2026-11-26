@@ -62,12 +62,13 @@ test.describe("watching", () => {
       }),
     );
     const before = (await player(page))!.t;
-    await page.mouse.dblclick(box.x + box.width * 0.85, box.y + box.height / 2);
+    // (above the buttons stacked at the bottom right, so the tap reaches the video)
+    await page.mouse.dblclick(box.x + box.width * 0.85, box.y + box.height * 0.25);
     await expect(page.locator("#skipHint")).toHaveText(/10s/);
     const after = (await player(page))!.t;
     expect(after - before).toBeGreaterThanOrEqual(9);
     await page.waitForTimeout(400);
-    await page.mouse.dblclick(box.x + box.width * 0.15, box.y + box.height / 2);
+    await page.mouse.dblclick(box.x + box.width * 0.15, box.y + box.height * 0.25);
     expect((await player(page))!.t).toBeLessThan(after - 8);
   });
 
