@@ -4643,3 +4643,29 @@ button[aria-busy="true"] {
 .home-scroll {
   touch-action: pan-y;
 }
+
+/* ← Home, Add note and Topic: one row, left to right, the same height and shape */
+.chip-row .act-home {
+  flex: none;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  padding: 7px 14px 7px 11px;
+  border-radius: 999px;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  background: rgba(255, 255, 255, 0.14);
+}
+.chip-row .act-home .ico {
+  font-size: 15px;
+}
+.chip-row .note-chip {
+  max-width: none;
+}
+@media (min-width: 900px) {
+  .layout:not(.is-home) .chip-row .act-home {
+    display: none; /* the rail has Home */
+  }
+}

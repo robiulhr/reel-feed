@@ -18,6 +18,15 @@ test.describe("Wide screen: the Shorts feed uses the space", () => {
     await expect(page.locator("#title")).not.toBeEmpty();
   });
 
+  test("scrolling the panel with the wheel does not change the video", async ({ app: page }) => {
+    await closeTips(page);
+    const title = await page.locator("#title").textContent();
+    await page.locator("#sidePanel").hover();
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(700);
+    await expect(page.locator("#title")).toHaveText(title ?? "");
+  });
+
   test("the panel follows the video", async ({ app: page }) => {
     await closeTips(page);
     const first = await page.locator("#sidePanel .sp-title").textContent();

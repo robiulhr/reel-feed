@@ -195,6 +195,7 @@ function bindWheel() {
     "wheel",
     (e) => {
       if (anyModalOpen() || !els.tips.hidden || onOtherScreen()) return;
+      if ((e.target as HTMLElement | null)?.closest?.("#sidePanel")) return; // scrolling the wide-screen panel must not move the video
       const t = Date.now();
       if (t < wheelLock) return;
       wheelAcc += e.deltaY;
