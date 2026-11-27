@@ -9,6 +9,7 @@ import { openChannel } from "./explore";
 import { historyShorts } from "./history";
 import { toast } from "./ui";
 import { announce } from "./a11y";
+import { loadLong } from "./data";
 import { ago, compact, nowSec } from "./dom";
 import { banner, els, setThumb, showEmpty, showSpinner, thumb } from "./view";
 import { playback, playerHooks, pool, resetWatch, stopClock } from "./player";
@@ -178,8 +179,51 @@ export function playNow(s: Short) {
 }
 
 /** Swipe through a specific list; the main feed waits where you left it. */
+/**
+ * Long videos you saved, noted, put in topics or watched are found again after a restart: they live in the
+ * long-video data, so they are added to the lookup (with their channel in the Shorts data's channel list).
+ */
+export async function adoptLong() {
+  const wanted = new Set<string>([
+    ...state.saved,
+    ...Object.keys(state.notes),
+    ...state.hist.map((h) => h.id),
+    ...state.topics.flatMap((t) => t.vids.map((v) => v.id)),
+    ...state.playlists.flatMap((p) => p.ids),
+  ]);
+  if (![...wanted].some((id) => !feed.byId.has(id))) return; // everything is already known: the long videos need not be read
+  const ds = await loadLong();
+  if (!ds) return;
+  for (const v of ds.videos) {
+    if (!wanted.has(v.id) || feed.byId.has(v.id)) continue;
+    const c = ds.channels[v.ch];
+    if (!c) continue;
+    feed.byId.set(v.id, { ...v, ch: ensureChannel({ id: c.id, name: c.n, handle: c.h, thumb: c.thumb, subs: c.subs }) });
+  }
+}
+
 export function playList(title: string, items: Short[], start: number, onBack?: () => void) {
   if (!items.length) return;
+  const first = items[Math.max(0, Math.min(start, items.length - 1))];
+  if (first.d) {
+    // a long video (from Saved, History, a topic…) goes to the player page, not the Shorts player
+    for (const s of items) if (!feed.byId.has(s.id)) feed.byId.set(s.id, s);
+    finishCurrent();
+    closeOverlaysForPlayback();
+    void import("./home").then((m) =>
+      m.openLongFrom(
+        first,
+        items.filter((s) => s.d),
+        feed.ds,
+      ),
+    );
+    return;
+  }
+  if (items.some((s) => s.d)) {
+    // Shorts only: the Shorts player can't play the long videos in a mixed list
+    start = items.slice(0, start).filter((s) => !s.d).length;
+    items = items.filter((s) => !s.d);
+  }
   for (const s of items) if (!feed.byId.has(s.id)) feed.byId.set(s.id, s); // so saves from this list show in Saved
   finishCurrent();
   closeOverlaysForPlayback();

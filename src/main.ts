@@ -27,6 +27,7 @@ import { btn, nowSec } from "./dom";
 import { banner, els, showEmpty } from "./view";
 import { pool } from "./player";
 import {
+  adoptLong,
   channelsCtx,
   feed,
   latestVersion,
@@ -128,6 +129,7 @@ async function boot() {
   }
   setData(first.ds, false);
   initChannels(channelsCtx());
+  void adoptLong(); // long videos you saved or watched can be found again
   const linked = !!wantShort;
   // the app opens on Home (or, by your choice on this device, straight into the Shorts feed); a link to one Short or
   // a hand-over from the browser extension always goes to the feed

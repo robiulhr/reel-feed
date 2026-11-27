@@ -191,7 +191,7 @@ export interface HistItem {
   id: string;
   at: number;
   f: number;
-  x?: { t: string; n: string; h: string; c: string };
+  x?: { t: string; n: string; h: string; c: string; d?: number }; // d = length, for a long video
 }
 const MAX_HIST = 600;
 

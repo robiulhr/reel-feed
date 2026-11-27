@@ -148,3 +148,22 @@ test("Back from a Short opened on Home returns to Home (the ← button too)", as
   await expect(page.locator("#home")).toBeVisible();
   await expect(page).toHaveURL(/\/home$/);
 });
+
+test.describe("Long videos in your library", () => {
+  test("a long video you watched is in History, and opening it from there uses the player page", async ({ app: page }) => {
+    await closeTips(page);
+    const title = await openFirstLong(page, 40);
+    await expect.poll(async () => (await watched(page))?.t ?? 0).toBeGreaterThanOrEqual(40);
+    await page.locator(".w-bar").getByRole("button", { name: /Home/ }).click();
+    await page.locator("#tabbar").getByRole("button", { name: "Menu" }).click();
+    await page
+      .getByRole("button", { name: /History/ })
+      .first()
+      .click();
+    const row = page.locator("#panelBody .h-row", { hasText: title });
+    await expect(row).toBeVisible();
+    await row.click();
+    await expect(page.locator("#watch")).toBeVisible();
+    await expect(page.locator(".w-title")).toHaveText(title);
+  });
+});

@@ -8,7 +8,7 @@
  * It sits over Home, so Back (or Home) returns to Home exactly where you left it.
  * Loaded only when a long video is opened (its own small file).
  */
-import { ago, btn, compact, el } from "./dom";
+import { ago, btn, compact, el, nowSec } from "./dom";
 import { lengthLabel } from "./home";
 import { loadApi } from "./pool";
 import { openChannel } from "./explore";
@@ -72,6 +72,7 @@ let speed = Number(read<number>(SPEED_KEY, 1)) || 1;
 let auto = read<boolean>(AUTO_KEY, false);
 let token = 0; // a newer load makes an older one stop
 let lastState = -1;
+let startedAt = 0; // when the current video was opened (unix seconds)
 
 const time = (): number => {
   try {
@@ -720,10 +721,29 @@ function jumpTo(s: Short) {
   show(at + 1);
 }
 
+/** What you watched goes into History, like a Short does (with enough to rebuild it later). */
+function logWatch(s: Short | undefined, sec: number) {
+  if (!s || !cur || state.histPaused || sec < 10) return;
+  const ch = cur.ds.channels[s.ch];
+  act({
+    t: "watch",
+    item: {
+      id: s.id,
+      at: startedAt || nowSec(),
+      f: s.d ? Math.min(1, Math.round((sec / s.d) * 100) / 100) : 0,
+      ...(ch ? { x: { t: s.t, n: ch.n, h: ch.h, c: ch.id, d: s.d || undefined } } : {}),
+    },
+  });
+}
+
 function show(i: number) {
   if (!cur || !p) return;
   const old = here();
-  if (old && playerReady) savePos(old.id, time());
+  if (old && playerReady) {
+    savePos(old.id, time());
+    logWatch(old, time());
+  }
+  startedAt = nowSec();
   at = i;
   const s = cur.list[i];
   if (root) root.dataset.vid = s.id;
@@ -792,7 +812,10 @@ function tick() {
 /** Closes the page (Back already took its history step). */
 function hide() {
   const s = here();
-  if (s && playerReady) savePos(s.id, time());
+  if (s && playerReady) {
+    savePos(s.id, time());
+    logWatch(s, time());
+  }
   clearInterval(timer);
   destroyPlayer();
   if (root) {
