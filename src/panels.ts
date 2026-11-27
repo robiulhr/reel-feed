@@ -640,19 +640,54 @@ export function renderControls() {
   els.tabs.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
     mark(b, b.dataset.tab === state.tab);
   });
+  const cur = els.tabs.querySelector<HTMLButtonElement>(`button[data-tab="${state.tab}"]`);
+  els.sortLabel.textContent = cur?.textContent ?? "For You"; // phones show the order as one chip
   renderFilterBar();
 }
 
 function bindTopBar() {
   bindFilterBar();
   els.tabs.setAttribute("aria-label", "Feed");
-  els.tabs.addEventListener("click", (e) => {
-    const tab = (e.target as HTMLElement).closest("button")?.dataset.tab as Tab | undefined;
+  const pickTab = (tab: Tab | undefined) => {
     if (!tab || tab === state.tab) return;
     state.tab = tab;
     persist();
     renderControls();
     resetFeed();
+  };
+  els.tabs.addEventListener("click", (e) => pickTab((e.target as HTMLElement).closest("button")?.dataset.tab as Tab | undefined));
+
+  // phones: the order (For You, Trending…) is one chip that opens a short list
+  const closeSort = () => {
+    els.sortMenu.hidden = true;
+    els.sortChip.setAttribute("aria-expanded", "false");
+  };
+  els.sortChip.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!els.sortMenu.hidden) return closeSort();
+    els.sortMenu.replaceChildren(
+      ...Array.from(els.tabs.querySelectorAll<HTMLButtonElement>("button")).map((t) => {
+        const on = t.dataset.tab === state.tab;
+        const b = btn(
+          t.textContent ?? "",
+          () => {
+            closeSort();
+            pickTab(t.dataset.tab as Tab);
+          },
+          `sort-item${on ? " on" : ""}`,
+        );
+        b.setAttribute("aria-pressed", String(on));
+        return b;
+      }),
+    );
+    els.sortMenu.hidden = false;
+    els.sortChip.setAttribute("aria-expanded", "true");
+  });
+  document.addEventListener("click", (e) => {
+    if (!els.sortMenu.hidden && !els.sortMenu.contains(e.target as Node)) closeSort();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.sortMenu.hidden) closeSort();
   });
 }
 

@@ -5149,3 +5149,88 @@ a,
     display: inline-flex;
   }
 }
+
+/* ---------- phones, Home: the order tabs become one chip, so the header is a single row ---------- */
+.sort-chip {
+  display: none;
+}
+.sort-menu {
+  display: none;
+}
+@media (max-width: 699px) {
+  .is-home .top {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    position: relative;
+    z-index: 20;
+  }
+  .is-home .row1,
+  .is-home .row2:not([hidden]) {
+    display: contents;
+  }
+  .is-home .tabs,
+  .is-home .scroll-wrap:has(> .tabs),
+  .is-home #homeRefresh {
+    display: none;
+  }
+  .is-home .top-logo {
+    order: 0;
+  }
+  .is-home .sort-chip {
+    order: 1;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    background: var(--chip);
+    border: 1px solid var(--accent, #ff3b5c);
+    border-radius: 999px;
+    padding: 6px 10px;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .is-home .filt-btn {
+    order: 2;
+  }
+  .is-home .row2 .scroll-wrap {
+    order: 3;
+    flex: 1;
+    min-width: 0;
+  }
+  .is-home .row2 .scroll-arrow {
+    display: none; /* a finger scrolls the chips */
+  }
+  .is-home .row1 #searchBtn {
+    order: 4;
+    flex: none;
+  }
+  .is-home .sort-menu:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    left: 48px;
+    min-width: 170px;
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .sort-item {
+    background: none;
+    border: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .sort-item.on {
+    font-weight: 600;
+    background: var(--panel-2);
+  }
+}

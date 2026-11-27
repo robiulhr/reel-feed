@@ -82,10 +82,11 @@ test.describe("Home", () => {
   }) => {
     await closeTips(page);
     await openHome(page);
-    const tabs = page.locator("#tabs");
-    await expect(tabs.getByRole("button", { name: "Most viewed" })).toBeVisible();
-    await tabs.getByRole("button", { name: "Most viewed" }).click();
-    await expect(tabs.getByRole("button", { name: "Most viewed" })).toHaveAttribute("aria-pressed", "true");
+    // phones: the order is one chip ("For You ▾") that opens a short list
+    await expect(page.locator("#sortChip")).toBeVisible();
+    await page.locator("#sortChip").click();
+    await page.locator("#sortMenu").getByRole("button", { name: "Most viewed" }).click();
+    await expect(page.locator("#sortLabel")).toHaveText("Most viewed");
     await expect(page.locator("#home")).toBeVisible();
     const views = async () =>
       page.locator("#homeLong .hl-meta").evaluateAll((els) =>
@@ -131,14 +132,10 @@ test.describe("Home", () => {
     await expect(page.locator("#home")).toBeVisible();
     expect(await playing(page)).toBe(false);
   });
-  test("↻ Refresh and pulling down at the top both refresh Home", async ({ app: page }) => {
+  test("pulling down at the top refreshes Home (no Refresh button on phones)", async ({ app: page }) => {
     await closeTips(page);
     await openHome(page);
-    await page.locator("#homeRefresh").click();
-    await expect(page.locator(".toast")).toContainText("Fresh feed");
-    await expect(page.locator("#homeRow .home-short").first()).toBeVisible();
-    await expect(page.locator("#home")).toBeVisible();
-    await page.waitForTimeout(3500); // the toast goes away
+    await expect(page.locator("#homeRefresh")).toBeHidden(); // phones refresh by pulling down
     // a pull: finger down 160px from the top of the list
     await page.evaluate(() => {
       const el = document.getElementById("homeScroll") as HTMLElement;
