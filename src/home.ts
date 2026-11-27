@@ -9,8 +9,9 @@
  */
 import { loadLong } from "./data";
 import { ago, compact, el } from "./dom";
-import { setLongSource } from "./explore";
-import { feed, homeHook, playList, resumeFeed } from "./feed";
+import { openChannelOf, setLongSource } from "./explore";
+import { longCardEl } from "./longcard";
+import { app, feed, homeHook, playList, resumeFeed } from "./feed";
 import { pool } from "./player";
 import { buildQueue, feedFilter } from "./rank";
 import { go, inList, setBase } from "./router";
@@ -182,22 +183,18 @@ function shortCard(s: Short, i: number): HTMLElement {
   return b;
 }
 
-function longCard(s: Short): HTMLElement {
+function longCard(s: Short, open: () => void = () => openLong(s, longItems)): HTMLElement {
   const ch = longDs?.channels[s.ch];
-  const b = el("button", "home-long-card");
-  b.type = "button";
-  const box = el("span", "hl-thumb");
-  const img = el("img");
-  img.alt = "";
-  img.loading = "lazy";
-  img.decoding = "async";
-  thumb(img, s.id);
-  box.append(img);
-  if (s.d) box.append(el("span", "hl-dur", lengthLabel(s.d)));
-  const meta = [ch?.n, `${compact(s.v)} views`, ago(s.p)].filter(Boolean).join(" · ");
-  b.append(box, el("span", "hl-title", s.t), el("span", "hl-meta", meta));
-  b.onclick = () => openLong(s, longItems); // its name is the text on it: length, title, channel, views
-  return b;
+  return longCardEl({
+    id: s.id,
+    title: s.t,
+    dur: s.d ? lengthLabel(s.d) : "",
+    channel: ch?.n ?? "",
+    rest: `${compact(s.v)} views · ${ago(s.p)}`,
+    thumb,
+    open,
+    openChannel: ch ? () => openChannelOf(app, ch) : undefined,
+  });
 }
 
 const note = (text: string) => el("p", "home-note", text);
@@ -233,7 +230,7 @@ function drawCont() {
   els.homeCont.hidden = !items.length;
   els.homeContRow.replaceChildren(
     ...items.map((s) => {
-      const c = longCard(s);
+      const c = longCard(s, () => openLong(s, items));
       c.setAttribute("role", "listitem");
       const at = pos[s.id]?.[0] ?? 0;
       if (s.d) {
@@ -241,7 +238,6 @@ function drawCont() {
         bar.style.width = `${Math.min(100, Math.round((at / s.d) * 100))}%`;
         c.querySelector(".hl-thumb")?.append(bar);
       }
-      c.onclick = () => openLong(s, items);
       return c;
     }),
   );
@@ -254,7 +250,7 @@ function drawLong() {
     return box.replaceChildren(note("Long videos from your channels will appear here after the next daily update."));
   if (!longItems.length) return box.replaceChildren(note("No long videos match these filters."));
   moreObs?.disconnect();
-  box.replaceChildren(...longItems.slice(0, longShown).map(longCard));
+  box.replaceChildren(...longItems.slice(0, longShown).map((s) => longCard(s)));
   watchEnd();
 }
 
@@ -272,7 +268,7 @@ function watchEnd() {
       end.remove();
       const from = longShown;
       longShown += LONG_PAGE;
-      els.homeLong.append(...longItems.slice(from, longShown).map(longCard));
+      els.homeLong.append(...longItems.slice(from, longShown).map((s) => longCard(s)));
       watchEnd();
     },
     { root: els.homeScroll, rootMargin: "800px 0px" },

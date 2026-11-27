@@ -196,3 +196,21 @@ test.describe("Home: continue watching, player keys", () => {
     await expect.poll(async () => (await watched(page))?.t ?? 0).toBeGreaterThanOrEqual(Math.min(t0 + 9, 59));
   });
 });
+
+test.describe("Long video cards: the channel name is its own button", () => {
+  test("tapping the channel name opens the channel; tapping the picture opens the video", async ({ app: page }) => {
+    await closeTips(page);
+    await page.evaluate(() => localStorage.setItem("rf.openOn", "home"));
+    await gotoStart(page);
+    const card = page.locator("#homeLong .home-long-card").first();
+    const name = (await card.locator(".hl-ch").textContent()) ?? "";
+    await card.locator(".hl-ch").click();
+    await expect(page.locator("#page")).toBeVisible();
+    await expect(page.locator("#pageTitle")).toHaveText(name);
+    await expect(page.locator("#watch")).toBeHidden();
+    await page.goBack();
+    await expect(page.locator("#page")).toBeHidden();
+    await page.locator("#homeLong .home-long-card .hl-main").first().click();
+    await expect(page.locator("#watch")).toBeVisible();
+  });
+});

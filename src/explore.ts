@@ -14,6 +14,7 @@ import { act, state } from "./store";
 import * as sync from "./sync";
 import type { Channel, Dataset, Short } from "./types";
 import { el, btn } from "./dom";
+import { longCardEl } from "./longcard";
 import { listSummary, listsOf, pickLists } from "./lists";
 import { pageHref } from "./fbdata";
 
@@ -233,21 +234,25 @@ const clock = (sec: number) => {
 };
 
 /** Long videos as the cards Home uses (thumbnail, length, title, views). */
-export function longCards(app: AppApi, vids: Short[], open: (s: Short) => void): HTMLElement[] {
+export function longCards(app: AppApi, vids: Short[], open: (s: Short) => void, chOf?: (s: Short) => Channel | undefined): HTMLElement[] {
   return vids.map((s) => {
-    const b = el("button", "home-long-card");
-    b.type = "button";
-    const thumbBox = el("span", "hl-thumb");
-    const img = el("img");
-    img.alt = "";
-    img.loading = "lazy";
-    app.thumb(img, s.id);
-    thumbBox.append(img);
-    if (s.d) thumbBox.append(el("span", "hl-dur", clock(s.d)));
-    b.append(thumbBox, el("span", "hl-title", s.t), el("span", "hl-meta", `${app.fmt(s.v)} views · ${app.ago(s.p)}`));
-    b.onclick = () => open(s);
-    return b;
+    const ch = chOf?.(s);
+    return longCardEl({
+      id: s.id,
+      title: s.t,
+      dur: s.d ? clock(s.d) : "",
+      channel: ch?.n ?? "",
+      rest: `${app.fmt(s.v)} views · ${app.ago(s.p)}`,
+      thumb: app.thumb,
+      open: () => open(s),
+      openChannel: ch ? () => openChannelOf(app, ch) : undefined,
+    });
   });
+}
+
+/** Opens a channel (by what the data knows of it) in the app. */
+export function openChannelOf(app: AppApi, ch: Channel) {
+  openChannel(app, { info: { id: ch.id, name: ch.n, handle: ch.h, thumb: ch.thumb, subs: ch.subs, suggestedCats: ch.cats } });
 }
 
 /** The channel's long videos, newest first, as the same cards Home uses. */

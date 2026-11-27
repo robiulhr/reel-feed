@@ -204,11 +204,16 @@ function renderSearch(body: HTMLElement, app: AppApi) {
       out.append(el("div", "u-h", `Long videos · ${longs.length.toLocaleString()}`));
       const list = el("div", "cp-videos-l");
       list.append(
-        ...longCards(app, longs.slice(0, 24), (s) => {
-          remember(q);
-          app.closePage();
-          openLongFrom(s, longs, ds);
-        }),
+        ...longCards(
+          app,
+          longs.slice(0, 24),
+          (s) => {
+            remember(q);
+            app.closePage();
+            openLongFrom(s, longs, ds);
+          },
+          (s) => ds.channels[s.ch],
+        ),
       );
       out.append(list);
     };

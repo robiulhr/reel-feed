@@ -4930,3 +4930,27 @@ button[aria-busy="true"] {
   text-overflow: ellipsis;
   cursor: pointer;
 }
+
+.hl-main {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.hl-ch {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.hl-ch:hover {
+  text-decoration: underline;
+}

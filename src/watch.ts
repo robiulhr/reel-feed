@@ -11,7 +11,8 @@
 import { ago, btn, compact, el, nowSec } from "./dom";
 import { lengthLabel } from "./home";
 import { loadApi } from "./pool";
-import { openChannel } from "./explore";
+import { openChannel, openChannelOf } from "./explore";
+import { longCardEl } from "./longcard";
 import { app, feed } from "./feed";
 import { dismiss, go, shareLink } from "./router";
 import { similarInLibrary } from "./similar";
@@ -697,20 +698,18 @@ function commentRow(c: Comment): HTMLElement {
 
 // ---------- cards: Up next and Related ----------
 function card(s: Short, ds: Dataset, open: () => void): HTMLElement {
-  const b = el("button", "home-long-card w-card");
-  b.type = "button";
-  const thumbBox = el("span", "hl-thumb");
-  const img = el("img");
-  img.alt = "";
-  img.loading = "lazy";
-  img.decoding = "async";
-  thumb(img, s.id);
-  thumbBox.append(img);
-  if (s.d) thumbBox.append(el("span", "hl-dur", lengthLabel(s.d)));
-  const meta = [ds.channels[s.ch]?.n, `${compact(s.v)} views`, ago(s.p)].filter(Boolean).join(" · ");
-  b.append(thumbBox, el("span", "hl-title", s.t), el("span", "hl-meta", meta));
-  b.onclick = open;
-  return b;
+  const ch = ds.channels[s.ch];
+  return longCardEl({
+    id: s.id,
+    title: s.t,
+    dur: s.d ? lengthLabel(s.d) : "",
+    channel: ch?.n ?? "",
+    rest: `${compact(s.v)} views · ${ago(s.p)}`,
+    thumb,
+    open,
+    openChannel: ch ? () => openChannelOf(app, ch) : undefined,
+    extraClass: "w-card",
+  });
 }
 
 function paintLists() {
