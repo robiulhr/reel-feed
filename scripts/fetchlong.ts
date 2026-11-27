@@ -37,8 +37,10 @@ const LIMIT = Number(process.argv.find((a) => a.startsWith("--limit="))?.slice(8
 const MAX_UNITS = 3000; // this run's share of the daily quota
 const CHECK_EVERY = 20 * 3600; // each channel's playlist about once a day
 const NO_LONG_RECHECK = 7 * DAY; // a channel with no long videos is looked at again weekly
-const KEEP_PER_CHANNEL = 50;
-const BACKFILL_PAGES = 4; // once per channel: read back through its last 200 long videos (1 unit per page), not only the newest 50
+const KEEP_PER_CHANNEL = 80;
+const TARGET_PAGES = 8; // dig back through each channel's last 400 long videos (1 unit per page of 50)
+const PAGES_PER_RUN = 4; // ...at most this many pages per channel per run, and
+const BACKFILL_UNITS = 1500; // at most this many units of digging per run, so each run still has room for new videos and stats
 const KEEP_RECENT_DAYS = 60;
 const CONCURRENCY = 8;
 const MIN_SECONDS = 61; // YouTube Shorts can be up to 3 minutes; the long-video playlist has none, this is only a safety net
@@ -55,7 +57,9 @@ interface ChannelInput {
 interface LongChannel {
   checkedAt?: number;
   noLong?: boolean;
-  deep?: boolean; // the one-time look further back has been done
+  pages?: number; // pages of its long-video list read so far (newest first)
+  next?: string; // where the next page starts
+  end?: boolean; // the list has been read to its end
   known: string[]; // newest first
 }
 interface LongVideo {
@@ -186,10 +190,12 @@ async function main() {
     delete cache.channels[h];
   }
 
-  // 1. New long videos: each channel's long-video playlist, newest 50, about once a day
+  // 1. New long videos: each channel's newest page about once a day; older ones are dug up over a few runs
+  let digUnits = 0;
+  const wantsDig = (ch?: LongChannel) => !ch?.end && (ch?.pages ?? 0) < TARGET_PAGES;
   const due = active.filter(({ c }) => {
     const ch = cache.channels[c.handle];
-    return !ch?.checkedAt || !ch.deep || now - ch.checkedAt >= (ch.noLong ? NO_LONG_RECHECK : CHECK_EVERY);
+    return !ch?.checkedAt || wantsDig(ch) || now - ch.checkedAt >= (ch.noLong ? NO_LONG_RECHECK : CHECK_EVERY);
   });
   console.log(`Long videos: checking ${due.length} of ${active.length} channels...`);
   let newCount = 0;
@@ -204,36 +210,46 @@ async function main() {
       cache.channels[c.handle] = ch;
       const have = new Set(ch.known);
       const fresh: string[] = [];
-      const pages = ch.deep ? 1 : BACKFILL_PAGES;
-      let token: string | undefined;
-      let any = false;
-      for (let n = 0; n < pages; n++) {
-        if (n && overBudget()) break;
-        const j = await yt("playlistItems", {
-          part: "contentDetails",
-          playlistId: `UULF${id.slice(2)}`,
-          maxResults: 50,
-          ...(token ? { pageToken: token } : {}),
-        });
-        if (!j) break;
-        any = true;
+      const playlistId = `UULF${id.slice(2)}`;
+      const take = (j: { items?: { contentDetails?: { videoId?: string } }[] }) => {
         for (const it of j.items ?? []) {
-          const vid: string | undefined = it.contentDetails?.videoId;
+          const vid = it.contentDetails?.videoId;
           if (vid && !have.has(vid)) {
             have.add(vid);
             fresh.push(vid);
           }
         }
-        token = j.nextPageToken;
-        if (!token) break;
+      };
+      // the newest page (new uploads): once a day, or on the first look
+      if (!ch.checkedAt || ch.pages === undefined || now - ch.checkedAt >= (ch.noLong ? NO_LONG_RECHECK : CHECK_EVERY)) {
+        const j = await yt("playlistItems", { part: "contentDetails", playlistId, maxResults: 50 });
+        ch.checkedAt = now;
+        if (!j) {
+          ch.noLong = ch.known.length === 0;
+          return;
+        }
+        ch.noLong = false;
+        take(j);
+        if (ch.pages === undefined) {
+          ch.pages = 1;
+          ch.next = j.nextPageToken;
+          ch.end = !j.nextPageToken;
+        }
       }
-      ch.checkedAt = now;
-      if (!any) {
-        ch.noLong = ch.known.length === 0;
-        return;
+      // older pages: a few per run, within the digging allowance
+      for (let n = 0; n < PAGES_PER_RUN && wantsDig(ch) && ch.next && digUnits < BACKFILL_UNITS && !overBudget(); n++) {
+        digUnits++;
+        const j = await yt("playlistItems", { part: "contentDetails", playlistId, maxResults: 50, pageToken: ch.next });
+        if (!j) {
+          ch.next = undefined; // the saved place went stale: start the digging over next time
+          ch.pages = undefined;
+          break;
+        }
+        take(j);
+        ch.pages = (ch.pages ?? 1) + 1;
+        ch.next = j.nextPageToken;
+        ch.end = !j.nextPageToken;
       }
-      ch.noLong = false;
-      ch.deep = true; // the one-time look further back is done
       ch.known = [...fresh, ...ch.known];
       newCount += fresh.length;
     });
