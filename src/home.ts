@@ -479,13 +479,20 @@ export function initHome() {
     }
   });
 
+  els.searchBar.onclick = () => els.searchBtn.click(); // the search bar on top of Home opens the same Search page
+
   // the bar slides away while you scroll down (more room for the videos) and comes back when you scroll up
   els.homeScroll.addEventListener(
     "scroll",
     () => {
       const top = els.homeScroll.scrollTop;
-      if (top > lastTop + 12 && top > 80) els.tabbar.classList.add("tb-hide");
-      else if (top < lastTop - 8 || top < 40) els.tabbar.classList.remove("tb-hide");
+      if (top > lastTop + 12 && top > 80) {
+        els.tabbar.classList.add("tb-hide");
+        els.searchBar.parentElement?.classList.add("sb-hide");
+      } else if (top < lastTop - 8 || top < 40) {
+        els.tabbar.classList.remove("tb-hide");
+        els.searchBar.parentElement?.classList.remove("sb-hide");
+      }
       lastTop = top;
     },
     { passive: true },

@@ -169,3 +169,19 @@ test.describe("Home", () => {
     await expect(page.locator("#title")).not.toBeEmpty();
   });
 });
+
+test.describe("Home: the search bar on top", () => {
+  test("it is there on Home, opens Search, and is not on the Shorts feed", async ({ app: page }) => {
+    await closeTips(page);
+    await page.evaluate(() => localStorage.setItem("rf.openOn", "home"));
+    await gotoStart(page);
+    const bar = page.locator("#searchBar");
+    await expect(bar).toBeVisible();
+    await bar.click();
+    await expect(page.locator("#page")).toBeVisible();
+    await expect(page.locator("#pageBody").getByLabel("Search your videos, notes and topics")).toBeFocused();
+    await page.goBack();
+    await page.locator("#tabbar").getByRole("button", { name: "Shorts" }).click();
+    await expect(bar).toBeHidden();
+  });
+});
