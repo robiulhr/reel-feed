@@ -63,3 +63,14 @@ test.describe("Wide screen: Menu and Search", () => {
     await expect(body.locator(".u-h", { hasText: "Long videos" })).toHaveCount(0);
   });
 });
+
+test.describe("Wide screen: the search bar in the Home header", () => {
+  test("it is centred on Home and opens Search", async ({ app: page }) => {
+    await closeTips(page);
+    await page.locator("#tabbar").getByRole("button", { name: "Home" }).click();
+    const bar = page.locator("#searchBar");
+    await expect(bar).toBeVisible();
+    await bar.click();
+    await expect(page.locator("#page")).toBeVisible();
+  });
+});

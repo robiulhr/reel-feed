@@ -5139,3 +5139,13 @@ a,
     align-self: center;
   }
 }
+
+/* phones: no bar, just the 🔍 at the end of the tabs row (nothing moves, no extra height); wide screens keep the bar */
+@media (max-width: 699px) {
+  .is-home .search-bar {
+    display: none;
+  }
+  .is-home .row1 #searchBtn {
+    display: inline-flex;
+  }
+}
