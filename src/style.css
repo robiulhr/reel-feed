@@ -5018,22 +5018,18 @@ a,
 .home-short img {
   transition: transform 0.3s ease;
 }
+/* openings slide up gently; only the dimmed backdrop fades (text never changes opacity, so contrast stays exact) */
 @keyframes rf-rise {
   from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.99);
+    transform: translateY(12px);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
-@keyframes rf-fade {
+@keyframes rf-dim {
   from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+    background-color: transparent;
   }
 }
 .page:not([hidden]) .page-inner,
@@ -5044,15 +5040,7 @@ a,
 .page:not([hidden]),
 .panel:not([hidden]),
 .sheet:not([hidden]) {
-  animation: rf-fade 0.18s ease-out;
-}
-.watch:not([hidden]) {
-  animation: rf-fade 0.2s ease-out;
-}
-.home-long-card,
-.scard,
-.h-row {
-  animation: rf-fade 0.25s ease-out;
+  animation: rf-dim 0.18s ease-out;
 }
 @media (hover: hover) {
   .home-long-card:hover .hl-thumb {
