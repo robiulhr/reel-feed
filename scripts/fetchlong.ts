@@ -37,7 +37,8 @@ const LIMIT = Number(process.argv.find((a) => a.startsWith("--limit="))?.slice(8
 const MAX_UNITS = 3000; // this run's share of the daily quota
 const CHECK_EVERY = 20 * 3600; // each channel's playlist about once a day
 const NO_LONG_RECHECK = 7 * DAY; // a channel with no long videos is looked at again weekly
-const KEEP_PER_CHANNEL = 30;
+const KEEP_PER_CHANNEL = 50;
+const BACKFILL_PAGES = 4; // once per channel: read back through its last 200 long videos (1 unit per page), not only the newest 50
 const KEEP_RECENT_DAYS = 60;
 const CONCURRENCY = 8;
 const MIN_SECONDS = 61; // YouTube Shorts can be up to 3 minutes; the long-video playlist has none, this is only a safety net
@@ -54,6 +55,7 @@ interface ChannelInput {
 interface LongChannel {
   checkedAt?: number;
   noLong?: boolean;
+  deep?: boolean; // the one-time look further back has been done
   known: string[]; // newest first
 }
 interface LongVideo {
@@ -187,7 +189,7 @@ async function main() {
   // 1. New long videos: each channel's long-video playlist, newest 50, about once a day
   const due = active.filter(({ c }) => {
     const ch = cache.channels[c.handle];
-    return !ch?.checkedAt || now - ch.checkedAt >= (ch.noLong ? NO_LONG_RECHECK : CHECK_EVERY);
+    return !ch?.checkedAt || !ch.deep || now - ch.checkedAt >= (ch.noLong ? NO_LONG_RECHECK : CHECK_EVERY);
   });
   console.log(`Long videos: checking ${due.length} of ${active.length} channels...`);
   let newCount = 0;
@@ -200,19 +202,38 @@ async function main() {
       }
       const ch = cache.channels[c.handle] ?? { known: [] };
       cache.channels[c.handle] = ch;
-      const j = await yt("playlistItems", { part: "contentDetails", playlistId: `UULF${id.slice(2)}`, maxResults: 50 });
+      const have = new Set(ch.known);
+      const fresh: string[] = [];
+      const pages = ch.deep ? 1 : BACKFILL_PAGES;
+      let token: string | undefined;
+      let any = false;
+      for (let n = 0; n < pages; n++) {
+        if (n && overBudget()) break;
+        const j = await yt("playlistItems", {
+          part: "contentDetails",
+          playlistId: `UULF${id.slice(2)}`,
+          maxResults: 50,
+          ...(token ? { pageToken: token } : {}),
+        });
+        if (!j) break;
+        any = true;
+        for (const it of j.items ?? []) {
+          const vid: string | undefined = it.contentDetails?.videoId;
+          if (vid && !have.has(vid)) {
+            have.add(vid);
+            fresh.push(vid);
+          }
+        }
+        token = j.nextPageToken;
+        if (!token) break;
+      }
       ch.checkedAt = now;
-      if (!j) {
+      if (!any) {
         ch.noLong = ch.known.length === 0;
         return;
       }
       ch.noLong = false;
-      const have = new Set(ch.known);
-      const fresh: string[] = [];
-      for (const it of j.items ?? []) {
-        const vid: string | undefined = it.contentDetails?.videoId;
-        if (vid && !have.has(vid)) fresh.push(vid);
-      }
+      ch.deep = true; // the one-time look further back is done
       ch.known = [...fresh, ...ch.known];
       newCount += fresh.length;
     });
