@@ -4880,3 +4880,53 @@ button[aria-busy="true"] {
     font-weight: 600;
   }
 }
+
+.home-cont[hidden] {
+  display: none;
+}
+.home-cont-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 0 12px 6px;
+}
+.home-cont-row .home-long-card {
+  flex: 0 0 min(240px, 70vw);
+}
+.hl-prog {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent, #ff3b5c);
+}
+.w-ts {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #ff7a93);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.w-chapters {
+  margin: 4px 0 8px;
+}
+.w-chapters-h {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.w-chapter {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 5px 0;
+  color: inherit;
+  font: inherit;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}

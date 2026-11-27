@@ -167,3 +167,32 @@ test.describe("Long videos in your library", () => {
     await expect(page.locator(".w-title")).toHaveText(title);
   });
 });
+
+test.describe("Home: continue watching, player keys", () => {
+  test("a long video you started shows under Continue watching, and opens at the saved place", async ({ app: page }) => {
+    await closeTips(page);
+    await page.evaluate(() => {
+      localStorage.setItem("rf.openOn", "home");
+      localStorage.setItem("rf.pos", JSON.stringify({ longvid0000: [50, Date.now()] }));
+    });
+    await gotoStart(page);
+    await expect(page.locator("#homeCont")).toBeVisible();
+    await expect(page.locator("#homeContRow .home-long-card")).toHaveCount(1);
+    await page.locator("#homeContRow .home-long-card").first().click();
+    await expect(page.locator("#watch")).toBeVisible();
+    await expect.poll(async () => (await watched(page))?.t ?? 0).toBeGreaterThanOrEqual(50);
+  });
+
+  test("keys: K pauses and plays, L jumps ahead 10 s", async ({ app: page }) => {
+    await closeTips(page);
+    await openFirstLong(page, 20);
+    await expect.poll(async () => (await watched(page))?.state).toBe(1);
+    await page.keyboard.press("k");
+    await expect.poll(async () => (await watched(page))?.state).toBe(2);
+    await page.keyboard.press("k");
+    await expect.poll(async () => (await watched(page))?.state).toBe(1);
+    const t0 = (await watched(page))?.t ?? 0;
+    await page.keyboard.press("l");
+    await expect.poll(async () => (await watched(page))?.t ?? 0).toBeGreaterThanOrEqual(Math.min(t0 + 9, 59));
+  });
+});

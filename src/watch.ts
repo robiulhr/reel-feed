@@ -392,6 +392,30 @@ function destroyPlayer() {
   playerReady = false;
 }
 
+// ---------- times in the description: tap one to jump there ----------
+const TIME = /((?:\d{1,2}:)?\d{1,2}:\d{2})/g;
+function withStamps(text: string): Node[] {
+  const out: Node[] = [];
+  let last = 0;
+  for (const m of text.matchAll(TIME)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push(document.createTextNode(text.slice(last, i)));
+    out.push(btn(m[1], () => seek(`[${m[1]}]`), "w-ts"));
+    last = i + m[1].length;
+  }
+  if (last < text.length) out.push(document.createTextNode(text.slice(last)));
+  return out;
+}
+/** Lines that start with a time are the video's chapters. */
+function chaptersOf(text: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (const line of text.split("\n")) {
+    const m = /^\s*(?:[-•–]\s*)?((?:\d{1,2}:)?\d{1,2}:\d{2})\s*[-–:]?\s*(.+)$/.exec(line);
+    if (m) out.push([m[1], m[2].trim().slice(0, 80)]);
+  }
+  return out;
+}
+
 // ---------- notes ----------
 const STAMP = /(\[(?:\d+:)?\d+:\d\d\])/;
 function seek(label: string) {
@@ -588,7 +612,15 @@ function paintDesc(info: Info) {
   if (stats.length) box.append(el("div", "w-desc-stats", stats.join("  ·  ")));
   const text = info.desc.trim();
   if (text) {
-    const body = el("div", "w-desc-t clamped", text);
+    const body = el("div", "w-desc-t clamped");
+    body.append(...withStamps(text));
+    const chapters = chaptersOf(text);
+    if (chapters.length >= 3) {
+      const list = el("div", "w-chapters");
+      list.append(el("div", "w-chapters-h", "Chapters"));
+      for (const [t, name] of chapters) list.append(btn(`${t}  ${name}`, () => seek(`[${t}]`), "w-chapter"));
+      box.append(list);
+    }
     const more = btn(
       "Show more",
       () => {
@@ -796,8 +828,36 @@ export function openWatch(o: WatchOpen) {
     els.home.inert = true;
     go({ k: "watch", v: o.s.id }); // its own address (/w/ID): Back returns to Home, and a link opens it
     timer = window.setInterval(tick, 1000);
+    document.addEventListener("keydown", keys);
   }
   show(Math.max(i, 0));
+}
+
+/** Keyboard, like YouTube: space/K play-pause, J/L ±10 s, ←/→ ±5 s, F full screen, M mute, 0–9 jump, Shift+N/P next/previous. */
+function keys(e: KeyboardEvent) {
+  if (!playerReady || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target as HTMLElement | null;
+  if (t?.closest("input, textarea, select, [contenteditable]")) return;
+  if (t?.closest("button, a") && (e.key === " " || e.key === "Enter")) return; // those press the focused button
+  if (!els.page.hidden || !els.panel.hidden) return; // a page or the Menu is above the player
+  const k = e.key.toLowerCase();
+  const jump = (d: number) => player.seekTo(Math.max(0, time() + d), true);
+  try {
+    if (k === " " || k === "k") player.getPlayerState() === 1 ? player.pauseVideo() : player.playVideo();
+    else if (k === "j") jump(-10);
+    else if (k === "l") jump(10);
+    else if (k === "arrowleft") jump(-5);
+    else if (k === "arrowright") jump(5);
+    else if (k === "m") player.isMuted() ? player.unMute() : player.mute();
+    else if (k === "f") void root?.querySelector(".w-player")?.requestFullscreen?.();
+    else if (k === "n" && e.shiftKey) step(1);
+    else if (k === "p" && e.shiftKey) step(-1);
+    else if (/^[0-9]$/.test(k) && here()?.d) player.seekTo((here()!.d! * Number(k)) / 10, true);
+    else return;
+  } catch {
+    return;
+  }
+  e.preventDefault();
 }
 
 let ticks = 0;
@@ -817,6 +877,7 @@ function hide() {
     logWatch(s, time());
   }
   clearInterval(timer);
+  document.removeEventListener("keydown", keys);
   destroyPlayer();
   if (root) {
     root.hidden = true;

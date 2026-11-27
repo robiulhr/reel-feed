@@ -212,6 +212,41 @@ function drawRow() {
   els.homeRow.replaceChildren(...rowItems.map(shortCard));
 }
 
+/** Long videos you started and did not finish (the places kept on this device), the latest first. */
+function drawCont() {
+  const ds = longDs;
+  let pos: Record<string, [number, number]> = {};
+  try {
+    pos = JSON.parse(localStorage.getItem("rf.pos") || "{}") || {};
+  } catch {
+    /* storage blocked: nothing to continue */
+  }
+  const items = ds
+    ? ds.videos
+        .filter((s) => {
+          const p = pos[s.id]?.[0] ?? 0;
+          return p > 5 && (!s.d || p < s.d - 15) && ds.channels[s.ch]?.st !== "removed";
+        })
+        .sort((a, b) => (pos[b.id]?.[1] ?? 0) - (pos[a.id]?.[1] ?? 0))
+        .slice(0, 12)
+    : [];
+  els.homeCont.hidden = !items.length;
+  els.homeContRow.replaceChildren(
+    ...items.map((s) => {
+      const c = longCard(s);
+      c.setAttribute("role", "listitem");
+      const at = pos[s.id]?.[0] ?? 0;
+      if (s.d) {
+        const bar = el("span", "hl-prog");
+        bar.style.width = `${Math.min(100, Math.round((at / s.d) * 100))}%`;
+        c.querySelector(".hl-thumb")?.append(bar);
+      }
+      c.onclick = () => openLong(s, items);
+      return c;
+    }),
+  );
+}
+
 function drawLong() {
   const box = els.homeLong;
   if (longState === "loading") return box.replaceChildren(note("Loading long videos…"));
@@ -248,6 +283,7 @@ function watchEnd() {
 /** Draws Home (again). Cheap when nothing changed. */
 export function renderHome() {
   if (!isHome()) return;
+  drawCont();
   const changed = recompute();
   if (changed.row) drawRow();
   if (changed.long) drawLong();

@@ -26,6 +26,7 @@ const FAKE_YT = `
   Player.prototype._set = function (s) { this.state = s; var e = this.o.events; e && e.onStateChange && e.onStateChange({ data: s, target: this }); };
   Player.prototype._tick = function () { if (this.state === 1) { var n = performance.now(); this.t = Math.min(60, this.t + (n - this.last) / 1000 * this.rate); this.last = n; } };
   Player.prototype.loadVideoById = function (a) { var self = this; var id = typeof a === 'object' ? a.videoId : a; this.vid = id; this.f.dataset.vid = id; this.t = (typeof a === 'object' && a.startSeconds) || 0; this._set(3); setTimeout(function () { self.last = performance.now(); self._set(1); }, 30); };
+  Player.prototype.getPlayerState = function () { return this.state; };
   Player.prototype.playVideo = function () { this.last = performance.now(); this._set(1); };
   Player.prototype.pauseVideo = function () { this._tick(); this._set(2); };
   Player.prototype.seekTo = function (t) { this._tick(); this.t = t; };
