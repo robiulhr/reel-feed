@@ -190,6 +190,7 @@ function longCard(s: Short, open: () => void = () => openLong(s, longItems)): HT
     title: s.t,
     dur: s.d ? lengthLabel(s.d) : "",
     channel: ch?.n ?? "",
+    avatar: ch?.thumb,
     rest: `${compact(s.v)} views · ${ago(s.p)}`,
     thumb,
     open,

@@ -3956,6 +3956,13 @@ button[aria-busy="true"] {
   border-radius: 4px;
 }
 .hl-title {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
@@ -4953,4 +4960,147 @@ button[aria-busy="true"] {
 }
 .hl-ch:hover {
   text-decoration: underline;
+}
+
+.hl-info {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.hl-txt {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hl-avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-weight: 600;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.hl-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ---------- smoothness: gentle transitions and hover effects (not for people who ask for less motion) ---------- */
+button,
+.btn,
+.chip,
+a,
+.scard,
+.h-row,
+.search-row {
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+.hl-thumb {
+  transition: border-radius 0.2s ease;
+}
+.hl-thumb img,
+.scard img,
+.home-short img {
+  transition: transform 0.3s ease;
+}
+@keyframes rf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes rf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.page:not([hidden]) .page-inner,
+.panel:not([hidden]) .panel-inner,
+.sheet:not([hidden]) .sheet-inner {
+  animation: rf-rise 0.2s ease-out;
+}
+.page:not([hidden]),
+.panel:not([hidden]),
+.sheet:not([hidden]) {
+  animation: rf-fade 0.18s ease-out;
+}
+.watch:not([hidden]) {
+  animation: rf-fade 0.2s ease-out;
+}
+.home-long-card,
+.scard,
+.h-row {
+  animation: rf-fade 0.25s ease-out;
+}
+@media (hover: hover) {
+  .home-long-card:hover .hl-thumb {
+    border-radius: 4px;
+  }
+  .home-long-card:hover .hl-thumb img,
+  .scard:hover img,
+  .home-short:hover img {
+    transform: scale(1.04);
+  }
+  .home-long-card:hover .hl-title {
+    text-decoration: underline;
+  }
+  .hl-avatar:hover {
+    filter: brightness(1.15);
+  }
+  .btn:hover:not(:disabled),
+  .chip:hover:not(:disabled) {
+    filter: brightness(1.15);
+  }
+  .icon-btn:hover {
+    background: var(--panel-2);
+  }
+  .mh-card:hover,
+  .mh-row:hover,
+  .h-row:hover,
+  .search-row:hover,
+  .w-chapter:hover {
+    background: var(--panel-2);
+  }
+  .home-more:hover,
+  .cp-tab:hover {
+    color: #fff;
+  }
+}
+.btn:active:not(:disabled),
+.chip:active:not(:disabled),
+.icon-btn:active,
+.mh-card:active,
+.hl-main:active,
+.hl-title:active {
+  transform: scale(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

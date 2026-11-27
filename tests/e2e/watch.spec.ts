@@ -203,6 +203,7 @@ test.describe("Long video cards: the channel name is its own button", () => {
     await page.evaluate(() => localStorage.setItem("rf.openOn", "home"));
     await gotoStart(page);
     const card = page.locator("#homeLong .home-long-card").first();
+    await expect(card.locator(".hl-avatar")).toBeVisible();
     const name = (await card.locator(".hl-ch").textContent()) ?? "";
     await card.locator(".hl-ch").click();
     await expect(page.locator("#page")).toBeVisible();

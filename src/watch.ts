@@ -704,6 +704,7 @@ function card(s: Short, ds: Dataset, open: () => void): HTMLElement {
     title: s.t,
     dur: s.d ? lengthLabel(s.d) : "",
     channel: ch?.n ?? "",
+    avatar: ch?.thumb,
     rest: `${compact(s.v)} views · ${ago(s.p)}`,
     thumb,
     open,
