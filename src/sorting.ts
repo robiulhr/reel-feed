@@ -9,23 +9,33 @@ import { pickCategories } from "./catpicker";
 import { btn, el } from "./dom";
 import { isGuessed, videoCats } from "./rank";
 import { act, state } from "./store";
-import type { Short } from "./types";
+import { longNow } from "./data";
+import type { Dataset, Short } from "./types";
 
 const PAGE = 30;
 let shownCount = PAGE;
 
 export function renderSorting(body: HTMLElement, app: AppApi, rerender: () => void) {
   const ds = app.ds;
-  const total = ds.videos.length;
-  const live = (s: Short) => ds.channels[s.ch]?.st === "active";
-  const guessed = ds.videos.filter((s) => live(s) && isGuessed(s, state)).sort((a, b) => b.v - a.v);
+  // Shorts and long videos alike (each from its own data set, with its own channel list)
+  const sets: Dataset[] = [ds, longNow()].filter((x): x is Dataset => !!x);
+  const dsOf = new Map<Short, Dataset>();
+  const total = sets.reduce((n, d) => n + d.videos.length, 0);
+  const guessed: Short[] = [];
+  for (const d of sets)
+    for (const s of d.videos)
+      if (d.channels[s.ch]?.st === "active" && isGuessed(s, state)) {
+        guessed.push(s);
+        dsOf.set(s, d);
+      }
+  guessed.sort((a, b) => b.v - a.v);
   const fixed = Object.keys(state.catFix).length;
 
   body.append(
     el(
       "p",
       "ch-note",
-      `${guessed.length} of ${total} Shorts (${Math.round((guessed.length / Math.max(1, total)) * 100)}%) are sorted by a guess from their channel — their own words said nothing. Most viewed first.${fixed ? ` You've sorted ${fixed} yourself.` : ""}`,
+      `${guessed.length} of ${total} ${sets.length > 1 ? "videos" : "Shorts"} (${Math.round((guessed.length / Math.max(1, total)) * 100)}%) are sorted by a guess from their channel — their own words said nothing. Most viewed first.${fixed ? ` You've sorted ${fixed} yourself.` : ""}`,
     ),
   );
   if (!guessed.length) {
@@ -33,10 +43,11 @@ export function renderSorting(body: HTMLElement, app: AppApi, rerender: () => vo
     return;
   }
   const items = guessed.slice(0, shownCount);
-  body.append(btn("▶ Play these", () => app.playList("Needs sorting", items, 0, rerender), "btn sm primary"));
+  const shorts = items.filter((s) => !s.d);
+  if (shorts.length) body.append(btn("▶ Play these", () => app.playList("Needs sorting", shorts, 0, rerender), "btn sm primary"));
 
   const list = el("div", "h-list");
-  items.forEach((s, i) => {
+  items.forEach((s) => {
     const row = el("div", "h-row sort-row");
     const play = el("button", "sort-play") as HTMLButtonElement;
     play.type = "button";
@@ -46,13 +57,14 @@ export function renderSorting(body: HTMLElement, app: AppApi, rerender: () => vo
     img.alt = "";
     app.thumb(img, s.id);
     play.append(img);
-    play.onclick = () => app.playList("Needs sorting", items, i, rerender);
+    play.onclick = () =>
+      s.d ? app.playList("Needs sorting", [s], 0, rerender) : app.playList("Needs sorting", shorts, shorts.indexOf(s), rerender);
 
     const cats = videoCats(s, state);
     const txt = el("div", "h-txt");
     txt.append(
       el("div", "h-title", s.t),
-      el("div", "ch-note", `${ds.channels[s.ch]?.n ?? ""} · ${app.fmt(s.v)} views`),
+      el("div", "ch-note", `${dsOf.get(s)?.channels[s.ch]?.n ?? ""} · ${app.fmt(s.v)} views`),
       el("div", "h-status", `Guess: ${cats.map(catLabel).join(", ") || "none"}`),
     );
     const acts = el("div", "sort-acts");
@@ -65,7 +77,11 @@ export function renderSorting(body: HTMLElement, app: AppApi, rerender: () => vo
       );
     acts.append(
       btn("Change", async () => {
-        const picked = await pickCategories({ title: "Categories for this Short", current: cats, note: s.t });
+        const picked = await pickCategories({
+          title: s.d ? "Categories for this video" : "Categories for this Short",
+          current: cats,
+          note: s.t,
+        });
         if (picked) {
           act({ t: "catFix", id: s.id, cats: picked });
           rerender();

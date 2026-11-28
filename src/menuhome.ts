@@ -4,10 +4,12 @@
  * here (panels.ts), so there is no row of 12 tabs to scroll through.
  */
 import { cloudLine } from "./cloud";
+import { longNow } from "./data";
 import { el } from "./dom";
 import { feed } from "./feed";
 import { isGuessed } from "./rank";
 import { state } from "./store";
+import type { Dataset } from "./types";
 
 /** The pages, in the order the Menu's back-arrow header names them. */
 export const PAGE_TITLES: Record<string, string> = {
@@ -46,7 +48,9 @@ const startOfToday = () => {
 function items(): { title: string; cards?: boolean; rows: Item[] }[] {
   const channels = feed.ds.channels.filter((c) => c.st === "active" || c.st === "noShorts").length;
   const pages = feed.ds.channels.filter((c) => c.st === "fb").length; // Facebook pages with videos you added
-  const toCheck = feed.ds.videos.filter((s) => feed.ds.channels[s.ch]?.st === "active" && isGuessed(s, state)).length;
+  const guessedIn = (ds: Dataset | null) =>
+    ds ? ds.videos.filter((s) => ds.channels[s.ch]?.st === "active" && isGuessed(s, state)).length : 0;
+  const toCheck = guessedIn(feed.ds) + guessedIn(longNow());
   const today = state.activity.filter((e) => e.at >= startOfToday()).length;
   const notes = Object.keys(state.notes).length;
   return [
