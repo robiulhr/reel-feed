@@ -4,6 +4,7 @@
  * Grid sorted Newest / Most viewed / Breakouts, filtered by category and time range;
  * tap a Short to swipe through just this channel.
  */
+import { longNow } from "./data";
 import type { AppApi, ExternalChannelInfo } from "./app";
 import { type CatId, catInfo, catLabel, detectLang, normCats } from "./categories";
 import { catSummary, pickCategories } from "./catpicker";
@@ -323,8 +324,14 @@ export function openChannel(app: AppApi, target: { chIndex?: number; info?: Exte
       if (hidden) titleRow.append(el("span", "pill st-hidden", "Hidden"));
       const libCount = inLibrary ? ds.videos.filter((v) => v.ch === chIndex).length : 0;
       const stats = [info.handle, `${app.fmt(info.subs || preview?.channel.subs || 0)} subs`];
-      if (inLibrary) stats.push(`${libCount} Shorts in your feed`);
-      else if (preview) stats.push(`${app.fmt(preview.channel.shorts)} Shorts`);
+      if (inLibrary) {
+        const lds = longNow();
+        const li = lds
+          ? lds.channels.findIndex((c) => (info.id && c.id === info.id) || (info.handle && c.h.toLowerCase() === info.handle.toLowerCase()))
+          : -1;
+        const longCount = lds && li >= 0 ? lds.videos.filter((v) => v.ch === li).length : 0;
+        stats.push(`${libCount} Shorts${longCount ? ` · ${longCount} long videos` : ""} in your feed`);
+      } else if (preview) stats.push(`${app.fmt(preview.channel.shorts)} Shorts`);
       if (ch?.last) stats.push(`latest ${app.ago(ch.last)}`);
       meta.append(titleRow, el("div", "cp-sub", stats.join(" · ")));
       const mix = mixText(ch);

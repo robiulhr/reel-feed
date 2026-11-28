@@ -276,7 +276,7 @@ test.describe("categories", () => {
     await sheet.getByRole("button", { name: "30 days" }).click();
     await sheet.getByRole("button", { name: /^Sales & Customers,/ }).click();
     const show = sheet.locator(".btn.primary");
-    await expect(show).toHaveText(/^Show [0-9]+ Shorts$/);
+    await expect(show).toHaveText(/^Show [0-9]+ Shorts( · [0-9]+ long)?$/);
     await show.click();
     await expect(page.locator("#filtBtn")).toHaveAttribute("aria-label", "Filters, 2 on");
     await expect(page.locator('#chips button[data-clear="win"]')).toBeVisible();

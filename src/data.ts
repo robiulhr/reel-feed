@@ -193,6 +193,9 @@ export async function checkForUpdate(current: number, onNew: (ds: Dataset) => vo
 
 const LONG_KEY = "long";
 let longLoading: Promise<Dataset | null> | undefined;
+let lastLong: Dataset | null = null;
+/** The long videos once they have been loaded (null before that): for counts that must not wait. */
+export const longNow = () => lastLong;
 
 /**
  * The long videos (data/long.json), loaded only when something needs them so the first start stays as fast as
@@ -208,7 +211,8 @@ export function loadLong(onFresh?: (ds: Dataset) => void): Promise<Dataset | nul
         if (!raw?.videos?.length) return null;
         if (saved && raw.generatedAt <= saved.generatedAt) return null;
         await idbSet(LONG_KEY, raw);
-        return parse(raw);
+        lastLong = parse(raw);
+        return lastLong;
       } catch {
         return null; // no file yet, or offline
       }
@@ -217,7 +221,8 @@ export function loadLong(onFresh?: (ds: Dataset) => void): Promise<Dataset | nul
       void fetchNew().then((ds) => {
         if (ds) onFresh?.(ds);
       });
-      return parse(saved);
+      lastLong = parse(saved);
+      return lastLong;
     }
     return fetchNew();
   })().finally(() => {

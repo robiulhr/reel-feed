@@ -5,11 +5,12 @@
  *   "Show N Shorts". Tapping a main category picks all its topics; each topic can also be picked on its own.
  */
 import { CATEGORIES, type CatId, catInfo, GROUPS, type GroupId, groupCats, groupOf, isPersonalGroup, type Lang } from "./categories";
+import { longNow } from "./data";
 import { el } from "./dom";
 import { app, feed, resetFeed } from "./feed";
 import { feedFilter, videoCats } from "./rank";
 import { persist, state } from "./store";
-import type { Win } from "./types";
+import type { Dataset, Win } from "./types";
 import { confirmDialog, toast } from "./ui";
 import { listById, listLabel, listSize, manageLists } from "./lists";
 import { els } from "./view";
@@ -62,21 +63,26 @@ export const groupState = (cats: CatId[], g: GroupId): "all" | "some" | "none" =
 
 /** Shorts per topic and per main category (any of the Short's categories) for a time range + views + language. */
 function counts(d: Pick<Draft, "win" | "minV" | "lang" | "list">) {
-  const pass = feedFilter(feed.ds, {
+  const f = {
     ...state,
     win: d.win,
     minV: d.minV,
     lang: d.lang,
     list: d.list,
     cats: [...CATEGORIES.map((c) => c.id)],
-  });
+  };
   const cat = new Map<CatId, number>();
   const group = new Map<GroupId, number>();
-  for (const s of feed.ds.videos) {
-    if (!pass(s)) continue;
-    const ks = videoCats(s, state);
-    for (const c of ks) cat.set(c, (cat.get(c) ?? 0) + 1);
-    for (const g of new Set(ks.map(groupOf))) if (g) group.set(g, (group.get(g) ?? 0) + 1);
+  // the filters rule Home's long videos too, so they are counted with the Shorts
+  const sets = [feed.ds, longNow()].filter((x): x is Dataset => !!x);
+  for (const ds of sets) {
+    const pass = feedFilter(ds, f);
+    for (const s of ds.videos) {
+      if (!pass(s)) continue;
+      const ks = videoCats(s, state);
+      for (const c of ks) cat.set(c, (cat.get(c) ?? 0) + 1);
+      for (const g of new Set(ks.map(groupOf))) if (g) group.set(g, (group.get(g) ?? 0) + 1);
+    }
   }
   return { cat, group };
 }
@@ -341,7 +347,7 @@ export async function openFilters(toTopics = false) {
       b.disabled = st === "none" && total === 0;
       b.querySelector(".fm-n")!.textContent = short(total);
       b.querySelector(".fm-tick")!.textContent = st === "all" ? "✓" : st === "some" ? "–" : "";
-      b.setAttribute("aria-label", `${GROUPS.find((x) => x.id === g)!.label}, ${total} Shorts`);
+      b.setAttribute("aria-label", `${GROUPS.find((x) => x.id === g)!.label}, ${total} videos`);
     }
     for (const [id, b] of topicBtns) {
       const total = n.cat.get(id) ?? 0;
@@ -350,13 +356,17 @@ export async function openFilters(toTopics = false) {
       b.setAttribute("aria-pressed", String(on));
       b.disabled = !on && total === 0;
       b.querySelector(".ft-n")!.textContent = short(total);
-      b.setAttribute("aria-label", `${catInfo(id)!.label}, ${total} Shorts`);
+      b.setAttribute("aria-label", `${catInfo(id)!.label}, ${total} videos`);
     }
     clear.hidden = !d.cats.length;
-    const total = feed.ds.videos.filter(feedFilter(feed.ds, { ...state, ...d })).length;
+    const fs = { ...state, ...d };
+    const total = feed.ds.videos.filter(feedFilter(feed.ds, fs)).length;
+    const lds = longNow();
+    const longTotal = lds ? lds.videos.filter(feedFilter(lds, fs)).length : 0;
     if (confirmBtn) {
-      confirmBtn.textContent = total ? `Show ${app.fmt(total)} Shorts` : "Nothing matches";
-      confirmBtn.disabled = !total;
+      confirmBtn.textContent =
+        total || longTotal ? `Show ${app.fmt(total)} Shorts${longTotal ? ` · ${app.fmt(longTotal)} long` : ""}` : "Nothing matches";
+      confirmBtn.disabled = !total && !longTotal;
     }
   }
 

@@ -255,7 +255,7 @@ test.describe("Facebook videos you add by link", () => {
     const sheet = page.getByRole("dialog", { name: "Filters" });
     await sheet.getByRole("button", { name: "🎯 Competitors · 1" }).click();
     const show = sheet.locator(".btn.primary");
-    await expect(show).toHaveText(/^Show 1 Shorts?$/);
+    await expect(show).toHaveText(/^Show 1 Shorts?( · [0-9]+ long)?$/);
     await show.click();
     await expect(page.locator(".fb-slot.on iframe")).toHaveAttribute("data-href", META.url);
   });

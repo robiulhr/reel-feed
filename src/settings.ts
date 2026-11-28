@@ -6,6 +6,7 @@ import { resetChannels } from "./channels";
 import { busy, confirmDialog, toast, toastError } from "./ui";
 import { renderHealth } from "./health";
 import { ago, btn, compact, el, para } from "./dom";
+import { longNow } from "./data";
 import { feed } from "./feed";
 import { type OpenOn, openOn, setOpenOn } from "./home";
 import { playback } from "./player";
@@ -20,6 +21,7 @@ export function renderAbout(body: HTMLElement, opts: { showTips: () => void }) {
   const stats = el("div", "stats");
   for (const [n, label] of [
     [ds.videos.length, "Shorts in library"],
+    ...(longNow() ? ([[longNow()!.videos.length, "Long videos in library"]] as const) : []),
     [ds.channels.filter((c) => c.st === "active").length, "Channels with Shorts"],
     [state.hist.length, "In your history"],
     [state.saved.length, "Saved"],
@@ -29,6 +31,30 @@ export function renderAbout(body: HTMLElement, opts: { showTips: () => void }) {
     stats.append(d);
   }
   body.append(stats, para(`Shorts last updated: ${updated}. New Shorts arrive automatically every 4 hours — tap ↻ for a fresh feed.`));
+
+  // where the videos come from, and what this app keeps about you
+  const legal = el("div", "legal");
+  const link = (href: string, text: string) => {
+    const a = el("a", "", text) as HTMLAnchorElement;
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    return a;
+  };
+  const yt = el("p", "ch-note");
+  yt.append(
+    "Video titles, thumbnails and numbers come from YouTube and play in YouTube’s own player. By using this app you also agree to ",
+    link("https://www.youtube.com/t/terms", "YouTube’s Terms of Service"),
+    " and the ",
+    link("https://policies.google.com/privacy", "Google Privacy Policy"),
+    ".",
+  );
+  const priv = el("p", "ch-note");
+  priv.append(
+    "Privacy: your history, saved videos, notes, lists and settings stay on this device. If you sign in to Sync, they are also stored in this app’s own private sync storage, behind the password. The app has no ads, no analytics and no tracking of its own, and shares nothing with anyone. YouTube may set its own cookies while its player is on screen. Menu → About lets you reset or erase it.",
+  );
+  legal.append(el("h3", "u-h", "Terms & privacy"), yt, priv);
+  body.append(legal);
 
   const builtAt = new Date(__BUILD__);
   body.append(
